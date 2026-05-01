@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auctus — UI Concepts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #C8C4BC;
+      font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 64px 48px 80px;
+      gap: 20px;
+      min-height: 100vh;
+    }
+
+    .page-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #8A8680;
+      margin-bottom: 16px;
+    }
+
+    .row {
+      display: flex;
+      gap: 48px;
+      align-items: flex-start;
+    }
+
+    .concept {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #8A8680;
+    }
+
+    .phone {
+      width: 340px;
+      height: 710px;
+      border-radius: 50px;
+      overflow: hidden;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.10),
+        0 2px 4px rgba(0,0,0,0.08),
+        0 12px 32px rgba(0,0,0,0.18),
+        0 32px 64px rgba(0,0,0,0.12);
+    }
+
+    /* ─────────────────────────────────────────
+       OBSIDIAN  dark, warm-neutral, gold accent
+    ───────────────────────────────────────── */
+
+    .ob {
+      background: #111114;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      color: #E8E8ED;
+    }
+
+    .ob-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px 0;
+      height: 52px;
+      flex-shrink: 0;
+    }
+    .ob-bar .time { font-size: 15px; font-weight: 600; color: #E8E8ED; }
+    .ob-bar .icons { font-size: 11px; color: #48484E; letter-spacing: 0.04em; }
+
+    .ob-scroll {
+      flex: 1;
+      overflow: hidden;
+      padding: 4px 18px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .ob-header { padding: 8px 0 14px; }
+    .ob-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #E8E8ED;
+      letter-spacing: -0.6px;
+    }
+    .ob-header p {
+      font-size: 12px;
+      color: #3A3A40;
+      margin-top: 3px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+
+    .ob-hero {
+      background: #1C1C21;
+      border-radius: 20px;
+      padding: 20px 20px 18px;
+      border: 1px solid rgba(255,255,255,0.055);
+      margin-bottom: 2px;
+    }
+    .ob-hero-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #38383E;
+    }
+    .ob-hero-val {
+      font-size: 40px;
+      font-weight: 800;
+      color: #C6A45E;
+      letter-spacing: -1.8px;
+      margin: 4px 0 16px;
+      line-height: 1;
+    }
+    .ob-hero-row { display: flex; gap: 24px; }
+    .ob-stat-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #30303A;
+    }
+    .ob-stat-val {
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+    .ob-stat-val.g { color: #4A9E68; }
+    .ob-stat-val.r { color: #A04848; }
+
+    .ob-sec {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #30303A;
+      margin: 16px 0 8px;
+    }
+
+    .ob-list {
+      background: #1C1C21;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .ob-row {
+      display: flex;
+      align-items: center;
+      padding: 11px 14px;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.035);
+    }
+    .ob-row:last-child { border-bottom: none; }
+
+    .ob-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .ob-info { flex: 1; min-width: 0; }
+    .ob-name { font-size: 13px; font-weight: 600; color: #DDDDE3; }
+    .ob-sub  { font-size: 11px; color: #38383E; margin-top: 2px; }
+
+    .ob-amt { font-size: 13px; font-weight: 700; }
+    .ob-amt.g { color: #4A9E68; }
+    .ob-amt.r { color: #A04848; }
+
+    .ob-tabs {
+      height: 76px;
+      background: #0C0C0F;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      display: flex;
+      align-items: flex-start;
+      padding-top: 12px;
+      flex-shrink: 0;
+    }
+    .ob-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .ob-tab-ico {
+      width: 22px;
+      height: 3px;
+      border-radius: 2px;
+      background: transparent;
+    }
+    .ob-tab.on .ob-tab-ico { background: #C6A45E; }
+    .ob-tab-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      color: #2A2A30;
+      letter-spacing: 0.03em;
+    }
+    .ob-tab.on .ob-tab-lbl { color: #C6A45E; }
+
+    .ob-fab {
+      position: absolute;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 25px;
+      background: #C6A45E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 200;
+      color: #0C0C0F;
+      line-height: 1;
+      box-shadow: 0 4px 20px rgba(198,164,94,0.45);
+    }
+
+    /* ─────────────────────────────────────────
+       LINEN  warm off-white, editorial, slate
+    ───────────────────────────────────────── */
+
+    .ln {
+      background: #EDEBE6;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ln-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px 0;
+      height: 52px;
+      flex-shrink: 0;
+    }
+    .ln-bar .time { font-size: 15px; font-weight: 600; color: #1A1916; }
+    .ln-bar .icons { font-size: 11px; color: #B8B4AE; letter-spacing: 0.04em; }
+
+    .ln-scroll {
+      flex: 1;
+      overflow: hidden;
+      padding: 4px 18px 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ln-header { padding: 8px 0 14px; }
+    .ln-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1A1916;
+      letter-spacing: -0.6px;
+    }
+    .ln-header p {
+      font-size: 12px;
+      color: #B0AC A6;
+      margin-top: 3px;
+      font-weight: 500;
+    }
+
+    .ln-hero {
+      background: #1A1916;
+      border-radius: 20px;
+      padding: 20px 20px 18px;
+      margin-bottom: 2px;
+    }
+    .ln-hero-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.28);
+    }
+    .ln-hero-val {
+      font-size: 40px;
+      font-weight: 800;
+      color: #F0EDE8;
+      letter-spacing: -1.8px;
+      margin: 4px 0 16px;
+      line-height: 1;
+    }
+    .ln-hero-row { display: flex; gap: 24px; }
+    .ln-stat-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.25);
+    }
+    .ln-stat-val {
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+    .ln-stat-val.g { color: #7AAF8E; }
+    .ln-stat-val.r { color: #B07868; }
+
+    .ln-sec {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #C0BCB6;
+      margin: 16px 0 8px;
+    }
+
+    .ln-list {
+      background: #F8F6F2;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .ln-row {
+      display: flex;
+      align-items: center;
+      padding: 11px 14px;
+      gap: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .ln-row:last-child { border-bottom: none; }
+
+    .ln-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .ln-info { flex: 1; min-width: 0; }
+    .ln-name { font-size: 13px; font-weight: 600; color: #1A1916; }
+    .ln-sub  { font-size: 11px; color: #C0BCB6; margin-top: 2px; }
+
+    .ln-amt { font-size: 13px; font-weight: 700; }
+    .ln-amt.g { color: #3D7856; }
+    .ln-amt.r { color: #8A4A3A; }
+
+    .ln-tabs {
+      height: 76px;
+      background: #F2F0EB;
+      border-top: 1px solid rgba(0,0,0,0.06);
+      display: flex;
+      align-items: flex-start;
+      padding-top: 12px;
+      flex-shrink: 0;
+    }
+    .ln-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .ln-tab-ico {
+      width: 22px;
+      height: 3px;
+      border-radius: 2px;
+      background: transparent;
+    }
+    .ln-tab.on .ln-tab-ico { background: #4A5568; }
+    .ln-tab-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      color: #C8C4BE;
+      letter-spacing: 0.03em;
+    }
+    .ln-tab.on .ln-tab-lbl { color: #4A5568; }
+
+    .ln-fab {
+      position: absolute;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 25px;
+      background: #1A1916;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 200;
+      color: #F0EDE8;
+      line-height: 1;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.22);
+    }
+  </style>
+</head>
+<body>
+
+  <p class="page-title">Auctus — UI Concepts</p>
+
+  <div class="row">
+
+    <!-- ── OBSIDIAN ── -->
+    <div class="concept">
+      <div class="label">Obsidian</div>
+      <div class="phone">
+        <div class="ob">
+
+          <div class="ob-bar">
+            <span class="time">9:41</span>
+            <span class="icons">▲ ◼ ●●●</span>
+          </div>
+
+          <div class="ob-scroll">
+
+            <div class="ob-header">
+              <h1>Auctus</h1>
+              <p>Trace, Track, Grow</p>
+            </div>
+
+            <div class="ob-hero">
+              <div class="ob-hero-label">Net Worth</div>
+              <div class="ob-hero-val">$24,850</div>
+              <div class="ob-hero-row">
+                <div>
+                  <div class="ob-stat-lbl">Income</div>
+                  <div class="ob-stat-val g">+$4,200</div>
+                </div>
+                <div>
+                  <div class="ob-stat-lbl">Purchases</div>
+                  <div class="ob-stat-val r">-$1,830</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ob-sec">Recent Transactions</div>
+
+            <div class="ob-list">
+              <div class="ob-row">
+                <div class="ob-icon">💼</div>
+                <div class="ob-info">
+                  <div class="ob-name">Salary</div>
+                  <div class="ob-sub">1010 · Checking Account</div>
+                </div>
+                <div class="ob-amt g">+$4,200</div>
+              </div>
+              <div class="ob-row">
+                <div class="ob-icon">🏠</div>
+                <div class="ob-info">
+                  <div class="ob-name">Rent</div>
+                  <div class="ob-sub">7010 · Rent Expense</div>
+                </div>
+                <div class="ob-amt r">-$1,200</div>
+              </div>
+              <div class="ob-row">
+                <div class="ob-icon">💡</div>
+                <div class="ob-info">
+                  <div class="ob-name">Utilities</div>
+                  <div class="ob-sub">7020 · Utilities</div>
+                </div>
+                <div class="ob-amt r">-$180</div>
+              </div>
+              <div class="ob-row">
+                <div class="ob-icon">📦</div>
+                <div class="ob-info">
+                  <div class="ob-name">Office Supplies</div>
+                  <div class="ob-sub">7030 · Office Supplies</div>
+                </div>
+                <div class="ob-amt r">-$450</div>
+              </div>
+              <div class="ob-row">
+                <div class="ob-icon">📄</div>
+                <div class="ob-info">
+                  <div class="ob-name">Invoice — Acme Co.</div>
+                  <div class="ob-sub">1100 · AR · Balance $2,000</div>
+                </div>
+                <div class="ob-amt g">+$2,000</div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="ob-tabs">
+            <div class="ob-tab on">
+              <div class="ob-tab-ico"></div>
+              <div class="ob-tab-lbl">Home</div>
+            </div>
+            <div class="ob-tab">
+              <div class="ob-tab-ico"></div>
+              <div class="ob-tab-lbl">Activity</div>
+            </div>
+            <div class="ob-tab">
+              <div class="ob-tab-ico"></div>
+              <div class="ob-tab-lbl">Accounts</div>
+            </div>
+            <div class="ob-tab">
+              <div class="ob-tab-ico"></div>
+              <div class="ob-tab-lbl">Reports</div>
+            </div>
+            <div class="ob-tab">
+              <div class="ob-tab-ico"></div>
+              <div class="ob-tab-lbl">Settings</div>
+            </div>
+          </div>
+
+          <div class="ob-fab">+</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LINEN ── -->
+    <div class="concept">
+      <div class="label">Linen</div>
+      <div class="phone">
+        <div class="ln">
+
+          <div class="ln-bar">
+            <span class="time">9:41</span>
+            <span class="icons">▲ ◼ ●●●</span>
+          </div>
+
+          <div class="ln-scroll">
+
+            <div class="ln-header">
+              <h1>Auctus</h1>
+              <p style="color:#B8B4AE;">Trace, Track, Grow</p>
+            </div>
+
+            <div class="ln-hero">
+              <div class="ln-hero-label">Net Worth</div>
+              <div class="ln-hero-val">$24,850</div>
+              <div class="ln-hero-row">
+                <div>
+                  <div class="ln-stat-lbl">Income</div>
+                  <div class="ln-stat-val g">+$4,200</div>
+                </div>
+                <div>
+                  <div class="ln-stat-lbl">Purchases</div>
+                  <div class="ln-stat-val r">-$1,830</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ln-sec">Recent Transactions</div>
+
+            <div class="ln-list">
+              <div class="ln-row">
+                <div class="ln-icon" style="background:#E4EDE8;">💼</div>
+                <div class="ln-info">
+                  <div class="ln-name">Salary</div>
+                  <div class="ln-sub">1010 · Checking Account</div>
+                </div>
+                <div class="ln-amt g">+$4,200</div>
+              </div>
+              <div class="ln-row">
+                <div class="ln-icon" style="background:#EDE8E6;">🏠</div>
+                <div class="ln-info">
+                  <div class="ln-name">Rent</div>
+                  <div class="ln-sub">7010 · Rent Expense</div>
+                </div>
+                <div class="ln-amt r">-$1,200</div>
+              </div>
+              <div class="ln-row">
+                <div class="ln-icon" style="background:#EDEAE6;">💡</div>
+                <div class="ln-info">
+                  <div class="ln-name">Utilities</div>
+                  <div class="ln-sub">7020 · Utilities</div>
+                </div>
+                <div class="ln-amt r">-$180</div>
+              </div>
+              <div class="ln-row">
+                <div class="ln-icon" style="background:#EDECEA;">📦</div>
+                <div class="ln-info">
+                  <div class="ln-name">Office Supplies</div>
+                  <div class="ln-sub">7030 · Office Supplies</div>
+                </div>
+                <div class="ln-amt r">-$450</div>
+              </div>
+              <div class="ln-row">
+                <div class="ln-icon" style="background:#E8ECF0;">📄</div>
+                <div class="ln-info">
+                  <div class="ln-name">Invoice — Acme Co.</div>
+                  <div class="ln-sub">1100 · AR · Balance $2,000</div>
+                </div>
+                <div class="ln-amt g">+$2,000</div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="ln-tabs">
+            <div class="ln-tab on">
+              <div class="ln-tab-ico"></div>
+              <div class="ln-tab-lbl">Home</div>
+            </div>
+            <div class="ln-tab">
+              <div class="ln-tab-ico"></div>
+              <div class="ln-tab-lbl">Activity</div>
+            </div>
+            <div class="ln-tab">
+              <div class="ln-tab-ico"></div>
+              <div class="ln-tab-lbl">Accounts</div>
+            </div>
+            <div class="ln-tab">
+              <div class="ln-tab-ico"></div>
+              <div class="ln-tab-lbl">Reports</div>
+            </div>
+            <div class="ln-tab">
+              <div class="ln-tab-ico"></div>
+              <div class="ln-tab-lbl">Settings</div>
+            </div>
+          </div>
+
+          <div class="ln-fab">+</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

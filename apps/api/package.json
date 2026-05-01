@@ -1,0 +1,23 @@
+{
+  "name": "@auctus/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "npm run build && node --env-file-if-exists=.env.local --watch dist/index.js",
+    "start": "node --env-file-if-exists=.env.local dist/index.js",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@auctus/accounting-core": "file:../../packages/accounting-core",
+    "@auctus/shared-types": "file:../../packages/shared-types",
+    "@supabase/supabase-js": "^2.89.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.9.2"
+  }
+}
