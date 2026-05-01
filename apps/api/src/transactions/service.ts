@@ -218,6 +218,69 @@ const parseVoidInput = (body: unknown): VoidInput => {
   };
 };
 
+const parseTransactionPatch = (body: unknown): Partial<Omit<Transaction, "id" | "payments">> => {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "invalid_request", "Request body must be a JSON object.");
+  }
+  const input = body as Record<string, unknown>;
+  const patch: Partial<Omit<Transaction, "id" | "payments">> = {};
+
+  if ("type" in input) patch.type = readEnum(input, "type", transactionTypes, true);
+  if ("amount" in input) {
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount)) {
+      throw new ApiError(400, "invalid_transaction", "amount must be a number.");
+    }
+    patch.amount = amount;
+  }
+  if ("accountId" in input) patch.accountId = readString(input, "accountId", 64);
+  if ("accountToId" in input) patch.accountToId = readString(input, "accountToId", 64);
+  if ("categoryId" in input) patch.categoryId = readString(input, "categoryId", 64);
+  if ("chartAccountId" in input) patch.chartAccountId = readString(input, "chartAccountId", 64);
+  if ("clearingChartAccountId" in input) patch.clearingChartAccountId = readString(input, "clearingChartAccountId", 64);
+  if ("date" in input) patch.date = readDate(input, "date", true) ?? "";
+  if ("note" in input) patch.note = readString(input, "note", 1000);
+  if ("gstMode" in input) patch.gstMode = input.gstMode === null ? null : readEnum(input, "gstMode", gstModes);
+  if ("entryMode" in input) patch.entryMode = readEnum(input, "entryMode", entryModes);
+  if ("contactId" in input) patch.contactId = readString(input, "contactId", 64);
+  if ("party" in input) patch.party = readString(input, "party", 200);
+  if ("invoiceNo" in input) patch.invoiceNo = readString(input, "invoiceNo", 80);
+  if ("creditNoteNo" in input) patch.creditNoteNo = readString(input, "creditNoteNo", 80);
+  if ("paymentTerms" in input) patch.paymentTerms = readEnum(input, "paymentTerms", paymentTerms);
+  if ("dueDate" in input) patch.dueDate = readDate(input, "dueDate");
+  if ("docStatus" in input) patch.docStatus = readEnum(input, "docStatus", docStatuses);
+  if ("recurringTemplateId" in input) patch.recurringTemplateId = readString(input, "recurringTemplateId", 64);
+
+  return patch;
+};
+
+const mapTransactionRow = (row: unknown): Transaction => {
+  const r = row as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    type: String(r.type) as TransactionType,
+    amount: Number(r.amount),
+    accountId: r.payment_account_id ? String(r.payment_account_id) : undefined,
+    accountToId: r.payment_account_to_id ? String(r.payment_account_to_id) : undefined,
+    categoryId: r.category_id ? String(r.category_id) : undefined,
+    chartAccountId: r.chart_account_id ? String(r.chart_account_id) : undefined,
+    clearingChartAccountId: r.clearing_chart_account_id ? String(r.clearing_chart_account_id) : undefined,
+    date: String(r.date),
+    note: r.note ? String(r.note) : undefined,
+    gstMode: (r.gst_mode as GsmMode) ?? undefined,
+    entryMode: (r.entry_mode as EntryMode) ?? undefined,
+    contactId: r.contact_id ? String(r.contact_id) : undefined,
+    party: r.party ? String(r.party) : undefined,
+    invoiceNo: r.invoice_no ? String(r.invoice_no) : undefined,
+    creditNoteNo: r.credit_note_no ? String(r.credit_note_no) : undefined,
+    paymentTerms: (r.payment_terms as PaymentTerms) ?? undefined,
+    dueDate: r.due_date ? String(r.due_date) : undefined,
+    docStatus: (r.doc_status as DocStatus) ?? undefined,
+    voidedAt: r.voided_at ? String(r.voided_at) : undefined,
+    recurringTemplateId: r.recurring_template_id ? String(r.recurring_template_id) : undefined,
+  };
+};
+
 const requireKnownId = (ids: Set<string>, id: string | undefined, field: string): void => {
   if (id && !ids.has(id)) {
     throw new ApiError(400, "invalid_transaction", `${field} does not belong to this business.`);
@@ -425,6 +488,91 @@ export const createTransaction = async (
     ...transaction,
     id: transactionId,
   };
+};
+
+export const updateTransaction = async (
+  supabase: SupabaseServiceClient,
+  userId: string,
+  businessId: string,
+  transactionId: string,
+  body: unknown,
+): Promise<Transaction> => {
+  const context = await getWriteContext(supabase, userId, businessId);
+  const existing = context.snapshot.ledger.transactions.find((item) => item.id === transactionId);
+
+  if (!existing) {
+    throw new ApiError(404, "transaction_not_found", "Transaction not found.");
+  }
+  if (existing.voidedAt) {
+    throw new ApiError(400, "transaction_already_voided", "Cannot edit a voided transaction.");
+  }
+  if (isDateLocked(context.snapshot.ledger, existing.date)) {
+    throw new ApiError(400, "locked_period", `Transaction date ${existing.date} is in a locked period.`);
+  }
+
+  const patch = parseTransactionPatch(body);
+  if (Object.keys(patch).length === 0) {
+    throw new ApiError(400, "invalid_transaction", "No fields to update.");
+  }
+
+  const merged: Transaction = { ...existing, ...patch };
+
+  if (patch.date && isDateLocked(context.snapshot.ledger, merged.date)) {
+    throw new ApiError(400, "locked_period", `Transaction date ${merged.date} is in a locked period.`);
+  }
+
+  const validation = validateTransactionInput(context.snapshot.ledger, merged, { allowLockedPeriod: true });
+  if (!validation.ok) {
+    throw new ApiError(400, "invalid_transaction", validation.errors.join(" "));
+  }
+
+  const update: Record<string, unknown> = {};
+  if ("type" in patch) update.type = patch.type;
+  if ("amount" in patch) update.amount = patch.amount;
+  if ("accountId" in patch) update.payment_account_id = patch.accountId;
+  if ("accountToId" in patch) update.payment_account_to_id = patch.accountToId;
+  if ("categoryId" in patch) update.category_id = patch.categoryId;
+  if ("chartAccountId" in patch) update.chart_account_id = patch.chartAccountId;
+  if ("clearingChartAccountId" in patch) update.clearing_chart_account_id = patch.clearingChartAccountId;
+  if ("date" in patch) update.date = patch.date;
+  if ("note" in patch) update.note = patch.note;
+  if ("gstMode" in patch) update.gst_mode = patch.gstMode ?? undefined;
+  if ("entryMode" in patch) update.entry_mode = patch.entryMode;
+  if ("contactId" in patch) update.contact_id = patch.contactId;
+  if ("party" in patch) update.party = patch.party;
+  if ("invoiceNo" in patch) update.invoice_no = patch.invoiceNo;
+  if ("creditNoteNo" in patch) update.credit_note_no = patch.creditNoteNo;
+  if ("paymentTerms" in patch) update.payment_terms = patch.paymentTerms;
+  if ("dueDate" in patch) update.due_date = patch.dueDate;
+  if ("docStatus" in patch) update.doc_status = patch.docStatus;
+  if ("recurringTemplateId" in patch) update.recurring_template_id = patch.recurringTemplateId;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update(update)
+    .eq("business_id", businessId)
+    .eq("id", transactionId)
+    .is("voided_at", null)
+    .select(
+      "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id",
+    )
+    .single();
+
+  if (error || !data) {
+    throw new ApiError(500, "transaction_update_failed", error?.message ?? "No transaction returned.");
+  }
+
+  await recordAuditEvent(supabase, {
+    businessId,
+    actorUserId: userId,
+    action: "update",
+    entityType: "transaction",
+    entityId: transactionId,
+    detail: `Updated ${merged.type} ${merged.entryMode ?? "cash"} transaction for ${merged.amount} on ${merged.date}`,
+    metadata: { fields: Object.keys(patch) },
+  });
+
+  return mapTransactionRow(data);
 };
 
 export const recordTransactionPayment = async (

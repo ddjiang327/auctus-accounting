@@ -36,6 +36,7 @@ import {
   createBusinessCreditAllocation,
   createBusinessTransaction,
   createTransactionPayment,
+  updateBusinessTransaction,
   voidBusinessCreditAllocation,
   voidBusinessPayment,
   voidBusinessTransaction,
@@ -226,6 +227,11 @@ const routes: Route[] = [
     method: "POST",
     path: "/v1/businesses/:businessId/transactions/:transactionId/payments",
     handler: createTransactionPayment,
+  },
+  {
+    method: "PATCH",
+    path: "/v1/businesses/:businessId/transactions/:transactionId",
+    handler: updateBusinessTransaction,
   },
   {
     method: "POST",

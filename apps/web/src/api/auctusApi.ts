@@ -155,6 +155,38 @@ export const auctusApi = {
     return response.transaction;
   },
 
+  async updateTransaction(tx: Transaction): Promise<Transaction> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ transaction: Transaction }>(
+      `/v1/businesses/${businessId}/transactions/${tx.id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          type: tx.type,
+          amount: tx.amount,
+          accountId: tx.accountId,
+          accountToId: tx.accountToId,
+          categoryId: tx.categoryId,
+          chartAccountId: tx.chartAccountId,
+          clearingChartAccountId: tx.clearingChartAccountId,
+          date: tx.date,
+          note: tx.note,
+          gstMode: tx.gstMode,
+          entryMode: tx.entryMode,
+          contactId: tx.contactId,
+          party: tx.party,
+          invoiceNo: tx.invoiceNo || undefined,
+          creditNoteNo: tx.creditNoteNo || undefined,
+          paymentTerms: tx.paymentTerms,
+          dueDate: tx.dueDate,
+          docStatus: tx.docStatus,
+          recurringTemplateId: tx.recurringTemplateId,
+        }),
+      },
+    );
+    return response.transaction;
+  },
+
   async recordPayment(txId: string, payment: Omit<InvoicePayment, 'id'>): Promise<InvoicePayment> {
     const businessId = await resolveBusinessId();
     const response = await request<{ payment: InvoicePayment }>(

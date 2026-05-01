@@ -96,8 +96,27 @@ export default function App() {
 
   async function saveTransaction(tx: Transaction) {
     if (remoteMode) {
-      if (data.transactions.some((item) => item.id === tx.id)) {
-        window.alert('Editing existing backend transactions is not enabled yet.');
+      const existing = data.transactions.find((item) => item.id === tx.id);
+      if (existing) {
+        try {
+          await auctusApi.updateTransaction(tx);
+          const existingPaymentIds = new Set(existing.payments?.map((p) => p.id) || []);
+          for (const payment of tx.payments || []) {
+            if (!existingPaymentIds.has(payment.id)) {
+              await auctusApi.recordPayment(tx.id, {
+                amount: payment.amount,
+                date: payment.date,
+                accountId: payment.accountId,
+              });
+            }
+          }
+          await refreshRemoteLedger();
+          setTxModalOpen(false);
+          setEditingTx(null);
+          setTxDefaults(null);
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : 'Transaction update failed.');
+        }
         return;
       }
       try {

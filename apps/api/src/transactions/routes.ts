@@ -9,6 +9,7 @@ import {
   createCreditAllocation,
   createTransaction,
   recordTransactionPayment,
+  updateTransaction,
   voidCreditAllocation,
   voidPayment,
   voidTransaction,
@@ -122,6 +123,53 @@ export const createBusinessCreditAllocation = async (
 
     sendJson(response, 201, {
       allocation,
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      sendJson(response, 400, {
+        error: "invalid_json",
+      });
+      return;
+    }
+
+    if (error instanceof ApiError) {
+      sendJson(response, error.statusCode, {
+        error: error.code,
+        message: error.message,
+      });
+      return;
+    }
+
+    throw error;
+  }
+};
+
+export const updateBusinessTransaction = async (
+  request: IncomingMessage,
+  response: ServerResponse,
+  context: ApiContext,
+  params: Record<string, string>,
+): Promise<void> => {
+  const user = await getCurrentUser(request, context);
+  if (!user) {
+    sendJson(response, 401, {
+      error: "unauthorized",
+    });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(request);
+    const transaction = await updateTransaction(
+      context.supabase,
+      user.id,
+      params.businessId ?? "",
+      params.transactionId ?? "",
+      body,
+    );
+
+    sendJson(response, 200, {
+      transaction,
     });
   } catch (error) {
     if (error instanceof SyntaxError) {
