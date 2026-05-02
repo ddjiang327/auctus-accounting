@@ -218,12 +218,74 @@ const parseVoidInput = (body: unknown): VoidInput => {
   };
 };
 
-const parseTransactionPatch = (body: unknown): Partial<Omit<Transaction, "id" | "payments">> => {
+const readPatchString = (body: Record<string, unknown>, key: string, maxLength: number): string | null | undefined => {
+  if (!(key in body)) return undefined;
+  const value = body[key];
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new ApiError(400, "invalid_transaction", `${key} must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > maxLength) {
+    throw new ApiError(400, "invalid_transaction", `${key} is too long.`);
+  }
+  return trimmed;
+};
+
+const readPatchEnum = <T extends string>(
+  body: Record<string, unknown>,
+  key: string,
+  allowed: Set<T>,
+): T | null | undefined => {
+  if (!(key in body)) return undefined;
+  const value = body[key];
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !allowed.has(value as T)) {
+    throw new ApiError(400, "invalid_transaction", `${key} is invalid.`);
+  }
+  return value as T;
+};
+
+const readPatchDate = (body: Record<string, unknown>, key: string): string | null | undefined => {
+  if (!(key in body)) return undefined;
+  const value = readPatchString(body, key, 10);
+  if (value === null) return null;
+  if (!value) return undefined;
+  if (!datePattern.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))) {
+    throw new ApiError(400, "invalid_transaction", `${key} must be YYYY-MM-DD.`);
+  }
+  return value;
+};
+
+type TransactionPatch = {
+  type?: TransactionType;
+  amount?: number;
+  accountId?: string | null;
+  accountToId?: string | null;
+  categoryId?: string | null;
+  chartAccountId?: string | null;
+  clearingChartAccountId?: string | null;
+  date?: string;
+  note?: string | null;
+  gstMode?: GsmMode;
+  entryMode?: EntryMode | null;
+  contactId?: string | null;
+  party?: string | null;
+  invoiceNo?: string | null;
+  creditNoteNo?: string | null;
+  paymentTerms?: PaymentTerms | null;
+  dueDate?: string | null;
+  docStatus?: DocStatus | null;
+  recurringTemplateId?: string | null;
+};
+
+const parseTransactionPatch = (body: unknown): TransactionPatch => {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new ApiError(400, "invalid_request", "Request body must be a JSON object.");
   }
   const input = body as Record<string, unknown>;
-  const patch: Partial<Omit<Transaction, "id" | "payments">> = {};
+  const patch: TransactionPatch = {};
 
   if ("type" in input) patch.type = readEnum(input, "type", transactionTypes, true);
   if ("amount" in input) {
@@ -233,23 +295,23 @@ const parseTransactionPatch = (body: unknown): Partial<Omit<Transaction, "id" | 
     }
     patch.amount = amount;
   }
-  if ("accountId" in input) patch.accountId = readString(input, "accountId", 64);
-  if ("accountToId" in input) patch.accountToId = readString(input, "accountToId", 64);
-  if ("categoryId" in input) patch.categoryId = readString(input, "categoryId", 64);
-  if ("chartAccountId" in input) patch.chartAccountId = readString(input, "chartAccountId", 64);
-  if ("clearingChartAccountId" in input) patch.clearingChartAccountId = readString(input, "clearingChartAccountId", 64);
+  if ("accountId" in input) patch.accountId = readPatchString(input, "accountId", 64);
+  if ("accountToId" in input) patch.accountToId = readPatchString(input, "accountToId", 64);
+  if ("categoryId" in input) patch.categoryId = readPatchString(input, "categoryId", 64);
+  if ("chartAccountId" in input) patch.chartAccountId = readPatchString(input, "chartAccountId", 64);
+  if ("clearingChartAccountId" in input) patch.clearingChartAccountId = readPatchString(input, "clearingChartAccountId", 64);
   if ("date" in input) patch.date = readDate(input, "date", true) ?? "";
-  if ("note" in input) patch.note = readString(input, "note", 1000);
+  if ("note" in input) patch.note = readPatchString(input, "note", 1000);
   if ("gstMode" in input) patch.gstMode = input.gstMode === null ? null : readEnum(input, "gstMode", gstModes);
-  if ("entryMode" in input) patch.entryMode = readEnum(input, "entryMode", entryModes);
-  if ("contactId" in input) patch.contactId = readString(input, "contactId", 64);
-  if ("party" in input) patch.party = readString(input, "party", 200);
-  if ("invoiceNo" in input) patch.invoiceNo = readString(input, "invoiceNo", 80);
-  if ("creditNoteNo" in input) patch.creditNoteNo = readString(input, "creditNoteNo", 80);
-  if ("paymentTerms" in input) patch.paymentTerms = readEnum(input, "paymentTerms", paymentTerms);
-  if ("dueDate" in input) patch.dueDate = readDate(input, "dueDate");
-  if ("docStatus" in input) patch.docStatus = readEnum(input, "docStatus", docStatuses);
-  if ("recurringTemplateId" in input) patch.recurringTemplateId = readString(input, "recurringTemplateId", 64);
+  if ("entryMode" in input) patch.entryMode = readPatchEnum(input, "entryMode", entryModes);
+  if ("contactId" in input) patch.contactId = readPatchString(input, "contactId", 64);
+  if ("party" in input) patch.party = readPatchString(input, "party", 200);
+  if ("invoiceNo" in input) patch.invoiceNo = readPatchString(input, "invoiceNo", 80);
+  if ("creditNoteNo" in input) patch.creditNoteNo = readPatchString(input, "creditNoteNo", 80);
+  if ("paymentTerms" in input) patch.paymentTerms = readPatchEnum(input, "paymentTerms", paymentTerms);
+  if ("dueDate" in input) patch.dueDate = readPatchDate(input, "dueDate");
+  if ("docStatus" in input) patch.docStatus = readPatchEnum(input, "docStatus", docStatuses);
+  if ("recurringTemplateId" in input) patch.recurringTemplateId = readPatchString(input, "recurringTemplateId", 64);
 
   return patch;
 };
@@ -281,7 +343,7 @@ const mapTransactionRow = (row: unknown): Transaction => {
   };
 };
 
-const requireKnownId = (ids: Set<string>, id: string | undefined, field: string): void => {
+const requireKnownId = (ids: Set<string>, id: string | null | undefined, field: string): void => {
   if (id && !ids.has(id)) {
     throw new ApiError(400, "invalid_transaction", `${field} does not belong to this business.`);
   }
@@ -339,6 +401,114 @@ const normalizeTransaction = (ledger: WriteContext, input: Omit<Transaction, "id
   return transaction;
 };
 
+const compactPatchedTransaction = (existing: Transaction, patch: TransactionPatch): Transaction => ({
+  ...existing,
+  ...("type" in patch ? { type: patch.type } : {}),
+  ...("amount" in patch ? { amount: patch.amount } : {}),
+  ...("accountId" in patch ? { accountId: patch.accountId ?? undefined } : {}),
+  ...("accountToId" in patch ? { accountToId: patch.accountToId ?? undefined } : {}),
+  ...("categoryId" in patch ? { categoryId: patch.categoryId ?? undefined } : {}),
+  ...("chartAccountId" in patch ? { chartAccountId: patch.chartAccountId ?? undefined } : {}),
+  ...("clearingChartAccountId" in patch ? { clearingChartAccountId: patch.clearingChartAccountId ?? undefined } : {}),
+  ...("date" in patch ? { date: patch.date } : {}),
+  ...("note" in patch ? { note: patch.note ?? undefined } : {}),
+  ...("gstMode" in patch ? { gstMode: patch.gstMode ?? undefined } : {}),
+  ...("entryMode" in patch ? { entryMode: patch.entryMode ?? undefined } : {}),
+  ...("contactId" in patch ? { contactId: patch.contactId ?? undefined } : {}),
+  ...("party" in patch ? { party: patch.party ?? undefined } : {}),
+  ...("invoiceNo" in patch ? { invoiceNo: patch.invoiceNo ?? undefined } : {}),
+  ...("creditNoteNo" in patch ? { creditNoteNo: patch.creditNoteNo ?? undefined } : {}),
+  ...("paymentTerms" in patch ? { paymentTerms: patch.paymentTerms ?? undefined } : {}),
+  ...("dueDate" in patch ? { dueDate: patch.dueDate ?? undefined } : {}),
+  ...("docStatus" in patch ? { docStatus: patch.docStatus ?? undefined } : {}),
+  ...("recurringTemplateId" in patch ? { recurringTemplateId: patch.recurringTemplateId ?? undefined } : {}),
+});
+
+const normalizePatchedTransaction = (
+  ledger: WriteContext,
+  existing: Transaction,
+  patch: TransactionPatch,
+): Transaction => {
+  const data = ledger.snapshot.ledger;
+  const accountIds = new Set(data.accounts.map((account) => account.id));
+  const chartAccountIds = new Set(data.chartOfAccounts.map((account) => account.id));
+  const contactIds = new Set(data.contacts.map((contact) => contact.id));
+  const merged = compactPatchedTransaction(existing, patch);
+
+  requireKnownId(accountIds, merged.accountId, "accountId");
+  requireKnownId(accountIds, merged.accountToId, "accountToId");
+  requireKnownId(chartAccountIds, merged.chartAccountId, "chartAccountId");
+  requireKnownId(chartAccountIds, merged.clearingChartAccountId, "clearingChartAccountId");
+  requireKnownId(contactIds, merged.contactId, "contactId");
+
+  const categoryPool = merged.type === "income" ? data.categories.income : data.categories.expense;
+  if (merged.type !== "transfer" && merged.categoryId && !categoryPool.some((category) => category.id === merged.categoryId)) {
+    throw new ApiError(400, "invalid_transaction", "categoryId does not belong to this business transaction type.");
+  }
+
+  if (merged.type === "transfer") {
+    if (!merged.accountId || !merged.accountToId) {
+      throw new ApiError(400, "invalid_transaction", "Transfers require accountId and accountToId.");
+    }
+    if (merged.accountId === merged.accountToId) {
+      throw new ApiError(400, "invalid_transaction", "Transfers require different accounts.");
+    }
+
+    return {
+      ...merged,
+      categoryId: undefined,
+      chartAccountId: undefined,
+      clearingChartAccountId: undefined,
+      contactId: undefined,
+      party: undefined,
+      invoiceNo: undefined,
+      creditNoteNo: undefined,
+      paymentTerms: undefined,
+      dueDate: undefined,
+      docStatus: undefined,
+      gstMode: undefined,
+      entryMode: undefined,
+    };
+  }
+
+  const entryMode = merged.entryMode ?? "cash";
+  const needsClearingAccount = entryMode === "invoice" || entryMode === "credit_note";
+  const normalized: Transaction = {
+    ...merged,
+    accountToId: undefined,
+    entryMode,
+    chartAccountId: merged.chartAccountId ?? defaultChartAccountId(data, merged.type, merged.categoryId),
+    clearingChartAccountId: needsClearingAccount
+      ? merged.clearingChartAccountId ?? clearingAccountId(data, merged.type)
+      : undefined,
+  };
+
+  if (entryMode === "cash") {
+    return {
+      ...normalized,
+      contactId: undefined,
+      party: undefined,
+      invoiceNo: undefined,
+      creditNoteNo: undefined,
+      paymentTerms: undefined,
+      dueDate: undefined,
+      docStatus: undefined,
+    };
+  }
+
+  if (entryMode === "invoice") {
+    return {
+      ...normalized,
+      creditNoteNo: undefined,
+    };
+  }
+
+  return {
+    ...normalized,
+    invoiceNo: undefined,
+  };
+};
+
 type WriteContext = Awaited<ReturnType<typeof getWriteContext>>;
 
 const getWriteContext = async (
@@ -374,6 +544,28 @@ const toInsertRow = (businessId: string, transaction: Transaction): TransactionI
   payment_terms: transaction.paymentTerms,
   doc_status: transaction.docStatus,
   recurring_template_id: transaction.recurringTemplateId,
+});
+
+const toUpdateRow = (transaction: Transaction): Record<string, unknown> => ({
+  type: transaction.type,
+  entry_mode: transaction.entryMode ?? null,
+  amount: transaction.amount,
+  payment_account_id: transaction.accountId ?? null,
+  payment_account_to_id: transaction.accountToId ?? null,
+  category_id: transaction.categoryId ?? null,
+  chart_account_id: transaction.chartAccountId ?? null,
+  clearing_chart_account_id: transaction.clearingChartAccountId ?? null,
+  contact_id: transaction.contactId ?? null,
+  party: transaction.party ?? null,
+  date: transaction.date,
+  due_date: transaction.dueDate ?? null,
+  note: transaction.note ?? null,
+  gst_mode: transaction.gstMode ?? null,
+  invoice_no: transaction.invoiceNo ?? null,
+  credit_note_no: transaction.creditNoteNo ?? null,
+  payment_terms: transaction.paymentTerms ?? null,
+  doc_status: transaction.docStatus ?? null,
+  recurring_template_id: transaction.recurringTemplateId ?? null,
 });
 
 const toPaymentInsertRow = (
@@ -515,7 +707,7 @@ export const updateTransaction = async (
     throw new ApiError(400, "invalid_transaction", "No fields to update.");
   }
 
-  const merged: Transaction = { ...existing, ...patch };
+  const merged = normalizePatchedTransaction(context, existing, patch);
 
   if (patch.date && isDateLocked(context.snapshot.ledger, merged.date)) {
     throw new ApiError(400, "locked_period", `Transaction date ${merged.date} is in a locked period.`);
@@ -526,26 +718,7 @@ export const updateTransaction = async (
     throw new ApiError(400, "invalid_transaction", validation.errors.join(" "));
   }
 
-  const update: Record<string, unknown> = {};
-  if ("type" in patch) update.type = patch.type;
-  if ("amount" in patch) update.amount = patch.amount;
-  if ("accountId" in patch) update.payment_account_id = patch.accountId;
-  if ("accountToId" in patch) update.payment_account_to_id = patch.accountToId;
-  if ("categoryId" in patch) update.category_id = patch.categoryId;
-  if ("chartAccountId" in patch) update.chart_account_id = patch.chartAccountId;
-  if ("clearingChartAccountId" in patch) update.clearing_chart_account_id = patch.clearingChartAccountId;
-  if ("date" in patch) update.date = patch.date;
-  if ("note" in patch) update.note = patch.note;
-  if ("gstMode" in patch) update.gst_mode = patch.gstMode ?? undefined;
-  if ("entryMode" in patch) update.entry_mode = patch.entryMode;
-  if ("contactId" in patch) update.contact_id = patch.contactId;
-  if ("party" in patch) update.party = patch.party;
-  if ("invoiceNo" in patch) update.invoice_no = patch.invoiceNo;
-  if ("creditNoteNo" in patch) update.credit_note_no = patch.creditNoteNo;
-  if ("paymentTerms" in patch) update.payment_terms = patch.paymentTerms;
-  if ("dueDate" in patch) update.due_date = patch.dueDate;
-  if ("docStatus" in patch) update.doc_status = patch.docStatus;
-  if ("recurringTemplateId" in patch) update.recurring_template_id = patch.recurringTemplateId;
+  const update = toUpdateRow(merged);
 
   const { data, error } = await supabase
     .from("transactions")

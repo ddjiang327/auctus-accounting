@@ -85,6 +85,11 @@ async function resolveBusinessId(): Promise<string> {
   return businessId;
 }
 
+function optionalString(value: string | undefined | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export const auctusApi = {
   async loadLedger(): Promise<LedgerData> {
     const businessId = await resolveBusinessId();
@@ -157,31 +162,36 @@ export const auctusApi = {
 
   async updateTransaction(tx: Transaction): Promise<Transaction> {
     const businessId = await resolveBusinessId();
+    const isTransfer = tx.type === 'transfer';
+    const isInvoice = !isTransfer && tx.entryMode === 'invoice';
+    const isCreditNote = !isTransfer && tx.entryMode === 'credit_note';
+    const isCash = !isTransfer && !isInvoice && !isCreditNote;
+    const body = {
+      type: tx.type,
+      amount: tx.amount,
+      accountId: optionalString(tx.accountId),
+      accountToId: isTransfer ? optionalString(tx.accountToId) : null,
+      categoryId: isTransfer ? null : optionalString(tx.categoryId),
+      chartAccountId: isTransfer ? null : tx.chartAccountId ?? undefined,
+      clearingChartAccountId: isInvoice || isCreditNote ? tx.clearingChartAccountId ?? undefined : null,
+      date: tx.date,
+      note: optionalString(tx.note),
+      gstMode: isTransfer ? null : tx.gstMode ?? null,
+      entryMode: isTransfer ? null : tx.entryMode ?? 'cash',
+      contactId: isCash || isTransfer ? null : optionalString(tx.contactId),
+      party: isCash || isTransfer ? null : optionalString(tx.party),
+      invoiceNo: isInvoice ? optionalString(tx.invoiceNo) : null,
+      creditNoteNo: isCreditNote ? optionalString(tx.creditNoteNo) : null,
+      paymentTerms: isInvoice || isCreditNote ? tx.paymentTerms ?? null : null,
+      dueDate: isInvoice || isCreditNote ? tx.dueDate ?? null : null,
+      docStatus: isInvoice || isCreditNote ? tx.docStatus ?? null : null,
+      recurringTemplateId: tx.recurringTemplateId ?? null,
+    };
     const response = await request<{ transaction: Transaction }>(
       `/v1/businesses/${businessId}/transactions/${tx.id}`,
       {
         method: 'PATCH',
-        body: JSON.stringify({
-          type: tx.type,
-          amount: tx.amount,
-          accountId: tx.accountId,
-          accountToId: tx.accountToId,
-          categoryId: tx.categoryId,
-          chartAccountId: tx.chartAccountId,
-          clearingChartAccountId: tx.clearingChartAccountId,
-          date: tx.date,
-          note: tx.note,
-          gstMode: tx.gstMode,
-          entryMode: tx.entryMode,
-          contactId: tx.contactId,
-          party: tx.party,
-          invoiceNo: tx.invoiceNo || undefined,
-          creditNoteNo: tx.creditNoteNo || undefined,
-          paymentTerms: tx.paymentTerms,
-          dueDate: tx.dueDate,
-          docStatus: tx.docStatus,
-          recurringTemplateId: tx.recurringTemplateId,
-        }),
+        body: JSON.stringify(body),
       },
     );
     return response.transaction;
