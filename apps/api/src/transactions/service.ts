@@ -189,6 +189,22 @@ const parsePaymentInput = (body: unknown): Omit<InvoicePayment, "id"> => {
   };
 };
 
+const parseNewPaymentsInput = (body: unknown): Array<Omit<InvoicePayment, "id">> => {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return [];
+  }
+
+  const input = body as Record<string, unknown>;
+  if (!("newPayments" in input) || input.newPayments === undefined || input.newPayments === null) {
+    return [];
+  }
+  if (!Array.isArray(input.newPayments)) {
+    throw new ApiError(400, "invalid_payment", "newPayments must be an array.");
+  }
+
+  return input.newPayments.map((payment) => parsePaymentInput(payment));
+};
+
 const parseCreditAllocationInput = (body: unknown): Omit<CreditAllocation, "id"> => {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new ApiError(400, "invalid_request", "Request body must be a JSON object.");
@@ -582,6 +598,27 @@ const toPaymentInsertRow = (
   receipt_created_at: payment.receiptCreatedAt,
 });
 
+const toPaymentRpcRow = (payment: Omit<InvoicePayment, "id">): Record<string, unknown> => ({
+  amount: payment.amount,
+  date: payment.date,
+  payment_account_id: payment.accountId,
+  receipt_no: payment.receiptNo ?? null,
+  receipt_created_at: payment.receiptCreatedAt ?? null,
+});
+
+const mapPaymentRow = (row: unknown): InvoicePayment => {
+  const r = row as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    amount: Number(r.amount),
+    date: String(r.date),
+    accountId: String(r.payment_account_id),
+    receiptNo: r.receipt_no ? String(r.receipt_no) : undefined,
+    receiptCreatedAt: r.receipt_created_at ? String(r.receipt_created_at) : undefined,
+    voidedAt: r.voided_at ? String(r.voided_at) : undefined,
+  };
+};
+
 const toCreditAllocationInsertRow = (
   businessId: string,
   allocation: Omit<CreditAllocation, "id">,
@@ -703,6 +740,7 @@ export const updateTransaction = async (
   }
 
   const patch = parseTransactionPatch(body);
+  const newPayments = parseNewPaymentsInput(body);
   if (Object.keys(patch).length === 0) {
     throw new ApiError(400, "invalid_transaction", "No fields to update.");
   }
@@ -718,34 +756,63 @@ export const updateTransaction = async (
     throw new ApiError(400, "invalid_transaction", validation.errors.join(" "));
   }
 
+  const paymentValidationLedger = {
+    ...context.snapshot.ledger,
+    transactions: context.snapshot.ledger.transactions.map((transaction) =>
+      transaction.id === transactionId ? merged : transaction,
+    ),
+  };
+  const paymentValidatedTransaction: Transaction = { ...merged, payments: [...(merged.payments ?? [])] };
+  const payments = newPayments.map((payment) => ({
+    ...payment,
+    receiptNo: payment.receiptNo,
+    receiptCreatedAt: payment.receiptCreatedAt,
+  }));
+
+  for (const payment of payments) {
+    const paymentValidation = validatePaymentInput(paymentValidationLedger, paymentValidatedTransaction, payment);
+    if (!paymentValidation.ok) {
+      throw new ApiError(400, "invalid_payment", paymentValidation.errors.join(" "));
+    }
+    paymentValidatedTransaction.payments = [
+      ...(paymentValidatedTransaction.payments ?? []),
+      {
+        id: `pending_${paymentValidatedTransaction.payments?.length ?? 0}`,
+        ...payment,
+      },
+    ];
+  }
+
   const update = toUpdateRow(merged);
 
   const { data, error } = await supabase
-    .from("transactions")
-    .update(update)
-    .eq("business_id", businessId)
-    .eq("id", transactionId)
-    .is("voided_at", null)
-    .select(
-      "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id",
-    )
-    .single();
+    .rpc("update_transaction_with_payments", {
+      target_business_id: businessId,
+      target_transaction_id: transactionId,
+      transaction_update: update,
+      new_payments: payments.map(toPaymentRpcRow),
+      transaction_audit: {
+        action: "update",
+        entity_type: "transaction",
+        entity_id: transactionId,
+        detail: `Updated ${merged.type} ${merged.entryMode ?? "cash"} transaction for ${merged.amount} on ${merged.date}`,
+        metadata: { fields: Object.keys(patch), newPaymentCount: payments.length },
+      },
+      actor_user_id: userId,
+    });
 
   if (error || !data) {
     throw new ApiError(500, "transaction_update_failed", error?.message ?? "No transaction returned.");
   }
 
-  await recordAuditEvent(supabase, {
-    businessId,
-    actorUserId: userId,
-    action: "update",
-    entityType: "transaction",
-    entityId: transactionId,
-    detail: `Updated ${merged.type} ${merged.entryMode ?? "cash"} transaction for ${merged.amount} on ${merged.date}`,
-    metadata: { fields: Object.keys(patch) },
-  });
+  const result = data as unknown as { transaction?: unknown; payments?: unknown[] };
+  const updated = mapTransactionRow(result.transaction);
+  const insertedPayments = Array.isArray(result.payments) ? result.payments.map(mapPaymentRow) : [];
 
-  return mapTransactionRow(data);
+  return {
+    ...updated,
+    payments: [...(existing.payments ?? []), ...insertedPayments],
+  };
 };
 
 export const recordTransactionPayment = async (

@@ -72,6 +72,7 @@ Do not start by trying to clone every Xero/MYOB feature. Build a reliable accoun
   - Business creation seeds default accounting foundation data.
   - Ledger snapshot now returns real chart accounts, payment accounts, categories, contacts, transactions, payments, credit allocations, period locks, bank feed items, bank reconciliations, and audit log from Supabase.
   - Server write paths now cover business profile/settings updates, payment accounts, categories, contacts, transactions, payments, credit allocations, voids, period locks, bank feed items, and bank reconciliations.
+  - Backend transaction edits now support nullable field clearing and atomic update-with-new-payments through a Supabase RPC.
   - Server backup/restore, import, and reset endpoints now exist for owner/admin users, preserve the server audit trail, rebuild imported IDs into Supabase UUIDs, and audit each export/restore/reset.
   - Server write paths enforce membership/role checks, shared accounting validation, locked-period checks, no physical delete for commercial documents, and audit entries for key accounting changes.
   - Manual journals now have Supabase tables, ledger snapshot projection, and server write paths for create, update, void, and reverse.
@@ -171,7 +172,8 @@ Avoid building advanced payroll, STP lodgement, complex inventory, or third-part
 29. Done: Add bank feed and bank reconciliation Supabase tables, ledger snapshot support, API write paths, and Web Accounts backend integration for import, match, ignore/unignore, record-from-feed, finalise, and void.
 30. Done: Add owner/admin backup/restore, reset/import API workflows and connect Web Settings backup, restore, and reset actions to the backend.
 31. Done: Add audited clear/unlock period-lock workflow and dedicated Web category management UI with chart-account mapping.
-32. In progress: Continue web/backend integration beyond the first write paths, especially remaining admin overrides and category-management polish.
+32. Done: Add backend transaction edit/update, nullable field clearing for type changes, and atomic update-with-new-payments Web integration.
+33. In progress: Continue web/backend integration beyond the first write paths, especially remaining admin overrides and category-management polish.
 
 ## Technical Roadmap
 

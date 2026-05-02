@@ -266,7 +266,8 @@ Server write paths must enforce these rules even if the client already checked t
 - `validateCreditAllocations` runs before applying credit notes.
 - `isDateLocked` blocks writes dated on or before the locked-through date.
 - Accounting documents are not physically deleted in commercial mode; use `voided_at`.
-- Voids, unlocks, admin overrides, restore/import, payment records, credit allocations, journal writes, and reconciliation finalise/void must create audit log entries.
+- Voids, transaction edits, unlocks, admin overrides, restore/import, payment records, credit allocations, journal writes, and reconciliation finalise/void must create audit log entries.
+- Transaction edits that also record new payments should use the atomic update-with-payments RPC so transaction and payment writes cannot partially apply.
 - Viewer role cannot write accounting data.
 - Bookkeeper can create ordinary transactions and documents but cannot unlock periods or reset/restore/import business data.
 - Owner/admin can manage members, settings, period locks, backup/restore/import, and reset.

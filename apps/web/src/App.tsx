@@ -99,17 +99,15 @@ export default function App() {
       const existing = data.transactions.find((item) => item.id === tx.id);
       if (existing) {
         try {
-          await auctusApi.updateTransaction(tx);
           const existingPaymentIds = new Set(existing.payments?.map((p) => p.id) || []);
-          for (const payment of tx.payments || []) {
-            if (!existingPaymentIds.has(payment.id)) {
-              await auctusApi.recordPayment(tx.id, {
-                amount: payment.amount,
-                date: payment.date,
-                accountId: payment.accountId,
-              });
-            }
-          }
+          const newPayments = (tx.payments || [])
+            .filter((payment) => !existingPaymentIds.has(payment.id))
+            .map((payment) => ({
+              amount: payment.amount,
+              date: payment.date,
+              accountId: payment.accountId,
+            }));
+          await auctusApi.updateTransaction(tx, newPayments);
           await refreshRemoteLedger();
           setTxModalOpen(false);
           setEditingTx(null);

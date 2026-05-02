@@ -160,7 +160,7 @@ export const auctusApi = {
     return response.transaction;
   },
 
-  async updateTransaction(tx: Transaction): Promise<Transaction> {
+  async updateTransaction(tx: Transaction, newPayments: Array<Omit<InvoicePayment, 'id'>> = []): Promise<Transaction> {
     const businessId = await resolveBusinessId();
     const isTransfer = tx.type === 'transfer';
     const isInvoice = !isTransfer && tx.entryMode === 'invoice';
@@ -186,6 +186,7 @@ export const auctusApi = {
       dueDate: isInvoice || isCreditNote ? tx.dueDate ?? null : null,
       docStatus: isInvoice || isCreditNote ? tx.docStatus ?? null : null,
       recurringTemplateId: tx.recurringTemplateId ?? null,
+      newPayments,
     };
     const response = await request<{ transaction: Transaction }>(
       `/v1/businesses/${businessId}/transactions/${tx.id}`,

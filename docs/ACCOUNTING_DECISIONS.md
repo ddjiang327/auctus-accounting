@@ -113,7 +113,7 @@ Decision:
 - Owner/admin can unlock a period, but this must write an audit log entry.
 - Later versions should support reversal workflows.
 
-Implementation note: current core has date-lock helper functions. Mobile now blocks locked-period transaction edits, document status changes, manual journal changes, bank reconciliation finalise/void, and bank-feed clearing. The first API write paths now enforce locked periods for transactions, payments, credit allocations, and voids. Backend period-lock clearing is owner/admin only and uses a database RPC so the unlock and audit entry are committed atomically.
+Implementation note: current core has date-lock helper functions. Mobile now blocks locked-period transaction edits, document status changes, manual journal changes, bank reconciliation finalise/void, and bank-feed clearing. The first API write paths now enforce locked periods for transactions, payments, credit allocations, and voids. Backend transaction edits support nullable field clearing for type changes and can atomically update a transaction with newly recorded payments through a database RPC. Backend period-lock clearing is owner/admin only and uses a database RPC so the unlock and audit entry are committed atomically.
 
 ## Opening Balances
 
@@ -176,4 +176,5 @@ Decision:
 - Done: add API validation and audit enforcement for bank feed import/matching/ignore and bank reconciliation finalise/void.
 - Done: add owner/admin backup/restore, reset/import backend workflows with audit entries.
 - Done: add owner/admin audited period-lock clear/unlock backend workflow.
+- Done: add backend transaction edit/update with nullable field clearing and atomic update-with-new-payments workflow.
 - Continue API write-path validation as new backend features are added, especially admin overrides.
