@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { chartAccountName, latestLockedThrough, todayStr } from '../../domain/accounting';
 import type { BasBasis, BusinessProfile, Category, LedgerData } from '../../domain/models';
+import type { UiPermissions } from '../../domain/permissions';
 
 interface SettingsProps {
   data: LedgerData;
@@ -19,6 +20,7 @@ interface SettingsProps {
   onRestore: (file: File) => void;
   onSaveCategory: (category: Category, type: 'income' | 'expense') => void | Promise<void>;
   onArchiveCategory: (categoryId: string) => void | Promise<void>;
+  permissions: UiPermissions;
 }
 
 export function Settings({
@@ -37,6 +39,7 @@ export function Settings({
   onRestore,
   onSaveCategory,
   onArchiveCategory,
+  permissions,
 }: SettingsProps) {
   const [periodLockOpen, setPeriodLockOpen] = useState(false);
   const [numberingOpen, setNumberingOpen] = useState(false);
@@ -44,6 +47,8 @@ export function Settings({
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const lockedThrough = latestLockedThrough(data);
   const profile = data.settings.businessProfile;
+  const activeCategoryCount = data.categories.income.filter((category) => !category.archivedAt).length
+    + data.categories.expense.filter((category) => !category.archivedAt).length;
   const backupStats = [
     `${data.transactions.length} transactions`,
     `${data.contacts.length} contacts`,
@@ -62,67 +67,85 @@ export function Settings({
         <h1>Settings</h1>
         <p>Accounting controls, GST, data and app lock</p>
       </header>
-      <div className="list">
-        <button className="list-row" onClick={() => runSettingsAction(() => onUpdateSettings({ gstEnabled: !data.settings.gstEnabled }))}>
-          <span className="icon blue">%</span>
-          <span className="row-body"><b>Track GST</b><small>Show GST on sales and purchases</small></span>
-          <span className={`toggle ${data.settings.gstEnabled ? 'on' : ''}`} />
-        </button>
-        <div className="list-row">
-          <span className="icon blue">BAS</span>
-          <span className="row-body"><b>BAS Basis</b><small>Controls GST report timing</small></span>
-          <select
-            className="inline-input"
-            value={data.settings.basBasis || 'cash'}
-            onChange={(event) => {
-              const basBasis = event.target.value as BasBasis;
-              runSettingsAction(() => onUpdateSettings({ basBasis }));
-            }}
-          >
-            <option value="cash">Cash</option>
-            <option value="accrual">Accrual</option>
-          </select>
+      {permissions.canManageSettings ? (
+        <div className="list">
+          <button className="list-row" onClick={() => runSettingsAction(() => onUpdateSettings({ gstEnabled: !data.settings.gstEnabled }))}>
+            <span className="icon blue">%</span>
+            <span className="row-body"><b>Track GST</b><small>Show GST on sales and purchases</small></span>
+            <span className={`toggle ${data.settings.gstEnabled ? 'on' : ''}`} />
+          </button>
+          <div className="list-row">
+            <span className="icon blue">BAS</span>
+            <span className="row-body"><b>BAS Basis</b><small>Controls GST report timing</small></span>
+            <select
+              className="inline-input"
+              value={data.settings.basBasis || 'cash'}
+              onChange={(event) => {
+                const basBasis = event.target.value as BasBasis;
+                runSettingsAction(() => onUpdateSettings({ basBasis }));
+              }}
+            >
+              <option value="cash">Cash</option>
+              <option value="accrual">Accrual</option>
+            </select>
+          </div>
+          <div className="list-row">
+            <span className="icon orange">GST</span>
+            <span className="row-body"><b>GST Rate</b><small>Fixed for Australia</small></span>
+            <strong className="setting-value">10%</strong>
+          </div>
         </div>
-        <div className="list-row">
-          <span className="icon orange">GST</span>
-          <span className="row-body"><b>GST Rate</b><small>Fixed for Australia</small></span>
-          <strong className="setting-value">10%</strong>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="section-header"><h3>Accounting Controls</h3></div>
-      <div className="list">
-        <button className="list-row" onClick={() => setPeriodLockOpen(true)}>
-          <span className="icon blue">✓</span>
-          <span className="row-body"><b>Period Lock</b><small>{lockedThrough ? `Locked through ${lockedThrough}` : 'No locked accounting period'}</small></span>
-          <span className="row-right wide"><b>{lockedThrough || 'Open'}</b><small>Closed period</small></span>
-        </button>
-        <button className="list-row" onClick={() => setNumberingOpen(true)}>
-          <span className="icon orange">#</span>
-          <span className="row-body"><b>Document Numbering</b><small>Invoice, bill, credit note and receipt sequences</small></span>
-          <span className="row-right wide"><b>{data.settings.invoicePrefix}{data.settings.nextInvoiceNumber}</b><small>{data.settings.billPrefix}{data.settings.nextBillNumber}</small></span>
-        </button>
-      </div>
+      {permissions.canManagePeriodLocks || permissions.canManageSettings ? (
+        <>
+          <div className="section-header"><h3>Accounting Controls</h3></div>
+          <div className="list">
+            {permissions.canManagePeriodLocks ? (
+              <button className="list-row" onClick={() => setPeriodLockOpen(true)}>
+                <span className="icon blue">✓</span>
+                <span className="row-body"><b>Period Lock</b><small>{lockedThrough ? `Locked through ${lockedThrough}` : 'No locked accounting period'}</small></span>
+                <span className="row-right wide"><b>{lockedThrough || 'Open'}</b><small>Closed period</small></span>
+              </button>
+            ) : null}
+            {permissions.canManageSettings ? (
+              <button className="list-row" onClick={() => setNumberingOpen(true)}>
+                <span className="icon orange">#</span>
+                <span className="row-body"><b>Document Numbering</b><small>Invoice, bill, credit note and receipt sequences</small></span>
+                <span className="row-right wide"><b>{data.settings.invoicePrefix}{data.settings.nextInvoiceNumber}</b><small>{data.settings.billPrefix}{data.settings.nextBillNumber}</small></span>
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
-      <div className="section-header"><h3>Categories</h3></div>
-      <div className="list">
-        <button className="list-row" onClick={() => setCategoriesOpen(true)}>
-          <span className="icon orange">🏷</span>
-          <span className="row-body"><b>Manage Categories</b><small>Income and expense categories</small></span>
-          <span className="row-right wide"><b>{data.categories.income.length + data.categories.expense.length}</b><small>Categories</small></span>
-        </button>
-      </div>
+      {permissions.canWriteAccounting ? (
+        <>
+          <div className="section-header"><h3>Categories</h3></div>
+          <div className="list">
+            <button className="list-row" onClick={() => setCategoriesOpen(true)}>
+              <span className="icon orange">🏷</span>
+              <span className="row-body"><b>Manage Categories</b><small>Income and expense categories</small></span>
+              <span className="row-right wide"><b>{activeCategoryCount}</b><small>Active</small></span>
+            </button>
+          </div>
+        </>
+      ) : null}
 
-      <div className="section-header"><h3>Business</h3></div>
-      <button className="business-profile-card" onClick={() => setBusinessOpen(true)}>
-        <span className="business-mark">{profile.logoText || profile.name.slice(0, 1) || 'A'}</span>
-        <span className="business-profile-body">
-          <b>{profile.name || 'Business Profile'}</b>
-          <small>{[profile.abn ? `ABN ${profile.abn}` : '', profile.email, profile.phone].filter(Boolean).join(' · ') || 'Add ABN, contact details and invoice text'}</small>
-          {profile.address ? <em>{profile.address}</em> : null}
-        </span>
-        <span className="row-right wide"><b>Edit</b><small>Invoices & bills</small></span>
-      </button>
+      {permissions.canManageSettings ? (
+        <>
+          <div className="section-header"><h3>Business</h3></div>
+          <button className="business-profile-card" onClick={() => setBusinessOpen(true)}>
+            <span className="business-mark">{profile.logoText || profile.name.slice(0, 1) || 'A'}</span>
+            <span className="business-profile-body">
+              <b>{profile.name || 'Business Profile'}</b>
+              <small>{[profile.abn ? `ABN ${profile.abn}` : '', profile.email, profile.phone].filter(Boolean).join(' · ') || 'Add ABN, contact details and invoice text'}</small>
+              {profile.address ? <em>{profile.address}</em> : null}
+            </span>
+            <span className="row-right wide"><b>Edit</b><small>Invoices & bills</small></span>
+          </button>
+        </>
+      ) : null}
 
       <div className="section-header"><h3>Security</h3></div>
       <div className="list">
@@ -139,40 +162,44 @@ export function Settings({
         ) : null}
       </div>
 
-      <div className="section-header"><h3>Data</h3></div>
-      <div className="data-panel">
-        <div className="data-panel-head">
-          <span className="icon blue">↓</span>
-          <span>
-            <b>{remoteMode ? 'Backend Backup' : 'Local Backup'}</b>
-            <small>{backupStats}</small>
-          </span>
-        </div>
-        <div className="data-actions">
-          <button className="primary" onClick={onBackup}>Download Backup</button>
-          <label className="secondary file-action">
-            Restore Backup
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) onRestore(file);
-                event.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-        <p className="data-note">Backup files include settings, contacts, accounts, invoices, bills, journals, reconciliations and audit log entries.</p>
-      </div>
-      <div className="list compact-danger-list">
-        <button className="list-row danger-row" onClick={onReset}>
-          <span className="icon red">!</span>
-          <span className="row-body"><b>{remoteMode ? 'Reset Backend Ledger' : 'Reset Local Data'}</b><small>{remoteMode ? 'Replaces backend ledger data with the default accounting foundation after confirmation' : "Clears this browser's local app data after confirmation"}</small></span>
-        </button>
-      </div>
+      {permissions.canManageLedgerData ? (
+        <>
+          <div className="section-header"><h3>Data</h3></div>
+          <div className="data-panel">
+            <div className="data-panel-head">
+              <span className="icon blue">↓</span>
+              <span>
+                <b>{remoteMode ? 'Backend Backup' : 'Local Backup'}</b>
+                <small>{backupStats}</small>
+              </span>
+            </div>
+            <div className="data-actions">
+              <button className="primary" onClick={onBackup}>Download Backup</button>
+              <label className="secondary file-action">
+                Restore Backup
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onRestore(file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            <p className="data-note">Backup files include settings, contacts, accounts, invoices, bills, journals, reconciliations and audit log entries.</p>
+          </div>
+          <div className="list compact-danger-list">
+            <button className="list-row danger-row" onClick={onReset}>
+              <span className="icon red">!</span>
+              <span className="row-body"><b>{remoteMode ? 'Reset Backend Ledger' : 'Reset Local Data'}</b><small>{remoteMode ? 'Replaces backend ledger data with the default accounting foundation after confirmation' : "Clears this browser's local app data after confirmation"}</small></span>
+            </button>
+          </div>
+        </>
+      ) : null}
 
-      <PeriodLockModal
+      {permissions.canManagePeriodLocks ? <PeriodLockModal
         open={periodLockOpen}
         data={data}
         onClose={() => setPeriodLockOpen(false)}
@@ -186,8 +213,8 @@ export function Settings({
         onClear={() => {
           onClearPeriodLocks();
         }}
-      />
-      <NumberingModal
+      /> : null}
+      {permissions.canManageSettings ? <NumberingModal
         open={numberingOpen}
         data={data}
         onClose={() => setNumberingOpen(false)}
@@ -198,8 +225,8 @@ export function Settings({
             window.alert(error instanceof Error ? error.message : 'Document numbering save failed.');
           });
         }}
-      />
-      <BusinessProfileModal
+      /> : null}
+      {permissions.canManageSettings ? <BusinessProfileModal
         open={businessOpen}
         profile={profile}
         onClose={() => setBusinessOpen(false)}
@@ -210,8 +237,8 @@ export function Settings({
             window.alert(error instanceof Error ? error.message : 'Business profile save failed.');
           });
         }}
-      />
-      <CategoriesModal
+      /> : null}
+      {permissions.canWriteAccounting ? <CategoriesModal
         open={categoriesOpen}
         data={data}
         onClose={() => setCategoriesOpen(false)}
@@ -229,7 +256,7 @@ export function Settings({
             window.alert(error instanceof Error ? error.message : 'Category archive failed.');
           }
         }}
-      />
+      /> : null}
     </section>
   );
 }
@@ -487,8 +514,13 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
     setChartAccountId(defaultChartAccountId);
   }, [defaultChartAccountId, tab]);
 
-  const categories = data.categories[tab];
+  const categories = data.categories[tab].filter((c) => !c.archivedAt);
   const editingCategory = editingId ? categories.find((c) => c.id === editingId) : null;
+  const accountLabel = tab === 'income' ? 'Revenue Chart Account' : 'Expense Chart Account';
+  const categoryAccountName = (category: Category) => {
+    const account = data.chartOfAccounts.find((item) => item.id === category.chartAccountId);
+    return account ? `${account.code} · ${account.name}` : 'No chart account';
+  };
 
   function startEdit(category: Category) {
     setEditingId(category.id);
@@ -523,7 +555,11 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
 
   async function handleArchive() {
     if (!editingCategory) return;
-    if (!window.confirm(`Archive "${editingCategory.name}"?`)) return;
+    const usageCount = data.transactions.filter((tx) => tx.categoryId === editingCategory.id).length;
+    const usageNote = usageCount > 0
+      ? `\n\n${usageCount} transaction${usageCount === 1 ? '' : 's'} use this category — they will continue to display correctly.`
+      : '';
+    if (!window.confirm(`Archive "${editingCategory.name}"? It will no longer appear in pickers for new transactions.${usageNote}`)) return;
     await onArchive(editingCategory.id);
     setEditingId(null);
     setName('');
@@ -570,7 +606,7 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
             onClick={() => startEdit(category)}
           >
             <span className="icon" style={{ backgroundColor: category.color }}>{category.icon}</span>
-            <span className="row-body"><b>{category.name}</b></span>
+            <span className="row-body"><b>{category.name}</b><small>{categoryAccountName(category)}</small></span>
             <span className="row-right"><small>{editingId === category.id ? 'Editing' : 'Edit'}</small></span>
           </button>
         )) : <div className="empty-card flat">No {tab} categories</div>}
@@ -579,13 +615,18 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
       <div className="form-card">
         <label>Name <input value={name} onChange={(event) => setName(event.target.value)} /></label>
         <label>Icon <input value={icon} maxLength={4} onChange={(event) => setIcon(event.target.value)} /></label>
-        <label>Chart Account
+        <label>{accountLabel}
           <select value={chartAccountId} onChange={(event) => setChartAccountId(event.target.value)}>
             {chartAccounts.map((account) => (
-              <option key={account.id} value={account.id}>{chartAccountName(data, account.id)}</option>
+              <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
             ))}
           </select>
         </label>
+      </div>
+      <div className="empty-card modal-note">
+        {tab === 'income'
+          ? 'Income categories post to revenue accounts only.'
+          : 'Expense categories post to expense accounts only.'}
       </div>
       <div className="swatch-row">
         {categoryColors.map((c) => (

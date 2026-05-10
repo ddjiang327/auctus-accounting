@@ -6,9 +6,10 @@ interface ActivityProps {
   data: LedgerData;
   onEditTransaction: (tx: Transaction) => void;
   onRecordPayment: (tx: Transaction) => void;
+  canWrite?: boolean;
 }
 
-export function Activity({ data, onEditTransaction, onRecordPayment }: ActivityProps) {
+export function Activity({ data, onEditTransaction, onRecordPayment, canWrite = true }: ActivityProps) {
   const outstanding = data.transactions
     .filter((tx) => isInvoice(tx) && txBalance(tx, data) > 0)
     .sort((a, b) => ((a.dueDate || a.date) + a.id).localeCompare((b.dueDate || b.date) + b.id));
@@ -39,16 +40,18 @@ export function Activity({ data, onEditTransaction, onRecordPayment }: ActivityP
               </span>
               <span className="row-actions">
                 <b>{fmtMoney(txBalance(tx, data))}</b>
-                <button className={tx.type === 'income' ? 'success' : 'primary'} onClick={() => onRecordPayment(tx)}>
-                  {tx.type === 'income' ? 'Receive' : 'Pay'}
-                </button>
+                {canWrite ? (
+                  <button className={tx.type === 'income' ? 'success' : 'primary'} onClick={() => onRecordPayment(tx)}>
+                    {tx.type === 'income' ? 'Receive' : 'Pay'}
+                  </button>
+                ) : null}
               </span>
             </div>
           );
         }) : <div className="empty-card flat">No outstanding invoices</div>}
       </div>
       <div className="section-header"><h3>All Transactions</h3></div>
-      <TransactionList data={data} transactions={[...data.transactions].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id))} onEditTransaction={onEditTransaction} />
+      <TransactionList data={data} transactions={[...data.transactions].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id))} onEditTransaction={onEditTransaction} canEditTransactions={canWrite} />
     </section>
   );
 }

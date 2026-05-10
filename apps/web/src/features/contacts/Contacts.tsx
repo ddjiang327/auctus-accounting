@@ -6,12 +6,13 @@ import type { Contact, ContactType, LedgerData, PaymentTerms } from '../../domai
 interface ContactsProps {
   data: LedgerData;
   onSaveContact: (contact: Contact) => void;
+  canWrite?: boolean;
 }
 
 const contactTypes: ContactType[] = ['customer', 'supplier', 'both'];
 const paymentTerms: PaymentTerms[] = ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'];
 
-export function Contacts({ data, onSaveContact }: ContactsProps) {
+export function Contacts({ data, onSaveContact, canWrite = true }: ContactsProps) {
   const [filter, setFilter] = useState<ContactType | 'all'>('all');
   const [editing, setEditing] = useState<Contact | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,12 +63,12 @@ export function Contacts({ data, onSaveContact }: ContactsProps) {
             </button>
           ))}
         </div>
-        <button className="small-action" onClick={() => openNewContact(filter === 'supplier' ? 'supplier' : 'customer')}>Add Contact</button>
+        {canWrite ? <button className="small-action" onClick={() => openNewContact(filter === 'supplier' ? 'supplier' : 'customer')}>Add Contact</button> : null}
       </div>
 
       <div className="list desktop-table">
         {contacts.length ? contacts.map((contact) => (
-          <button key={contact.id} className="list-row" onClick={() => openEditContact(contact)}>
+          <button key={contact.id} className="list-row" onClick={canWrite ? () => openEditContact(contact) : undefined}>
             <span className="icon blue">{contact.name.slice(0, 1).toUpperCase()}</span>
             <span className="row-body">
               <b>{contact.name}</b>
@@ -81,12 +82,14 @@ export function Contacts({ data, onSaveContact }: ContactsProps) {
         )) : <div className="empty-card flat">No contacts yet</div>}
       </div>
 
-      <ContactModal
-        open={modalOpen}
-        contact={editing}
-        onClose={() => setModalOpen(false)}
-        onSave={saveContact}
-      />
+      {canWrite ? (
+        <ContactModal
+          open={modalOpen}
+          contact={editing}
+          onClose={() => setModalOpen(false)}
+          onSave={saveContact}
+        />
+      ) : null}
     </section>
   );
 }

@@ -16,9 +16,10 @@ interface JournalsProps {
   onSaveJournal: (journal: ManualJournal) => void | Promise<void>;
   onVoidJournal: (journal: ManualJournal) => void | Promise<void>;
   onReverseJournal: (journal: ManualJournal) => void | Promise<void>;
+  canWrite?: boolean;
 }
 
-export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal }: JournalsProps) {
+export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal, canWrite = true }: JournalsProps) {
   const [tab, setTab] = useState<JournalTab>('journals');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingJournal, setEditingJournal] = useState<ManualJournal | null>(null);
@@ -48,7 +49,7 @@ export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal 
           <h1>Journals / Audit</h1>
           <p>Manual postings and accounting audit trail</p>
         </div>
-        <button className="primary" onClick={openNewJournal}>New Manual Journal</button>
+        {canWrite ? <button className="primary" onClick={openNewJournal}>New Manual Journal</button> : null}
       </header>
 
       <div className="toolbar-row">
@@ -82,30 +83,34 @@ export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal 
                 window.alert(error instanceof Error ? error.message : 'Manual journal reverse failed.');
               });
             }}
+            canWrite={canWrite}
           />
         </>
       ) : <AuditLogTable rows={auditRows} />}
 
-      <ManualJournalModal
-        open={modalOpen}
-        data={data}
-        journal={editingJournal}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingJournal(null);
-        }}
-        onSave={saveJournal}
-      />
+      {canWrite ? (
+        <ManualJournalModal
+          open={modalOpen}
+          data={data}
+          journal={editingJournal}
+          onClose={() => {
+            setModalOpen(false);
+            setEditingJournal(null);
+          }}
+          onSave={saveJournal}
+        />
+      ) : null}
     </section>
   );
 }
 
-function JournalList({ data, journals, onEdit, onVoid, onReverse }: {
+function JournalList({ data, journals, onEdit, onVoid, onReverse, canWrite = true }: {
   data: LedgerData;
   journals: ManualJournal[];
   onEdit: (journal: ManualJournal) => void;
   onVoid: (journal: ManualJournal) => void;
   onReverse: (journal: ManualJournal) => void;
+  canWrite?: boolean;
 }) {
   return (
     <div className="list compact">
@@ -125,9 +130,9 @@ function JournalList({ data, journals, onEdit, onVoid, onReverse }: {
               <JournalLines data={data} lines={journal.lines} />
             </div>
             <div className="row-actions">
-              {canChange ? <button onClick={() => onEdit(journal)}>Edit</button> : null}
-              {canChange ? <button className="secondary-action" onClick={() => onReverse(journal)}>Reverse</button> : null}
-              {!isVoided ? <button className="danger-action" onClick={() => onVoid(journal)}>Void</button> : null}
+              {canWrite && canChange ? <button onClick={() => onEdit(journal)}>Edit</button> : null}
+              {canWrite && canChange ? <button className="secondary-action" onClick={() => onReverse(journal)}>Reverse</button> : null}
+              {canWrite && !isVoided ? <button className="danger-action" onClick={() => onVoid(journal)}>Void</button> : null}
             </div>
           </div>
         );

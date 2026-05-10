@@ -1,12 +1,23 @@
-import { BarChart3, BookOpenText, Home, List, Plus, ReceiptText, Settings, ShoppingCart, Users, WalletCards } from 'lucide-react';
+import { BarChart3, BookOpenText, Home, List, LogOut, Plus, ReceiptText, Settings, ShoppingCart, SwitchCamera, Users, WalletCards } from 'lucide-react';
 import type { ReactNode } from 'react';
+
+type SyncState = 'idle' | 'syncing' | 'error';
 
 export type ViewKey = 'dashboard' | 'activity' | 'sales' | 'purchases' | 'contacts' | 'accounts' | 'reports' | 'journals' | 'settings';
 
 interface ShellProps {
   view: ViewKey;
   onViewChange: (view: ViewKey) => void;
-  onAdd: () => void;
+  onAdd?: () => void;
+  mode?: 'local' | 'cloud';
+  businessName?: string;
+  userRole?: string;
+  syncState?: SyncState;
+  syncError?: string | null;
+  onDismissSyncError?: () => void;
+  onRetrySync?: () => void;
+  onLogout?: () => void;
+  onSwitchWorkspace?: () => void;
   children: ReactNode;
 }
 
@@ -22,17 +33,21 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: 'settings', label: 'Settings', icon: <Settings size={23} /> },
 ];
 
-export function Shell({ view, onViewChange, onAdd, children }: ShellProps) {
+export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole, syncState, syncError, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
   const active = navItems.find((item) => item.key === view) || navItems[0];
   return (
     <div className="viewport">
       <aside className="sidebar">
         <div className="brand-block">
-          <span className="brand-mark">A</span>
+          <img src="/logo-mark.svg" className="brand-mark" alt="Auctus" />
           <span>
             <b>Auctus</b>
-            <small>AUD workspace</small>
+            {mode === 'local'
+              ? <small>Local demo</small>
+              : <small>{businessName ?? 'Cloud workspace'}{userRole ? ` · ${userRole}` : ''}</small>
+            }
           </span>
+          {mode === 'local' && <span className="mode-badge">Demo</span>}
         </div>
         <nav className="side-nav">
           {navItems.map((item) => (
@@ -42,6 +57,22 @@ export function Shell({ view, onViewChange, onAdd, children }: ShellProps) {
             </button>
           ))}
         </nav>
+        {(onSwitchWorkspace || onLogout) && (
+          <div className="side-nav" style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
+            {onSwitchWorkspace && (
+              <button className="side-nav-item" onClick={onSwitchWorkspace}>
+                <SwitchCamera size={23} />
+                <span>Switch workspace</span>
+              </button>
+            )}
+            {onLogout && (
+              <button className="side-nav-item" onClick={onLogout}>
+                <LogOut size={23} />
+                <span>Sign out</span>
+              </button>
+            )}
+          </div>
+        )}
       </aside>
       <section className="app-frame">
         <header className="top-bar">
@@ -49,11 +80,30 @@ export function Shell({ view, onViewChange, onAdd, children }: ShellProps) {
             <span className="top-kicker">Auctus Web</span>
             <h2>{active.label}</h2>
           </div>
-          <button className="top-add" onClick={onAdd}>
-            <Plus size={18} />
-            <span>New Transaction</span>
-          </button>
+          <div className="top-bar-end">
+            {syncState === 'syncing' && <span className="sync-chip syncing">Syncing…</span>}
+            {syncState === 'error' && syncError && (
+              <button className="sync-chip error" onClick={onDismissSyncError} title={syncError}>
+                Sync error ×
+              </button>
+            )}
+            {onAdd ? (
+              <button className="top-add" onClick={onAdd}>
+                <Plus size={18} />
+                <span>New Transaction</span>
+              </button>
+            ) : null}
+          </div>
         </header>
+        {syncState === 'error' && syncError ? (
+          <div className="app-alert">
+            <span>{syncError}</span>
+            <div>
+              {onRetrySync ? <button onClick={onRetrySync}>Retry</button> : null}
+              {onDismissSyncError ? <button onClick={onDismissSyncError}>Dismiss</button> : null}
+            </div>
+          </div>
+        ) : null}
         <main className="content">{children}</main>
       </section>
     </div>

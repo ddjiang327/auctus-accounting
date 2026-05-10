@@ -34,6 +34,7 @@ export interface Category {
   icon: string;
   color: string;
   chartAccountId?: string;
+  archivedAt?: string;
 }
 
 export interface ChartAccount {

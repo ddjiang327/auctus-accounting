@@ -15,9 +15,10 @@ interface DocumentsProps {
   onEditTransaction: (tx: Transaction) => void;
   onRecordPayment: (tx: Transaction) => void;
   onApplyCredit: (allocations: Array<Omit<CreditAllocation, 'id'>>) => boolean;
+  canWrite?: boolean;
 }
 
-export function Documents({ mode = 'combined', data, onCreateDocument, onCreateCreditNote, onEditTransaction, onRecordPayment, onApplyCredit }: DocumentsProps) {
+export function Documents({ mode = 'combined', data, onCreateDocument, onCreateCreditNote, onEditTransaction, onRecordPayment, onApplyCredit, canWrite = true }: DocumentsProps) {
   const fixedTab: DocumentTab | null = mode === 'sales' ? 'invoices' : mode === 'purchases' ? 'bills' : null;
   const [activeTab, setActiveTab] = useState<DocumentTab>('invoices');
   const [filter, setFilter] = useState<DocumentFilter>('outstanding');
@@ -65,6 +66,7 @@ export function Documents({ mode = 'combined', data, onCreateDocument, onCreateC
         onBack={() => setSelectedId(null)}
         onEditTransaction={onEditTransaction}
         onRecordPayment={onRecordPayment}
+        canWrite={canWrite}
       />
     );
   }
@@ -76,14 +78,16 @@ export function Documents({ mode = 'combined', data, onCreateDocument, onCreateC
           <h1>{pageTitle}</h1>
           <p>{pageSubtitle}</p>
         </div>
-        <div className="detail-actions">
-          <button className="primary secondary-action" onClick={() => onCreateCreditNote(tab)}>
-            {tab === 'invoices' ? 'New Credit Note' : 'New Supplier Credit'}
-          </button>
-          <button className={tab === 'invoices' ? 'primary success' : 'primary'} onClick={() => onCreateDocument(tab)}>
-            {tab === 'invoices' ? 'New Invoice' : 'New Bill'}
-          </button>
-        </div>
+        {canWrite ? (
+          <div className="detail-actions">
+            <button className="primary secondary-action" onClick={() => onCreateCreditNote(tab)}>
+              {tab === 'invoices' ? 'New Credit Note' : 'New Supplier Credit'}
+            </button>
+            <button className={tab === 'invoices' ? 'primary success' : 'primary'} onClick={() => onCreateDocument(tab)}>
+              {tab === 'invoices' ? 'New Invoice' : 'New Bill'}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <div className="toolbar-row">
@@ -118,7 +122,7 @@ export function Documents({ mode = 'combined', data, onCreateDocument, onCreateC
 
       <div className="section-header">
         <h3>{filterLabel(filter)} {title}</h3>
-        <button className="small-action" onClick={() => onCreateDocument(tab)}>{tab === 'invoices' ? 'Create Invoice' : 'Enter Bill'}</button>
+        {canWrite ? <button className="small-action" onClick={() => onCreateDocument(tab)}>{tab === 'invoices' ? 'Create Invoice' : 'Enter Bill'}</button> : null}
       </div>
 
       <div className="list compact">
@@ -130,13 +134,14 @@ export function Documents({ mode = 'combined', data, onCreateDocument, onCreateC
             onOpenDetail={setSelectedId}
             onEditTransaction={onEditTransaction}
             onRecordPayment={onRecordPayment}
+            canWrite={canWrite}
           />
         )) : <div className="empty-card flat">No {filter === 'all' ? title.toLowerCase() : `${filterLabel(filter).toLowerCase()} ${title.toLowerCase()}`}</div>}
       </div>
 
       <div className="section-header">
         <h3>{tab === 'invoices' ? 'Credit Notes' : 'Supplier Credits'}</h3>
-        <button className="small-action" onClick={() => onCreateCreditNote(tab)}>{tab === 'invoices' ? 'Create Credit Note' : 'Enter Supplier Credit'}</button>
+        {canWrite ? <button className="small-action" onClick={() => onCreateCreditNote(tab)}>{tab === 'invoices' ? 'Create Credit Note' : 'Enter Supplier Credit'}</button> : null}
       </div>
       <div className="list compact">
         {creditNotes.length ? creditNotes.map((tx) => (
@@ -146,30 +151,34 @@ export function Documents({ mode = 'combined', data, onCreateDocument, onCreateC
             tx={tx}
             onEditTransaction={onEditTransaction}
             onApplyCredit={setApplyingCredit}
+            canWrite={canWrite}
           />
         )) : <div className="empty-card flat">No {tab === 'invoices' ? 'credit notes' : 'supplier credits'}</div>}
       </div>
 
-      <CreditApplicationModal
-        open={!!applyingCredit}
-        data={data}
-        type={type}
-        creditNote={applyingCredit}
-        onClose={() => setApplyingCredit(null)}
-        onSave={(allocations) => {
-          if (onApplyCredit(allocations)) setApplyingCredit(null);
-        }}
-      />
+      {canWrite ? (
+        <CreditApplicationModal
+          open={!!applyingCredit}
+          data={data}
+          type={type}
+          creditNote={applyingCredit}
+          onClose={() => setApplyingCredit(null)}
+          onSave={(allocations) => {
+            if (onApplyCredit(allocations)) setApplyingCredit(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
 
-function DocumentRow({ data, tx, onOpenDetail, onEditTransaction, onRecordPayment }: {
+function DocumentRow({ data, tx, onOpenDetail, onEditTransaction, onRecordPayment, canWrite = true }: {
   data: LedgerData;
   tx: Transaction;
   onOpenDetail: (id: string) => void;
   onEditTransaction: (tx: Transaction) => void;
   onRecordPayment: (tx: Transaction) => void;
+  canWrite?: boolean;
 }) {
   const category = getCategory(data, tx.categoryId);
   const status = invoiceStatus(tx, data);
@@ -195,18 +204,19 @@ function DocumentRow({ data, tx, onOpenDetail, onEditTransaction, onRecordPaymen
         <small>Paid {fmtMoney(txPaid(tx))}</small>
       </div>
       <div className="row-actions">
-        <button onClick={() => onEditTransaction(tx)}>Edit</button>
-        {balance > 0.005 ? <button className={tx.type === 'income' ? 'success' : 'primary'} onClick={() => onRecordPayment(tx)}>{actionLabel}</button> : null}
+        {canWrite ? <button onClick={() => onEditTransaction(tx)}>Edit</button> : null}
+        {canWrite && balance > 0.005 ? <button className={tx.type === 'income' ? 'success' : 'primary'} onClick={() => onRecordPayment(tx)}>{actionLabel}</button> : null}
       </div>
     </div>
   );
 }
 
-function CreditNoteRow({ data, tx, onEditTransaction, onApplyCredit }: {
+function CreditNoteRow({ data, tx, onEditTransaction, onApplyCredit, canWrite = true }: {
   data: LedgerData;
   tx: Transaction;
   onEditTransaction: (tx: Transaction) => void;
   onApplyCredit: (tx: Transaction) => void;
+  canWrite?: boolean;
 }) {
   const category = getCategory(data, tx.categoryId);
   const party = contactName(data, tx.contactId, tx.party) || (tx.type === 'income' ? 'Customer' : 'Supplier');
@@ -215,8 +225,8 @@ function CreditNoteRow({ data, tx, onEditTransaction, onApplyCredit }: {
   const remaining = creditNoteBalance(tx, data);
   return (
     <div className="list-row document-row">
-      <button className="icon orange" onClick={() => onEditTransaction(tx)}>{tx.type === 'income' ? 'CN' : 'SC'}</button>
-      <button className="row-body document-main" onClick={() => onEditTransaction(tx)}>
+      <button className="icon orange" onClick={canWrite ? () => onEditTransaction(tx) : undefined}>{tx.type === 'income' ? 'CN' : 'SC'}</button>
+      <button className="row-body document-main" onClick={canWrite ? () => onEditTransaction(tx) : undefined}>
         <b>{tx.creditNoteNo || (tx.type === 'income' ? 'Credit Note' : 'Supplier Credit')} · {party}</b>
         <small>{category?.name || 'Uncategorised'} · Issued {tx.date}</small>
       </button>
@@ -229,19 +239,20 @@ function CreditNoteRow({ data, tx, onEditTransaction, onApplyCredit }: {
         <small>Allocated {fmtMoney(allocated)}</small>
       </div>
       <div className="row-actions">
-        <button onClick={() => onEditTransaction(tx)}>Edit</button>
-        {remaining > 0.005 ? <button className="success" onClick={() => onApplyCredit(tx)}>Apply</button> : null}
+        {canWrite ? <button onClick={() => onEditTransaction(tx)}>Edit</button> : null}
+        {canWrite && remaining > 0.005 ? <button className="success" onClick={() => onApplyCredit(tx)}>Apply</button> : null}
       </div>
     </div>
   );
 }
 
-function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment }: {
+function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment, canWrite = true }: {
   data: LedgerData;
   tx: Transaction;
   onBack: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onRecordPayment: (tx: Transaction) => void;
+  canWrite?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const status = invoiceStatus(tx, data);
@@ -282,8 +293,8 @@ function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment }
         <div className="detail-actions">
           <span className={`status-pill ${status.tone}`}>{status.label}</span>
           <button className="primary secondary-action" onClick={() => setPreviewOpen(true)}>Preview / PDF</button>
-          <button className="primary" onClick={() => onEditTransaction(tx)}>Edit</button>
-          {balance > 0.005 ? <button className={tx.type === 'income' ? 'primary success' : 'primary'} onClick={() => onRecordPayment(tx)}>{actionLabel}</button> : null}
+          {canWrite ? <button className="primary" onClick={() => onEditTransaction(tx)}>Edit</button> : null}
+          {canWrite && balance > 0.005 ? <button className={tx.type === 'income' ? 'primary success' : 'primary'} onClick={() => onRecordPayment(tx)}>{actionLabel}</button> : null}
         </div>
       </header>
 

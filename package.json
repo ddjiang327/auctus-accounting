@@ -13,6 +13,12 @@
     "build": "npm run build:packages && npm run build:api && npm run build:web",
     "build:api": "npm run build -w apps/api",
     "build:web": "npm run build -w apps/web",
-    "build:packages": "npm run build -w packages/shared-types && npm run build -w packages/accounting-core"
+    "build:packages": "npm run build -w packages/shared-types && npm run build -w packages/accounting-core",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
   }
 }

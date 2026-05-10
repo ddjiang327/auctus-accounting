@@ -268,9 +268,7 @@ Server write paths must enforce these rules even if the client already checked t
 - Accounting documents are not physically deleted in commercial mode; use `voided_at`.
 - Voids, transaction edits, unlocks, admin overrides, restore/import, payment records, credit allocations, journal writes, and reconciliation finalise/void must create audit log entries.
 - Transaction edits that also record new payments should use the atomic update-with-payments RPC so transaction and payment writes cannot partially apply.
-- Viewer role cannot write accounting data.
-- Bookkeeper can create ordinary transactions and documents but cannot unlock periods or reset/restore/import business data.
-- Owner/admin can manage members, settings, period locks, backup/restore/import, and reset.
+- Role capabilities are defined in `PERMISSIONS.md`. Keep API guards, tests, Web UI, and mobile UI aligned with that matrix.
 - RLS must prevent cross-business reads and writes.
 
 ## API Write Paths

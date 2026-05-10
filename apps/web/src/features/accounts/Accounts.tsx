@@ -4,8 +4,10 @@ import {
   accountTypeLabel,
   auditEntry,
   bankFeedFingerprint,
+  chartAccountBalances,
   chartAccountLedger,
   chartAccountName,
+  chartAccountSort,
   fmtMoney,
   isDateLocked,
   reconciliationRows,
@@ -14,11 +16,12 @@ import {
   totalAssets,
 } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
-import type { Account, AccountType, BankFeedItem, BankReconciliation, LedgerData, Transaction } from '../../domain/models';
+import type { Account, AccountType, BankFeedItem, BankReconciliation, ChartAccountClass, LedgerData, Transaction } from '../../domain/models';
 
 interface AccountsProps {
   data: LedgerData;
   onSaveAccount: (account: Account) => void | Promise<void>;
+  onArchiveAccount: (accountId: string) => void | Promise<void>;
   onDataChange: (data: LedgerData) => void;
   onImportBankFeedItems?: (accountId: string, items: BankFeedItem[]) => Promise<void>;
   onMatchBankFeedItem?: (itemId: string, sourceId?: string) => Promise<void>;
@@ -27,14 +30,24 @@ interface AccountsProps {
   onRecordBankFeedItem?: (item: BankFeedItem, transaction: Transaction) => Promise<void>;
   onFinalizeBankReconciliation?: (reconciliation: BankReconciliation) => Promise<void>;
   onVoidBankReconciliation?: (reconciliation: BankReconciliation) => Promise<void>;
+  canWrite?: boolean;
 }
 
 const accountTypes: AccountType[] = ['cash', 'bank', 'ewallet', 'credit', 'investment', 'loan', 'other'];
 const defaultColors = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#5AC8FA', '#8E8E93'];
 
+const chartClassTabs: { key: ChartAccountClass; label: string }[] = [
+  { key: 'asset', label: 'Assets' },
+  { key: 'liability', label: 'Liabilities' },
+  { key: 'revenue', label: 'Revenue' },
+  { key: 'expense', label: 'Expenses' },
+  { key: 'equity', label: 'Equity' },
+];
+
 export function Accounts({
   data,
   onSaveAccount,
+  onArchiveAccount,
   onDataChange,
   onImportBankFeedItems,
   onMatchBankFeedItem,
@@ -43,12 +56,29 @@ export function Accounts({
   onRecordBankFeedItem,
   onFinalizeBankReconciliation,
   onVoidBankReconciliation,
+  canWrite = true,
 }: AccountsProps) {
   const totals = totalAssets(data);
   const [editing, setEditing] = useState<Account | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const [reconciliationOpen, setReconciliationOpen] = useState(false);
+  const [chartClass, setChartClass] = useState<ChartAccountClass>('asset');
+
+  const allBalances = useMemo(() => {
+    const balanceMap = new Map(chartAccountBalances(data).map((b) => [b.account.id, b.balance]));
+    return data.chartOfAccounts.map((account) => ({
+      account,
+      balance: balanceMap.get(account.id) ?? 0,
+    }));
+  }, [data]);
+
+  const filteredChart = useMemo(() =>
+    allBalances
+      .filter((b) => b.account.class === chartClass)
+      .sort((a, b) => chartAccountSort(a.account, b.account)),
+    [allBalances, chartClass]
+  );
 
   function openNewAccount() {
     setEditing(null);
@@ -62,6 +92,12 @@ export function Accounts({
 
   async function saveAccount(account: Account) {
     await onSaveAccount(account);
+    setModalOpen(false);
+    setEditing(null);
+  }
+
+  async function archiveAccount(accountId: string) {
+    await onArchiveAccount(accountId);
     setModalOpen(false);
     setEditing(null);
   }
@@ -80,19 +116,48 @@ export function Accounts({
           <div><small>Liabilities</small><b>{fmtMoney(totals.liabilities)}</b></div>
         </div>
       </div>
+
       <div className="section-header">
-        <h3>Accounts</h3>
-        <div className="detail-actions">
-          <button className="small-action secondary" onClick={() => setFeedOpen(true)}>Bank Feed</button>
-          <button className="small-action secondary" onClick={() => setReconciliationOpen(true)}>Reconcile</button>
-          <button className="small-action" onClick={openNewAccount}>Add</button>
+        <h3>Chart of Accounts</h3>
+      </div>
+      <div className="toolbar-row">
+        <div className="seg-control compact-control">
+          {chartClassTabs.map(({ key, label }) => (
+            <button key={key} className={chartClass === key ? 'active' : ''} onClick={() => setChartClass(key)}>
+              {label}
+            </button>
+          ))}
         </div>
+      </div>
+      <div className="list compact">
+        {filteredChart.length ? filteredChart.map(({ account, balance }) => (
+          <div key={account.id} className="list-row">
+            <span className="row-body">
+              <b>{account.code} · {account.name}</b>
+              <small>{account.group}</small>
+            </span>
+            <span className="row-right">
+              <b className={balance < 0 ? 'expense' : ''}>{fmtMoney(balance)}</b>
+            </span>
+          </div>
+        )) : <div className="empty-card flat">No {chartClassTabs.find((t) => t.key === chartClass)?.label.toLowerCase()} accounts</div>}
+      </div>
+
+      <div className="section-header">
+        <h3>Payment Accounts</h3>
+        {canWrite ? (
+          <div className="detail-actions">
+            <button className="small-action secondary" onClick={() => setFeedOpen(true)}>Bank Feed</button>
+            <button className="small-action secondary" onClick={() => setReconciliationOpen(true)}>Reconcile</button>
+            <button className="small-action" onClick={openNewAccount}>Add</button>
+          </div>
+        ) : null}
       </div>
       <div className="list">
         {data.accounts.map((account) => {
           const balance = accountBalance(data, account.id);
           return (
-            <button key={account.id} className="list-row" onClick={() => openEditAccount(account)}>
+            <button key={account.id} className="list-row" onClick={canWrite ? () => openEditAccount(account) : undefined}>
               <span className="icon" style={{ backgroundColor: account.color }}>{account.icon}</span>
               <span className="row-body">
                 <b>{account.name}</b>
@@ -103,33 +168,38 @@ export function Accounts({
           );
         })}
       </div>
-      <AccountModal
-        open={modalOpen}
-        data={data}
-        account={editing}
-        onClose={() => setModalOpen(false)}
-        onSave={saveAccount}
-      />
-      <BankFeedModal
-        open={feedOpen}
-        data={data}
-        onClose={() => setFeedOpen(false)}
-        onDataChange={onDataChange}
-        onImportBankFeedItems={onImportBankFeedItems}
-        onMatchBankFeedItem={onMatchBankFeedItem}
-        onIgnoreBankFeedItem={onIgnoreBankFeedItem}
-        onUnignoreBankFeedItem={onUnignoreBankFeedItem}
-        onRecordBankFeedItem={onRecordBankFeedItem}
-        onFinalizeBankReconciliation={onFinalizeBankReconciliation}
-      />
-      <ReconciliationModal
-        open={reconciliationOpen}
-        data={data}
-        onClose={() => setReconciliationOpen(false)}
-        onDataChange={onDataChange}
-        onFinalizeBankReconciliation={onFinalizeBankReconciliation}
-        onVoidBankReconciliation={onVoidBankReconciliation}
-      />
+      {canWrite ? (
+        <>
+          <AccountModal
+            open={modalOpen}
+            data={data}
+            account={editing}
+            onClose={() => setModalOpen(false)}
+            onSave={saveAccount}
+            onArchive={archiveAccount}
+          />
+          <BankFeedModal
+            open={feedOpen}
+            data={data}
+            onClose={() => setFeedOpen(false)}
+            onDataChange={onDataChange}
+            onImportBankFeedItems={onImportBankFeedItems}
+            onMatchBankFeedItem={onMatchBankFeedItem}
+            onIgnoreBankFeedItem={onIgnoreBankFeedItem}
+            onUnignoreBankFeedItem={onUnignoreBankFeedItem}
+            onRecordBankFeedItem={onRecordBankFeedItem}
+            onFinalizeBankReconciliation={onFinalizeBankReconciliation}
+          />
+          <ReconciliationModal
+            open={reconciliationOpen}
+            data={data}
+            onClose={() => setReconciliationOpen(false)}
+            onDataChange={onDataChange}
+            onFinalizeBankReconciliation={onFinalizeBankReconciliation}
+            onVoidBankReconciliation={onVoidBankReconciliation}
+          />
+        </>
+      ) : null}
     </section>
   );
 }
@@ -831,12 +901,14 @@ function AccountModal({
   account,
   onClose,
   onSave,
+  onArchive,
 }: {
   open: boolean;
   data: LedgerData;
   account: Account | null;
   onClose: () => void;
   onSave: (account: Account) => void | Promise<void>;
+  onArchive: (accountId: string) => void | Promise<void>;
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('bank');
@@ -844,6 +916,7 @@ function AccountModal({
   const [icon, setIcon] = useState('🏦');
   const [color, setColor] = useState(defaultColors[0]);
   const [chartAccountId, setChartAccountId] = useState('');
+  const archiveGuard = account ? paymentAccountArchiveGuard(data, account) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -881,12 +954,29 @@ function AccountModal({
     }
   }
 
+  async function archiveAccount() {
+    if (!account || archiveGuard?.blocked) return;
+    if (!window.confirm(`Archive "${account.name}"? It will no longer appear in payment account pickers.`)) return;
+    try {
+      await onArchive(account.id);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Account archive failed.');
+    }
+  }
+
   return (
     <Modal
       open={open}
       title={account ? 'Edit Account' : 'New Account'}
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save Account</button>}
+      footer={(
+        <>
+          <button className="primary wide" onClick={submit}>Save Account</button>
+          {account ? (
+            <button className="primary danger-action" onClick={archiveAccount} disabled={archiveGuard?.blocked}>Archive</button>
+          ) : null}
+        </>
+      )}
     >
       <div className="form-card">
         <label>Name <input value={name} onChange={(event) => setName(event.target.value)} /></label>
@@ -914,8 +1004,39 @@ function AccountModal({
             .map((chart) => <option key={chart.id} value={chart.id}>{chart.code} · {chart.name}</option>)}
         </select></label>
       </div>
+      {account ? (
+        <div className={`empty-card modal-note ${archiveGuard?.blocked ? 'warning-card' : ''}`}>
+          {archiveGuard?.message}
+        </div>
+      ) : null}
     </Modal>
   );
+}
+
+function paymentAccountArchiveGuard(data: LedgerData, account: Account) {
+  const usedByTransaction = data.transactions.some((tx) => !tx.voidedAt && (tx.accountId === account.id || tx.accountToId === account.id));
+  const usedByPayment = data.transactions.some((tx) => (tx.payments || []).some((payment) => !payment.voidedAt && payment.accountId === account.id));
+  const hasOpeningBalance = Math.abs(Number(account.initBalance) || 0) > 0.005;
+  const usedByBankFeed = (data.bankFeedItems || []).some((item) => item.accountId === account.id);
+  const usedByReconciliation = (data.bankReconciliations || []).some((reconciliation) => reconciliation.accountId === account.id && !reconciliation.voidedAt);
+  const reasons = [
+    hasOpeningBalance ? 'opening balance' : '',
+    usedByTransaction ? 'transactions' : '',
+    usedByPayment ? 'payments' : '',
+    usedByBankFeed ? 'bank feed items' : '',
+    usedByReconciliation ? 'reconciliations' : '',
+  ].filter(Boolean);
+
+  if (reasons.length) {
+    return {
+      blocked: true,
+      message: `This account has ${reasons.join(', ')} and cannot be archived. Keep it active for audit history and reporting.`,
+    };
+  }
+  return {
+    blocked: false,
+    message: 'This account has no ledger history and can be archived.',
+  };
 }
 
 function defaultChartForType(data: LedgerData, type: AccountType) {

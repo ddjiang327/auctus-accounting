@@ -1,71 +1,76 @@
 import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, LedgerData, ManualJournal, PeriodLock, Transaction, InvoicePayment } from '../domain/models';
 import { ledgerDataAdapter } from '../storage/ledgerDataAdapter';
+import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const API_URL = import.meta.env.VITE_AUCTUS_API_URL || 'http://127.0.0.1:4010';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const DEV_EMAIL = import.meta.env.VITE_AUCTUS_DEV_EMAIL || '';
 const DEV_PASSWORD = import.meta.env.VITE_AUCTUS_DEV_PASSWORD || '';
 
-const TOKEN_KEY = 'auctus_api_access_token';
 const BUSINESS_ID_KEY = 'auctus_api_business_id';
 
-type BusinessSummary = {
+export type BusinessSummary = {
   id: string;
   name: string;
+  currency: string;
+  locale: string;
+  role: 'owner' | 'admin' | 'bookkeeper' | 'viewer';
+  settings: {
+    gstEnabled: boolean;
+    basBasis: 'cash' | 'accrual';
+  } | null;
 };
 
 export function isAuctusApiConfigured() {
-  return Boolean(
-    localStorage.getItem(TOKEN_KEY) ||
-      (SUPABASE_URL && SUPABASE_ANON_KEY && DEV_EMAIL && DEV_PASSWORD)
-  );
+  return Boolean(API_URL && isSupabaseConfigured());
+}
+
+export function hasDevCredentials() {
+  return Boolean(DEV_EMAIL && DEV_PASSWORD);
+}
+
+export async function devAutoSignIn() {
+  if (!isSupabaseConfigured()) return null;
+  if (!DEV_EMAIL || !DEV_PASSWORD) return null;
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: DEV_EMAIL,
+    password: DEV_PASSWORD,
+  });
+  if (error) return null;
+  return data.session;
 }
 
 async function getAccessToken(): Promise<string> {
-  const existing = localStorage.getItem(TOKEN_KEY);
-  if (existing) return existing;
-
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !DEV_EMAIL || !DEV_PASSWORD) {
-    throw new Error('Auctus API is not configured.');
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('Not authenticated. Please sign in.');
   }
-
-  const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: DEV_EMAIL,
-      password: DEV_PASSWORD,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Supabase login failed: ${await response.text()}`);
-  }
-
-  const body = await response.json() as { access_token?: string };
-  if (!body.access_token) throw new Error('Supabase login did not return an access token.');
-  localStorage.setItem(TOKEN_KEY, body.access_token);
-  return body.access_token;
+  return token;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      ...options.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        ...options.headers,
+      },
+    });
+  } catch (error) {
+    throw new Error(error instanceof Error ? `Cannot reach Auctus API: ${error.message}` : 'Cannot reach Auctus API.');
+  }
 
   const text = await response.text();
-  const body = text ? JSON.parse(text) as unknown : {};
+  let body: unknown = {};
+  try {
+    body = text ? JSON.parse(text) as unknown : {};
+  } catch {
+    body = { message: text };
+  }
   if (!response.ok) {
     const message = body && typeof body === 'object' && 'message' in body ? String(body.message) : text;
     throw new Error(message || `Auctus API request failed: ${response.status}`);
@@ -74,20 +79,60 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-async function resolveBusinessId(): Promise<string> {
-  const selected = localStorage.getItem(BUSINESS_ID_KEY);
-  if (selected) return selected;
+export function getSelectedBusinessId(): string | null {
+  return localStorage.getItem(BUSINESS_ID_KEY);
+}
 
+export function setSelectedBusinessId(id: string | null) {
+  if (id) {
+    localStorage.setItem(BUSINESS_ID_KEY, id);
+  } else {
+    localStorage.removeItem(BUSINESS_ID_KEY);
+  }
+}
+
+export async function listBusinesses(): Promise<BusinessSummary[]> {
   const response = await request<{ businesses: BusinessSummary[] }>('/v1/businesses');
-  const businessId = response.businesses[0]?.id;
-  if (!businessId) throw new Error('No Auctus business workspace found for this user.');
-  localStorage.setItem(BUSINESS_ID_KEY, businessId);
-  return businessId;
+  return response.businesses;
+}
+
+export const getBusinesses = listBusinesses;
+
+export function selectBusiness(businessId: string | null) {
+  setSelectedBusinessId(businessId);
+}
+
+export async function createBusiness(name: string): Promise<BusinessSummary> {
+  const response = await request<{ business: { id: string; name: string; currency: string; locale: string } }>('/v1/businesses', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+  // After creation, re-list to get the full summary with role
+  const businesses = await listBusinesses();
+  const created = businesses.find((b) => b.id === response.business.id);
+  if (!created) throw new Error('Business created but not found in list.');
+  return created;
+}
+
+export async function logout() {
+  setSelectedBusinessId(null);
+  await supabase.auth.signOut();
 }
 
 function optionalString(value: string | undefined | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+async function resolveBusinessId(): Promise<string> {
+  const selected = getSelectedBusinessId();
+  if (selected) return selected;
+
+  const response = await request<{ businesses: Array<{ id: string; name: string }> }>('/v1/businesses');
+  const businessId = response.businesses[0]?.id;
+  if (!businessId) throw new Error('No Auctus business workspace found for this user.');
+  setSelectedBusinessId(businessId);
+  return businessId;
 }
 
 export const auctusApi = {

@@ -1,4 +1,4 @@
-import type { Account, AccountType, Category } from "@auctus/shared-types";
+import type { Account, AccountType, Category, ChartAccount } from "@auctus/shared-types";
 
 import { recordAuditEvent } from "../audit/service.js";
 import { ApiError } from "../businesses/service.js";
@@ -225,6 +225,26 @@ const assertChartAccount = (
   }
 };
 
+const assertCategoryChartAccount = (
+  chartAccounts: ChartAccount[],
+  type: CategoryType,
+  chartAccountId: string | undefined,
+): void => {
+  if (!chartAccountId) return;
+  const account = chartAccounts.find((item) => item.id === chartAccountId);
+  if (!account) {
+    throw new ApiError(400, "invalid_chart_account", "chartAccountId does not belong to this business.");
+  }
+  const expectedClass = type === "income" ? "revenue" : "expense";
+  if (account.class !== expectedClass) {
+    throw new ApiError(
+      400,
+      "invalid_chart_account_type",
+      `${type} categories must map to a ${expectedClass} chart account.`,
+    );
+  }
+};
+
 export const createPaymentAccount = async (
   supabase: SupabaseServiceClient,
   userId: string,
@@ -347,8 +367,17 @@ export const archivePaymentAccount = async (
   const usedByPayment = context.snapshot.ledger.transactions.some((transaction) =>
     (transaction.payments || []).some((payment) => !payment.voidedAt && payment.accountId === accountId),
   );
-  if (usedByTransaction || usedByPayment) {
-    throw new ApiError(400, "payment_account_in_use", "Payment account is used by active transactions or payments and cannot be archived.");
+  const hasOpeningBalance = Math.abs(Number(existing.initBalance) || 0) > 0.005;
+  const usedByBankFeed = (context.snapshot.ledger.bankFeedItems || []).some((item) => item.accountId === accountId);
+  const usedByReconciliation = (context.snapshot.ledger.bankReconciliations || []).some(
+    (reconciliation) => reconciliation.accountId === accountId && !reconciliation.voidedAt,
+  );
+  if (usedByTransaction || usedByPayment || hasOpeningBalance || usedByBankFeed || usedByReconciliation) {
+    throw new ApiError(
+      400,
+      "payment_account_in_use",
+      "Payment account has opening balances, transactions, payments, bank feed items, or reconciliations and cannot be archived.",
+    );
   }
 
   const { data, error } = await supabase
@@ -385,7 +414,7 @@ export const createCategory = async (
 ): Promise<Category> => {
   const context = await getWriteContext(supabase, userId, businessId);
   const input = parseCategoryInput(body);
-  assertChartAccount(new Set(context.snapshot.ledger.chartOfAccounts.map((account) => account.id)), input.chartAccountId, false);
+  assertCategoryChartAccount(context.snapshot.ledger.chartOfAccounts, input.type, input.chartAccountId);
 
   const { data, error } = await supabase
     .from("categories")
@@ -437,9 +466,11 @@ export const updateCategory = async (
   }
 
   const patch = parseCategoryPatch(body);
-  if (patch.chartAccountId) {
-    assertChartAccount(new Set(context.snapshot.ledger.chartOfAccounts.map((account) => account.id)), patch.chartAccountId);
-  }
+  assertCategoryChartAccount(
+    context.snapshot.ledger.chartOfAccounts,
+    patch.type ?? (context.snapshot.ledger.categories.income.some((category) => category.id === categoryId) ? "income" : "expense"),
+    patch.chartAccountId ?? (patch.type ? existing.chartAccountId : undefined),
+  );
 
   const update: Record<string, unknown> = {};
   if (patch.type) update.type = patch.type;
@@ -493,13 +524,6 @@ export const archiveCategory = async (
   );
   if (!existing) {
     throw new ApiError(404, "category_not_found", "Category not found.");
-  }
-
-  const inUse = context.snapshot.ledger.transactions.some(
-    (transaction) => !transaction.voidedAt && transaction.categoryId === categoryId,
-  );
-  if (inUse) {
-    throw new ApiError(400, "category_in_use", "Category is used by active transactions and cannot be archived.");
   }
 
   const { data, error } = await supabase

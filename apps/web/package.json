@@ -11,6 +11,7 @@
   "dependencies": {
     "@auctus/accounting-core": "file:../../packages/accounting-core",
     "@auctus/shared-types": "file:../../packages/shared-types",
+    "@supabase/supabase-js": "^2.105.1",
     "@vitejs/plugin-react": "^5.0.0",
     "chart.js": "^4.4.0",
     "lucide-react": "^0.468.0",

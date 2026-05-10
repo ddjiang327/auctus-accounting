@@ -4,9 +4,10 @@ import type { LedgerData, Transaction } from '../../domain/models';
 interface DashboardProps {
   data: LedgerData;
   onEditTransaction: (tx: Transaction) => void;
+  canEditTransactions?: boolean;
 }
 
-export function Dashboard({ data, onEditTransaction }: DashboardProps) {
+export function Dashboard({ data, onEditTransaction, canEditTransactions = true }: DashboardProps) {
   const assets = totalAssets(data);
   const month = aggregate(data, 'month');
   const today = aggregate(data, 'today');
@@ -32,12 +33,12 @@ export function Dashboard({ data, onEditTransaction }: DashboardProps) {
         <div className="stat-card"><span>Today's Income</span><strong className="income">{fmtMoney(today.income)}</strong></div>
       </div>
       <div className="section-header"><h3>Recent Transactions</h3></div>
-      <TransactionList data={data} transactions={recent} onEditTransaction={onEditTransaction} />
+      <TransactionList data={data} transactions={recent} onEditTransaction={onEditTransaction} canEditTransactions={canEditTransactions} />
     </section>
   );
 }
 
-export function TransactionList({ data, transactions, onEditTransaction }: DashboardProps & { transactions: Transaction[] }) {
+export function TransactionList({ data, transactions, onEditTransaction, canEditTransactions = true }: DashboardProps & { transactions: Transaction[] }) {
   if (!transactions.length) {
     return <div className="empty-card">No transactions yet</div>;
   }
@@ -49,7 +50,7 @@ export function TransactionList({ data, transactions, onEditTransaction }: Dashb
         const total = txTotal(tx, data);
         const status = invoiceStatus(tx, data);
         return (
-          <button key={tx.id} className="list-row" onClick={() => onEditTransaction(tx)}>
+          <button key={tx.id} className="list-row" onClick={canEditTransactions ? () => onEditTransaction(tx) : undefined}>
             <span className="icon" style={{ backgroundColor: cat?.color || '#8E8E93' }}>{tx.type === 'transfer' ? '↔️' : cat?.icon || '📄'}</span>
             <span className="row-body">
               <b>{tx.type === 'transfer' ? 'Transfer' : cat?.name || 'Other'}</b>

@@ -167,6 +167,28 @@ Decision:
 - Imported ledger IDs are rebuilt as Supabase UUIDs, with related accounts, categories, transactions, payments, journals, bank feed matches, opening-balance ids, and reconciliation source ids remapped.
 - Only owner/admin users can export, restore/import, or reset backend business data.
 
+## Mobile Cloud Sync
+
+Decision:
+
+- Mobile remains local-first when cloud API configuration is absent.
+- When cloud API is configured, users sign in, choose a business, load the server ledger, save changes locally, and push the full ledger snapshot back to the server.
+- MVP mobile cloud sync does not attempt multi-device offline conflict merging. Last successful save wins until a proper conflict model is designed.
+
+Implementation note: current mobile cloud mode loads `/ledger` after login/workspace selection and debounces full-ledger saves through the existing restore endpoint.
+
+## Accountant / BAS Review Checklist
+
+Use this list for review with an accountant or BAS agent before treating the rules as production-ready accounting guidance.
+
+- [ ] BAS cash-basis date rule: confirm GST should be included by payment date for partial payments, split payments, voided payments, and credit note allocations.
+- [ ] BAS accrual-basis date rule: confirm GST should be included by invoice/bill issue date, and confirm how draft, sent, viewed, voided, and credit-note documents should affect BAS timing.
+- [ ] Credit note allocation: confirm customer credit notes and supplier credits reduce GST/revenue/expense at the credit note date, allocation date, original invoice date, or another date for BAS and reporting.
+- [ ] Opening balance signs: confirm positive and negative opening balances for bank, cash, credit card, loan, and other payment accounts post with the expected debit/credit sign against Opening Balance Equity.
+- [ ] GST-disabled behavior: confirm non-GST-registered businesses should treat all transaction amounts as full net/business amounts, ignore stored `gstMode`, and show zero BAS/GST even for imported historical data.
+- [ ] Owner contribution/drawings: confirm whether MVP should keep these out of ordinary transfers and handle them through manual journals, or add dedicated owner contribution/drawings workflows with equity postings.
+- [ ] Refund and overpayment workflow: confirm target product/accounting flow for customer refunds, supplier refunds, overpayments, unapplied credits, and whether negative ordinary transactions must remain blocked.
+
 ## Pending Product/Accounting Work
 
 - Done: add mobile UI for `settings.basBasis`.

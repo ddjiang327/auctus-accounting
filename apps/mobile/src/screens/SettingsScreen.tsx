@@ -7,7 +7,22 @@ import { ActionButton, Header, ListRow, Screen, SectionTitle, colors } from '../
 import { auditEntry, latestLockedThrough, todayStr, uid } from '../domain/accounting';
 import type { BasBasis, BusinessProfile, Contact, LedgerData } from '../domain/models';
 
-export function SettingsScreen({ data, onDataChange, lockEnabled, onToggleGst, onToggleLock, onLockNow, onBackup, onRestore, onReset }: {
+export function SettingsScreen({
+  data,
+  onDataChange,
+  lockEnabled,
+  onToggleGst,
+  onToggleLock,
+  onLockNow,
+  onBackup,
+  onRestore,
+  onReset,
+  onSignOut,
+  onSwitchWorkspace,
+  cloudWorkspace,
+  syncState,
+  syncError,
+}: {
   data: LedgerData;
   onDataChange: (data: LedgerData) => void;
   lockEnabled: boolean;
@@ -17,6 +32,11 @@ export function SettingsScreen({ data, onDataChange, lockEnabled, onToggleGst, o
   onBackup: () => void;
   onRestore: () => void;
   onReset: () => void;
+  onSignOut?: () => void;
+  onSwitchWorkspace?: () => void;
+  cloudWorkspace?: string;
+  syncState?: 'idle' | 'syncing' | 'error';
+  syncError?: string;
 }) {
   const [lockOpen, setLockOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
@@ -37,7 +57,15 @@ export function SettingsScreen({ data, onDataChange, lockEnabled, onToggleGst, o
 
   return (
     <Screen>
-      <Header title="Settings" subtitle="Security and data" />
+      <Header title="Settings" subtitle={cloudWorkspace ? `Cloud workspace: ${cloudWorkspace}` : 'Security and data'} />
+      {syncState ? (
+        <ListRow
+          title={syncState === 'error' ? 'Cloud Sync Error' : syncState === 'syncing' ? 'Cloud Syncing' : 'Cloud Sync Ready'}
+          subtitle={syncState === 'error' ? syncError : 'Login, workspace, and ledger sync are enabled'}
+          icon={syncState === 'error' ? '!' : '↕'}
+          color={syncState === 'error' ? colors.red : colors.blue}
+        />
+      ) : null}
       <ListRow title="Track GST" subtitle={data.settings.gstEnabled ? 'On' : 'Off'} icon="%" color={colors.blue} right={<ActionButton onPress={onToggleGst} tone="gray">{data.settings.gstEnabled ? 'On' : 'Off'}</ActionButton>} />
       <ListRow title="GST Rate" subtitle="Fixed for Australia" icon="GST" color={colors.orange} right={<Text style={styles.amount}>10%</Text>} />
       <ListRow
@@ -66,6 +94,8 @@ export function SettingsScreen({ data, onDataChange, lockEnabled, onToggleGst, o
       <SectionTitle>Security</SectionTitle>
       <ListRow title="App Lock" subtitle={lockEnabled ? 'PIN and Face ID supported' : 'Off'} icon="🔒" color={colors.blue} right={<ActionButton onPress={onToggleLock} tone="gray">{lockEnabled ? 'On' : 'Off'}</ActionButton>} />
       {lockEnabled ? <ListRow title="Lock Now" icon="↩" color={colors.orange} onPress={onLockNow} /> : null}
+      {onSwitchWorkspace ? <ListRow title="Switch Workspace" subtitle="Choose another cloud business" icon="⇄" color={colors.blue} onPress={onSwitchWorkspace} /> : null}
+      {onSignOut ? <ListRow title="Sign Out" subtitle="Return to login screen" icon="→" color={colors.red} onPress={onSignOut} /> : null}
       <SectionTitle>Data</SectionTitle>
       <ListRow title="Back Up to File" subtitle="Share a JSON backup" icon="↓" color={colors.blue} onPress={onBackup} />
       <ListRow title="Restore from File" subtitle="Import a JSON backup" icon="↑" color={colors.orange} onPress={onRestore} />

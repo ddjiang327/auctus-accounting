@@ -29,8 +29,14 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
   const [dueDate, setDueDate] = useState('');
   const [paidNow, setPaidNow] = useState('');
 
-  const categories = type === 'income' ? data.categories.income : data.categories.expense;
   const existing = transaction || null;
+  const activeCategories = (type === 'income' ? data.categories.income : data.categories.expense).filter((c) => !c.archivedAt);
+  const existingCategory = existing?.categoryId
+    ? (type === 'income' ? data.categories.income : data.categories.expense).find((category) => category.id === existing.categoryId)
+    : undefined;
+  const categories = existingCategory && existingCategory.archivedAt
+    ? [existingCategory, ...activeCategories]
+    : activeCategories;
   const contactOptions = data.contacts
     .filter((contact) => !contact.archivedAt)
     .filter((contact) => type === 'income'
@@ -48,7 +54,9 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
     setType(nextType);
     setEntryMode(nextEntryMode);
     setAmount(String(tx?.amount || defaults?.amount || 0));
-    setCategoryId(tx?.categoryId || defaults?.categoryId || (nextType === 'income' ? data.categories.income[0]?.id : data.categories.expense[0]?.id) || '');
+    setCategoryId(tx?.categoryId || defaults?.categoryId || (nextType === 'income'
+      ? data.categories.income.find((category) => !category.archivedAt)?.id
+      : data.categories.expense.find((category) => !category.archivedAt)?.id) || '');
     setAccountId(tx?.accountId || defaults?.accountId || data.accounts[0]?.id || '');
     setAccountToId(tx?.accountToId || defaults?.accountToId || data.accounts[1]?.id || data.accounts[0]?.id || '');
     setDate(nextDate);
@@ -161,7 +169,7 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
       <div className="form-card">
         <label>Amount <input type="number" value={amount} min={0} step={0.01} onChange={(event) => setAmount(event.target.value)} /></label>
         {type !== 'transfer' ? (
-          <label>Category <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>)}</select></label>
+          <label>Category <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}{cat.archivedAt ? ' (archived)' : ''}</option>)}</select></label>
         ) : null}
         <label>{type === 'transfer' ? 'From' : 'Account'} <select value={accountId} onChange={(event) => setAccountId(event.target.value)}>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.icon} {account.name}</option>)}</select></label>
         {type === 'transfer' ? <label>To <select value={accountToId} onChange={(event) => setAccountToId(event.target.value)}>{data.accounts.map((account) => <option key={account.id} value={account.id}>{account.icon} {account.name}</option>)}</select></label> : null}

@@ -97,6 +97,19 @@ Do not start by trying to clone every Xero/MYOB feature. Build a reliable accoun
   - Web Accounts now sends payment account create and update actions through `apps/api` when backend mode is configured.
   - Web Accounts now sends bank feed import, match, ignore/unignore, record-from-feed, finalise reconciliation, and void reconciliation actions through `apps/api` when backend mode is configured.
   - Web Settings now sends backup download, restore, and reset actions through `apps/api` when backend mode is configured.
+  - Web category/account polish is complete for the current MVP: archived categories remain visible on historical transactions, category chart-account mapping is clearer, payment account archive guards are surfaced in UI, and income/expense categories are constrained to the correct chart account classes.
+  - Web cloud initial loading now blocks editable UI until the selected workspace ledger successfully loads, preventing stale local demo data from appearing in cloud mode.
+  - Web has a minimal Playwright E2E layer covering auth/workspace/ledger smoke paths.
+  - Web owner/admin/bookkeeper/viewer UI permissions are aligned with the documented API role model for dangerous/write operations.
+- Mobile cloud/auth progress:
+  - Mobile remains local-first when cloud API config is absent.
+  - Mobile cloud mode now has Supabase auth, signup/login/dev-login, workspace selection, workspace creation, selected-workspace restore, blocking remote ledger loading, retry/switch workspace error UI, and debounced full-ledger save to the API.
+  - Mobile cloud sync is intentionally MVP-simple: login, load server ledger, save full ledger back to server, no offline conflict merge.
+- MVP readiness docs now exist for permissions, hardening, and data migration/seed strategy:
+  - `docs/PERMISSIONS.md`
+  - `docs/MVP_HARDENING.md`
+  - `docs/DATA_MIGRATION_SEED_STRATEGY.md`
+- Supabase RLS hardening now removes direct authenticated workspace/member/settings writes; cloud writes remain API-authoritative. The migration is local until it is pushed to the target Supabase project.
 
 ## Ownership And Responsibilities
 
@@ -173,7 +186,16 @@ Avoid building advanced payroll, STP lodgement, complex inventory, or third-part
 30. Done: Add owner/admin backup/restore, reset/import API workflows and connect Web Settings backup, restore, and reset actions to the backend.
 31. Done: Add audited clear/unlock period-lock workflow and dedicated Web category management UI with chart-account mapping.
 32. Done: Add backend transaction edit/update, nullable field clearing for type changes, and atomic update-with-new-payments Web integration.
-33. In progress: Continue web/backend integration beyond the first write paths, especially remaining admin overrides and category-management polish.
+33. Done: Complete Web category/account polish for archived category display, chart-account mapping clarity, payment account archive guard UX, and category chart-account type validation.
+34. Done: Add local Supabase/API/Web smoke attempt, document local Docker blocker, and run cloud-backed smoke against configured Supabase.
+35. Done: Add minimal Playwright E2E coverage for auth/workspace/ledger load paths.
+36. Done: Fix cloud initial ledger loading so stale local ledgers are not editable before remote load success.
+37. Done: Document owner/admin/bookkeeper/viewer permissions and align Web dangerous-action UI with that role model.
+38. Done: Align Mobile auth/workspace flow with Web at MVP level.
+39. Done: Document real-data migration, demo workspace, dev-user seed, and local/cloud data boundaries.
+40. In progress: Run the pre-trial manual verification pass in `docs/MVP_HARDENING.md`, especially empty workspace, role UI/API checks, backup/restore recovery, and Supabase RLS audit.
+41. Next: Add one API/manual script path for dev/demo workspace seeding if repeated demo setup becomes painful.
+42. Next: Decide whether Mobile should call server write endpoints per action before trial, or keep current full-ledger save as the explicit MVP mobile cloud strategy.
 
 ## Technical Roadmap
 
@@ -211,10 +233,12 @@ Work:
 - Done: Business workspaces.
 - Done: First database schema.
 - Done: First roles and permissions.
-- In progress: Cloud sync through business ledger snapshots and server write paths.
+- Done for Web MVP: cloud sync through selected business ledger snapshots and server write paths.
+- Done for Mobile MVP: login/workspace/ledger load plus full-ledger save, with no conflict merge.
 - Done: Audit log foundation.
 - Done: Server-side accounting validation for current transaction, payment, credit allocation, void, contact, profile/settings, and period-lock write paths.
 - Done: Backup/export, restore/import, and reset foundations.
+- Next: RLS/manual role audit and production deployment verification.
 
 Result:
 
@@ -230,15 +254,16 @@ Goal: recreate the current mobile functionality on web using the shared accounti
 
 Work:
 
-- Dashboard.
-- Invoices.
-- Bills.
-- Contacts.
-- Payments.
-- Reports.
-- BAS-ready views.
-- Bank import.
-- Settings.
+- Done: Dashboard.
+- Done: Invoices.
+- Done: Bills.
+- Done: Contacts.
+- Done: Payments.
+- Done: Reports and BAS-ready views.
+- Done: Bank import and reconciliation.
+- Done: Settings.
+- Done: Backend-backed cloud mode for current MVP workflows.
+- Next: Manual role/empty-state/offline UI pass and targeted bug fixes.
 
 Result:
 
@@ -285,7 +310,7 @@ Estimated time: 4-8 weeks.
 Work:
 
 - Broader automated tests.
-- Permission boundary tests.
+- Permission boundary tests and role UI checks.
 - Audit trail review.
 - Subscription/billing.
 - Backup and restore.
@@ -293,6 +318,27 @@ Work:
 - Data export.
 - Production deployment.
 - Support/admin tooling.
+
+Current pre-trial priority is not inventory or payroll. Finish the hardening
+checklist, role/RLS audit, backup/restore verification, and seed/migration
+practice run before expanding product scope.
+
+## Immediate Next Steps
+
+1. Run the `docs/MVP_HARDENING.md` pre-trial checklist end to end:
+   empty workspace UI, API offline/expired session behavior, viewer/bookkeeper
+   UI/API checks, backup/restore recovery, and production env sanity.
+2. Run Supabase RLS/role manual audit against the target project and record the
+   result in `docs/MVP_HARDENING.md`.
+3. Create a disposable cloud demo workspace using
+   `docs/DATA_MIGRATION_SEED_STRATEGY.md`, verify no local demo data leaks into
+   cloud, then test an explicit import/restore path.
+4. Add a small dev/demo seed script only if repeated workspace setup is slowing
+   testing down.
+5. After that pass, decide between:
+   - prepare a real trial deployment; or
+   - harden mobile cloud writes by replacing full-ledger save with per-action API
+     writes for transactions/payments/contacts/settings.
 
 ## Time Expectations
 
@@ -381,6 +427,9 @@ npx tsc -p apps/mobile/tsconfig.json --noEmit
 
 ### Recently Completed
 
+- Web cloud/account/category polish, initial remote ledger blocking, minimal E2E,
+  role UI gating, mobile auth/workspace alignment, and data migration/seed
+  strategy docs are complete.
 - Web Settings Business Profile is now complete enough for invoice/bill documents:
   - business name
   - ABN
@@ -430,29 +479,23 @@ npx tsc -p apps/mobile/tsconfig.json --noEmit
 ### Needs Refactor
 
 - Direct mobile imports still point at compatibility wrappers in `apps/mobile/src/domain`.
-- Accounting-core needs deeper tests for opening balances, payment journal entries, AP aging, manual journals, financial position, report periods, and rounding.
-- Accounting-core implementation should be gradually moved out of `ledger.ts` into the grouped modules once behavior is further covered by tests.
+- Accounting-core can still use deeper tests around edge-case assumptions, report periods, and rounding, but the grouped module split is already complete.
 - Accounting decisions are now documented in `docs/ACCOUNTING_DECISIONS.md`.
-- Implementation still needs audit-log enforcement for future admin overrides and API-level locked-period enforcement when backend write paths exist.
-- GST/BAS/posting assumptions still need review before backend schema design.
+- Accountant/BAS review checklist still needs external confirmation before real reliance.
+- Mobile cloud write strategy may need to move from full-ledger save to per-action API writes after MVP trial feedback.
 
 ### Web Must Rebuild Or Reconnect
 
-- Dashboard against shared accounting logic.
-- Invoices and bills against shared models.
-- Contacts, payments, reports, BAS views, bank import, settings.
-- Backend-backed data access once API exists.
+- Current MVP web workflows are connected. Remaining work is hardening,
+  role/empty/offline manual verification, and bug fixes from trial use.
 
 ### Backend Must Add
 
-- Authentication.
-- Business/workspace model.
-- Database schema.
-- Permissions.
-- Sync API.
-- Audit log.
-- Server-side validation.
-- Backup/export.
+- Member management API and UI.
+- Production RLS/role audit sign-off.
+- Optional demo/dev seed script.
+- Longer-term incremental sync/conflict model if mobile becomes offline-write
+  across multiple devices.
 
 ### Commercial Controls To Add
 

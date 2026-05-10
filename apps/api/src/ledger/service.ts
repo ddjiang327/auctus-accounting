@@ -82,6 +82,7 @@ type CategoryRow = {
   icon: string;
   color: string;
   chart_account_id: string | null;
+  archived_at: string | null;
 };
 
 type ContactRow = {
@@ -331,6 +332,7 @@ const mapCategory = (category: CategoryRow): Category => ({
   icon: category.icon,
   color: category.color,
   chartAccountId: category.chart_account_id ?? undefined,
+  archivedAt: category.archived_at ?? undefined,
 });
 
 const mapContact = (contact: ContactRow): Contact => ({
@@ -465,7 +467,7 @@ export const getLedgerSnapshot = async (
 
   const membershipRow = membership as unknown as MembershipRow | null;
   if (!membershipRow?.businesses) {
-    throw new ApiError(404, "business_not_found", "Business not found.");
+    throw new ApiError(403, "forbidden", "You do not have access to this business.");
   }
 
   const { data: settings, error: settingsError } = await supabase
@@ -531,9 +533,8 @@ export const getLedgerSnapshot = async (
       .order("created_at", { ascending: true }),
     supabase
       .from("categories")
-      .select("id,type,name,icon,color,chart_account_id")
+      .select("id,type,name,icon,color,chart_account_id,archived_at")
       .eq("business_id", businessId)
-      .is("archived_at", null)
       .order("created_at", { ascending: true }),
     supabase
       .from("contacts")

@@ -9,21 +9,33 @@ import { advanceRecurringDate, auditEntry, dueDateForTerms, isDateLocked, todayS
 import type { Contact, CreditAllocation, EntryMode, LedgerData, RecurringTemplate, Transaction, TransactionType } from './src/domain/models';
 import { AccountsScreen } from './src/screens/AccountsScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { PurchasesScreen } from './src/screens/PurchasesScreen';
 import { ManualJournalModal, ReportsScreen } from './src/screens/ReportsScreen';
 import { SalesScreen } from './src/screens/SalesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { WorkspaceSelectorScreen } from './src/screens/WorkspaceSelectorScreen';
 import { disableLock, enableLock, loadLockEnabled, tryBiometricUnlock, verifyPin } from './src/storage/secureLock';
 import { exportLedgerBackup, importLedgerBackup, loadLedgerData, resetLedgerData, saveLedgerData } from './src/storage/mobileStore';
+import type { BusinessSummary } from './src/api/cloudApi';
+import { getAccessToken, getSelectedBusinessId, listBusinesses, loadLedger, saveLedger, setSelectedBusinessId, signOut } from './src/api/cloudApi';
+import { isCloudConfigured } from './src/api/cloudConfig';
 
 type Tab = 'home' | 'sales' | 'purchases' | 'accounts' | 'reports' | 'settings';
+type AuthPhase = 'checking' | 'login' | 'workspace' | 'app';
+type SyncState = 'idle' | 'syncing' | 'error';
 
 function formatReceiptNumber(data: LedgerData) {
   return `${data.settings.receiptPrefix || 'REC-'}${String(data.settings.nextReceiptNumber || 1).padStart(4, '0')}`;
 }
 
 export default function App() {
+  const [authPhase, setAuthPhase] = useState<AuthPhase>('checking');
+  const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
+  const [selectedBusiness, setSelectedBusiness] = useState<BusinessSummary | null>(null);
   const [data, setData] = useState<LedgerData | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>('idle');
+  const [syncError, setSyncError] = useState('');
   const [tab, setTab] = useState<Tab>('home');
   const [locked, setLocked] = useState(false);
   const [lockEnabled, setLockEnabled] = useState(false);
@@ -36,20 +48,119 @@ export default function App() {
   const [newEntryMode, setNewEntryMode] = useState<EntryMode | undefined>(undefined);
   const [payingTx, setPayingTx] = useState<Transaction | null>(null);
   const hasProcessedRecurring = useRef(false);
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextCloudSave = useRef(false);
 
   useEffect(() => {
-    loadLedgerData().then(setData);
     loadLockEnabled().then(async (enabled) => {
       setLockEnabled(enabled);
       if (!enabled) return;
       if (await tryBiometricUnlock()) return;
       setLocked(true);
     });
-  }, []);
+
+    async function init() {
+      if (!isCloudConfigured()) {
+        setData(await loadLedgerData());
+        setAuthPhase('app');
+        return;
+      }
+      const token = await getAccessToken();
+      if (!token) { setAuthPhase('login'); return; }
+      try {
+        const list = await listBusinesses();
+        setBusinesses(list);
+        const storedId = await getSelectedBusinessId();
+        const resolvedId = (storedId && list.some((b) => b.id === storedId))
+          ? storedId
+          : list.length === 1 ? list[0].id : null;
+        const resolvedBusiness = resolvedId ? list.find((business) => business.id === resolvedId) : undefined;
+        if (resolvedBusiness) {
+          await selectBusiness(resolvedBusiness, list);
+        } else {
+          setAuthPhase('workspace');
+        }
+      } catch {
+        setAuthPhase('login');
+      }
+    }
+
+    init().catch(() => setAuthPhase('login'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function selectBusiness(business: BusinessSummary, list?: BusinessSummary[]) {
+    setSelectedBusiness(business);
+    setData(null);
+    setSyncError('');
+    setSyncState('syncing');
+    await setSelectedBusinessId(business.id);
+    if (list) setBusinesses(list);
+    else setBusinesses((current) => current.some((item) => item.id === business.id) ? current : [...current, business]);
+    try {
+      const ledger = await loadLedger(business.id);
+      skipNextCloudSave.current = true;
+      setData(ledger);
+      setSyncState('idle');
+      setAuthPhase('app');
+    } catch (error) {
+      setSyncState('error');
+      setSyncError(error instanceof Error ? error.message : 'Workspace data load failed');
+      setAuthPhase('app');
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    setSelectedBusiness(null);
+    setBusinesses([]);
+    setData(null);
+    setSyncError('');
+    setSyncState('idle');
+    setAuthPhase('login');
+  }
+
+  async function refreshWorkspaceList() {
+    const list = await listBusinesses();
+    setBusinesses(list);
+    const storedId = await getSelectedBusinessId();
+    const storedBusiness = storedId ? list.find((business) => business.id === storedId) : undefined;
+    const resolvedBusiness = storedBusiness || (list.length === 1 ? list[0] : undefined);
+    if (resolvedBusiness) await selectBusiness(resolvedBusiness, list);
+    else setAuthPhase('workspace');
+  }
+
+  async function retryLoadSelectedBusiness() {
+    if (!selectedBusiness) {
+      setAuthPhase('workspace');
+      return;
+    }
+    await selectBusiness(selectedBusiness);
+  }
 
   useEffect(() => {
-    if (data) saveLedgerData(data);
-  }, [data]);
+    if (!data || authPhase !== 'app') return;
+    saveLedgerData(data);
+    if (!isCloudConfigured() || !selectedBusiness) return;
+    if (skipNextCloudSave.current) {
+      skipNextCloudSave.current = false;
+      return;
+    }
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => {
+      setSyncState('syncing');
+      saveLedger(selectedBusiness.id, data)
+        .then((saved) => {
+          skipNextCloudSave.current = true;
+          setData(saved);
+          setSyncState('idle');
+          setSyncError('');
+        })
+        .catch((error) => {
+          setSyncState('error');
+          setSyncError(error instanceof Error ? error.message : 'Cloud save failed');
+        });
+    }, 2000);
+  }, [data, authPhase, selectedBusiness]);
 
   useEffect(() => {
     if (!data || hasProcessedRecurring.current) return;
@@ -109,6 +220,39 @@ export default function App() {
       return { ...current, settings, transactions: newTransactions, recurringTemplates: updatedTemplates, auditLog: newAuditLog };
     });
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (authPhase === 'checking') {
+    return <SafeAreaView style={styles.loading}><Text>Loading Auctus...</Text></SafeAreaView>;
+  }
+
+  if (authPhase === 'login') {
+    return <LoginScreen onLoggedIn={async () => {
+      try {
+        await refreshWorkspaceList();
+      } catch { setAuthPhase('login'); }
+    }} />;
+  }
+
+  if (authPhase === 'workspace') {
+    return <WorkspaceSelectorScreen
+      businesses={businesses}
+      onSelect={async (business) => selectBusiness(business)}
+      onSignOut={handleSignOut}
+    />;
+  }
+
+  if (isCloudConfigured() && !data) {
+    return (
+      <SafeAreaView style={styles.loading}>
+        <Text style={styles.loadingTitle}>{selectedBusiness?.name || 'Auctus'}</Text>
+        <Text style={styles.loadingText}>{syncState === 'error' ? syncError : 'Loading workspace data...'}</Text>
+        <View style={styles.loadingActions}>
+          <ActionButton tone="gray" onPress={() => setAuthPhase('workspace')}>Switch Workspace</ActionButton>
+          <ActionButton onPress={retryLoadSelectedBusiness}>{syncState === 'syncing' ? 'Loading...' : 'Retry'}</ActionButton>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!data) {
     return <SafeAreaView style={styles.loading}><Text>Loading Auctus...</Text></SafeAreaView>;
@@ -469,6 +613,11 @@ export default function App() {
             onBackup={backup}
             onRestore={restore}
             onReset={async () => setData(await resetLedgerData())}
+            onSignOut={isCloudConfigured() ? handleSignOut : undefined}
+            onSwitchWorkspace={isCloudConfigured() ? () => setAuthPhase('workspace') : undefined}
+            cloudWorkspace={selectedBusiness ? `${selectedBusiness.name} · ${selectedBusiness.role}` : undefined}
+            syncState={isCloudConfigured() ? syncState : undefined}
+            syncError={syncError || undefined}
           />
         )}
       </ScrollView>
@@ -526,6 +675,9 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 96 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingTitle: { fontSize: 22, fontWeight: '900', color: colors.text, marginBottom: 8 },
+  loadingText: { color: colors.muted, textAlign: 'center', marginHorizontal: 28, marginBottom: 16 },
+  loadingActions: { width: '80%', gap: 10 },
   tabBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', backgroundColor: '#F2F0EB', borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.08)', paddingBottom: 18 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 10, color: colors.muted, fontWeight: '700' },
