@@ -131,6 +131,7 @@ Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
 - `npm run audit:production` passed with production URL inputs: 15 passed, 1 warning, 0 failures. It confirmed the Netlify Web shell, Vercel API health check, exact production CORS origin, production CORS preflight, and Supabase migrations through `20260507010000`.
+- `npm run smoke:production` passed: created a temporary confirmed Supabase user, signed in through `https://auctus-web.netlify.app`, created a temporary workspace through the production API, loaded Home/Net Worth, and cleaned up the temporary user/workspace.
 - `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
 - `npm run e2e` passed: 10 Playwright tests (8 cloud + 1 local-mode + 1 real-role UI), including:

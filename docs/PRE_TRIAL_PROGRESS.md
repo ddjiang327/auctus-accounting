@@ -365,6 +365,8 @@ Deployment fixes:
 - Configured Git author email to `dd.jiang.claire@gmail.com` so Vercel accepts new commits.
 - Added an env-independent Vercel health handler so `/health` can verify the API deployment before Supabase env is needed.
 - Added explicit Vercel `api/health.mjs` and `api/v1/[...path].mjs` handlers so `/health` and `/v1/*` both reach the API runtime.
+- Added `api/router.mjs` and rewired Vercel rewrites through a single router endpoint so deep API paths such as `/v1/businesses/:id/ledger` reach the API runtime.
+- Added `scripts/production-browser-smoke.mjs` and `npm run smoke:production` for repeatable production login/workspace smoke tests.
 
 Verification:
 - `https://auctus-web.netlify.app` returned the production Web shell with `div#root`.
@@ -373,6 +375,8 @@ Verification:
 - `GET https://auctus-api.vercel.app/v1/businesses` returned 401 `{"error":"unauthorized"}`, confirming the production business API route is live and protected.
 - `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 15 checks, 1 warning, 0 failures.
 - Supabase Auth Site URL is `https://auctus-web.netlify.app`; allowed redirect URLs include `https://auctus-web.netlify.app` and `https://auctus-web.netlify.app/`.
+- `npm run smoke:production` passed after the router fix: it created a temporary confirmed Supabase user, signed in through the production Netlify Web app, created a temporary workspace through the Vercel API, loaded Home/Net Worth, and cleaned up the temporary user/workspace.
+- Deep production API path smoke changed from 404 to 401 for unauthenticated `GET https://auctus-api.vercel.app/v1/businesses/test-id/ledger`, confirming the Vercel router handles nested `/v1/*` routes.
 
 Remaining production console item:
 - None for the first trial deployment record.
