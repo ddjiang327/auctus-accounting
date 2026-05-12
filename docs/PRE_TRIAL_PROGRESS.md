@@ -174,6 +174,24 @@ Confirmed a copied project backup exists outside the working repository:
 Documentation:
 - Marked “Keep at least one off-platform backup before trial data is reset or imported” complete in `docs/MVP_HARDENING.md`.
 
+### 12) Production environment local repo/env audit
+
+Audited repository-tracked env examples and local env file placement without recording secret values:
+
+- `.gitignore` ignores `.env` and `.env.*`, while keeping `.env.example` tracked.
+- Tracked env examples:
+  - `apps/api/.env.example`: `PORT`, `HOST`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `API_CORS_ORIGIN`.
+  - `apps/web/.env.example`: `VITE_AUCTUS_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, plus local/dev-only `VITE_AUCTUS_DEV_EMAIL` and `VITE_AUCTUS_DEV_PASSWORD`.
+- Local untracked env files exist at `apps/api/.env.local` and `apps/web/.env.local`.
+- `apps/web/.env.local` contains dev login variables for local E2E/dev testing; those must not be set on the production Web host.
+- `SUPABASE_SERVICE_ROLE_KEY` appears in API env examples/docs only, not in Web env examples or Web source.
+- `apps/api/README.md` already documents `SUPABASE_SERVICE_ROLE_KEY` as server-only, exact `API_CORS_ORIGIN`, and `GET /health` as the deployment health check.
+
+Not completed from local repo inspection:
+- Production hosting provider env values still need control-plane verification.
+- Supabase Auth production `site_url` and `additional_redirect_urls` still need control-plane verification.
+- API `/health` monitoring still needs the real deployed health URL.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
@@ -191,3 +209,6 @@ Fill real deployment details into `docs/MVP_HARDENING.md`:
 - API host / health URL
 - Web host
 - Production env configuration values (no secrets committed)
+- Confirm no production Web `VITE_AUCTUS_DEV_EMAIL` / `VITE_AUCTUS_DEV_PASSWORD`
+- Confirm production API-only `SUPABASE_SERVICE_ROLE_KEY`
+- Confirm production `API_CORS_ORIGIN`, Supabase Auth URLs, and `/health` monitoring

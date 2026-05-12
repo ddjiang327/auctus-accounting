@@ -51,6 +51,14 @@ Production rules:
 - [ ] Supabase Auth allowed redirect/site URLs include the production web host.
 - [ ] API `/health` is monitored.
 
+Local repository/env audit on 2026-05-12:
+
+- `.env.local` files are ignored by git; only `.env.example` files are tracked.
+- `apps/web/.env.local` currently includes local dev login variables for E2E/local testing; do not copy these to production hosting.
+- `SUPABASE_SERVICE_ROLE_KEY` appears in API env examples/docs only, not in Web env examples or Web source.
+- `apps/api/README.md` documents `SUPABASE_SERVICE_ROLE_KEY` as server-only and `API_CORS_ORIGIN` as the exact production web origin.
+- Supabase Auth production `site_url` / redirect URL and hosting provider env values still need console verification before this section is fully complete.
+
 ## Supabase RLS / Role Manual Audit
 
 The API uses the service role key and must enforce business membership and roles server-side. RLS still matters for direct anon/authenticated client access.
