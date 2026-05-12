@@ -381,3 +381,85 @@ Verification:
 
 Remaining production console item:
 - None for the first trial deployment record.
+
+### 21) Trial acceptance checklist run
+
+Date: 2026-05-12
+
+Production targets:
+- Web: https://auctus-web.netlify.app
+- API: https://auctus-api.vercel.app
+- Supabase project: zvcbnocynsxzyrvxcsbn
+
+Tester:
+- David Jiang
+
+### Result
+
+Conditional pass.
+
+### Completed
+
+Automated Gate:
+- `npm run build` passed.
+- `npm run test -w apps/api` passed: 7 files, 44 tests.
+- `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
+- `npm run e2e` passed: 10 tests.
+- `npm run smoke:production` passed.
+- Production audit passed: 15 checks, 1 warning, 0 failures.
+- Remaining warning was local-only dev auto-login variables in `apps/web/.env.local`, which is acceptable as long as not set in production Web hosting.
+
+Owner/Admin Manual Pass:
+- Signed in to production Web.
+- Created disposable workspace: `Trial Acceptance 2026-05-12`.
+- Confirmed Home loaded and showed `NET WORTH`.
+- Created a contact.
+- Created an expense category.
+- Created a purchase transaction.
+- Confirmed Activity showed the transaction.
+- Downloaded backend backup.
+- Reset Backend Ledger.
+- Confirmed transaction/contact disappeared after reset.
+- Restored downloaded backup.
+- Confirmed transaction/contact returned after restore.
+- Created a period lock.
+- Confirmed transaction creation/editing inside locked period was blocked by the UI.
+- Cleared the period lock.
+- Confirmed owner/admin Settings exposed backup, restore, reset, period lock, account controls, and category management.
+
+Production Control Plane:
+- Netlify Web production deploy confirmed green on latest main commit `59dbb0a`.
+- Vercel API production deploy confirmed green on latest main commit `59dbb0a`.
+- `https://auctus-api.vercel.app/health` returned `{"ok":true,"service":"auctus-api"}`.
+- Supabase Auth Site URL confirmed as `https://auctus-web.netlify.app`.
+- Supabase Auth redirect URLs confirmed to include:
+  - `https://auctus-web.netlify.app`
+  - `https://auctus-web.netlify.app/`
+- Netlify Web environment confirmed not to include:
+  - `VITE_AUCTUS_DEV_EMAIL`
+  - `VITE_AUCTUS_DEV_PASSWORD`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+- Vercel API environment confirmed to include:
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `API_CORS_ORIGIN=https://auctus-web.netlify.app`
+
+Cleanup:
+- Deleted disposable workspace `Trial Acceptance 2026-05-12`.
+- Deleted temporary auth users created only for acceptance testing.
+- Removed downloaded backup files from local/shared download folders.
+
+### Pending / skipped
+
+Bookkeeper Manual Pass:
+- Skipped / pending.
+- Risk: bookkeeper role permissions were not manually verified in production during this pass.
+- Mitigation: automated role UI and API permission tests passed in the E2E suite.
+
+Viewer Manual Pass:
+- Skipped / pending.
+- Risk: viewer read-only UI and direct backup 403 behavior were not manually verified in production during this pass.
+- Mitigation: automated role UI and viewer 403 tests passed in the E2E suite.
+
+### Final decision
+
+Trial acceptance is conditionally passed for first trial exposure, with the explicit condition that Bookkeeper and Viewer manual role checks remain pending before broader user invitation or before assigning those roles to real trial users.
