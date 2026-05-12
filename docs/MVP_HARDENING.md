@@ -11,7 +11,7 @@ Use this before any real trial workspace is created.
 - [x] Playwright smoke confirms a newly created cloud workspace opens with an empty transaction list.
 - [x] Run a manual UI pass on an empty workspace after creating a brand-new business.
 - [x] Playwright recoverable-error smoke confirms API offline, expired session, and 403 responses surface clear in-app messages.
-- [ ] Run a manual UI pass with API offline, expired session, and a 403 viewer role.
+- [x] Run a manual UI pass with API offline, expired session, and a 403 viewer role.
 
 ## Export / Import Recovery Path
 
@@ -72,7 +72,7 @@ The API uses the service role key and must enforce business membership and roles
 - [x] Confirm the same RLS state on the target Supabase project after migrations are pushed.
 - [x] Reviewed direct authenticated owner/admin policies for `businesses`, `business_members`, and `business_settings`: they should not stay enabled for trial/production while member-management UI/API is not productized.
 - [x] Confirm cross-business read attempts return no rows for anon/authenticated client queries.
-- [ ] Confirm API role matrix manually:
+- [x] Confirm API role matrix manually:
   - owner/admin: settings, period locks, export/restore/reset, account/category management.
   - bookkeeper: ordinary accounting writes, no export/restore/reset or unlock.
   - viewer: read-only.
@@ -119,14 +119,16 @@ Latest automated verification: 2026-05-12.
 - `npm run build` passed.
 - `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 8 Playwright tests (7 cloud + 1 local-mode), including:
+- `npm run e2e` passed: 9 Playwright tests (7 cloud + 1 local-mode + 1 real-role UI), including:
   - Cloud export → restore → pre-restore backup recovery.
   - Local backup download → restore → safety backup download → recovery from pre-restore backup.
   - Recoverable API error UX (unreachable, 401, 403).
+  - Real owner/admin/bookkeeper/viewer UI permissions and viewer 403 using temporary Supabase users/memberships.
 - Playwright now asserts newly created cloud workspaces show `No transactions yet`.
 - Playwright now asserts API unreachable, 401 session expiry, and 403 forbidden responses render user-visible recovery messages instead of browser alerts.
 - Local backup smoke uses a second Playwright project (`local-mode`) targeting port 5174 (Vite dev server started with empty Supabase vars so the app runs without auth).
 - API permission tests now assert owner/admin can export, restore, import, and reset ledger data while bookkeeper/viewer receive 403 for the same actions.
+- Real-role UI smoke now asserts owner/admin can see settings, period lock, backup/restore/reset, account controls, and category management; bookkeeper keeps day-to-day accounting controls without admin-only controls; viewer is read-only and receives a real API 403 for backup.
 - Off-platform project backup confirmed at `/Users/david/Documents/Claude/Projects/backup/auctus` (430M, copied 2026-05-12 before further trial reset/import work).
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.

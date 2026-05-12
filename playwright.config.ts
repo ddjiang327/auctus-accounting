@@ -17,12 +17,17 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: '**/auctus-local-backup.spec.ts',
+      testIgnore: ['**/auctus-local-backup.spec.ts', '**/auctus-role-ui.spec.ts'],
     },
     {
       name: 'local-mode',
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5174' },
       testMatch: '**/auctus-local-backup.spec.ts',
+    },
+    {
+      name: 'role-ui',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5173' },
+      testMatch: '**/auctus-role-ui.spec.ts',
     },
   ],
   webServer: [

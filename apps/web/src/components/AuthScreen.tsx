@@ -9,6 +9,11 @@ interface AuthScreenProps {
   notice?: string | null;
 }
 
+function isDevAutoLoginDisabled() {
+  return import.meta.env.VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN === 'true'
+    || localStorage.getItem('auctus_disable_dev_auto_login') === 'true';
+}
+
 export function AuthScreen({ onAuthenticated, notice }: AuthScreenProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -114,7 +119,7 @@ export function AuthScreen({ onAuthenticated, notice }: AuthScreenProps) {
           )}
         </div>
 
-        {import.meta.env.DEV ? (
+        {import.meta.env.DEV && !isDevAutoLoginDisabled() ? (
           <div className="auth-dev">
             <button className="btn-secondary" onClick={handleDevLogin} disabled={loading}>
               Dev Auto-Login

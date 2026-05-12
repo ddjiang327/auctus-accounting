@@ -217,15 +217,34 @@ Cleanup:
 Documentation:
 - Marked “Confirm cross-business read attempts return no rows for anon/authenticated client queries” complete in `docs/MVP_HARDENING.md`.
 
+### 14) Real-role UI and viewer 403 smoke
+
+Added `tests/e2e/auctus-role-ui.spec.ts` and a dedicated Playwright `role-ui` project.
+
+The test creates temporary Supabase auth users and one temporary workspace with real memberships for `owner`, `admin`, `bookkeeper`, and `viewer`, then cleans them up at the end.
+
+Assertions:
+- owner/admin can see Settings controls, Period Lock, Download Backup, Restore Backup, Reset Backend Ledger, account controls, and category management.
+- bookkeeper can see ordinary accounting controls such as contacts/accounts/categories, but cannot see export/restore/reset, Period Lock, or business settings.
+- viewer cannot see create/edit/admin controls in Settings, Contacts, or Accounts.
+- viewer receives a real API `403` from `GET /v1/businesses/:businessId/backup` using a real viewer Supabase session, not a Playwright route mock.
+
+Implementation note:
+- Added `auctus_disable_dev_auto_login` / `VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN` support so E2E can run role-specific sessions without local dev auto-login overriding the active test user.
+- The `role-ui` project reuses the normal 5173 web origin so the API's exact `API_CORS_ORIGIN` behavior remains covered instead of widening CORS for tests.
+
+Verification:
+- `npx playwright test tests/e2e/auctus-role-ui.spec.ts --project=role-ui` passed.
+
+Documentation:
+- Marked the real-role UI/403 pass and API role matrix checklist items complete in `docs/MVP_HARDENING.md`.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
 
-- Validate error UX end-to-end:
-  - Manual real-role pass is still pending for 403 viewer behavior.
-- Click-through role validation:
-  - full owner/admin/bookkeeper/viewer permissions across key screens and actions
-  - export/restore/import/reset API role matrix is now automated
+- Runtime/error and role smoke are now covered by Playwright plus API permission tests.
+- Remaining manual work is mainly production-control-plane verification and disposable production-trial workspace validation.
 
 ### B) Trial deployment record in docs
 

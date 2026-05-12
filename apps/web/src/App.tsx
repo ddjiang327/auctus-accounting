@@ -26,6 +26,11 @@ type AppMode = 'local' | 'cloud';
 type SyncState = 'idle' | 'syncing' | 'error';
 type SyncError = { message: string; nonce: number };
 
+function isDevAutoLoginDisabled() {
+  return import.meta.env.VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN === 'true'
+    || localStorage.getItem('auctus_disable_dev_auto_login') === 'true';
+}
+
 export default function App() {
   const [data, setData] = useState<LedgerData>(() => ledgerDataAdapter.load());
   const [lockState, setLockState] = useState(() => loadLockState());
@@ -55,7 +60,7 @@ export default function App() {
 
     async function initAuth() {
       try {
-        if (import.meta.env.DEV) {
+        if (import.meta.env.DEV && !isDevAutoLoginDisabled()) {
           const session = await devAutoSignIn();
           if (session) {
             await loadWorkspaces();
