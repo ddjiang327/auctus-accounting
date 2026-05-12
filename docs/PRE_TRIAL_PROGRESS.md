@@ -277,3 +277,22 @@ Fill real deployment details into `docs/MVP_HARDENING.md`:
 - Confirm no production Web `VITE_AUCTUS_DEV_EMAIL` / `VITE_AUCTUS_DEV_PASSWORD`
 - Confirm production API-only `SUPABASE_SERVICE_ROLE_KEY`
 - Confirm production `API_CORS_ORIGIN`, Supabase Auth URLs, and `/health` monitoring
+
+### 16) Disposable trial workspace lifecycle smoke
+
+Added `tests/e2e/auctus-disposable-workspace.spec.ts` for an isolated target-Supabase workspace lifecycle check.
+
+Assertions:
+- Creates a unique disposable workspace through the real Web/API flow.
+- Creates a contact, edits it, and verifies the original draft name is gone.
+- Creates a temporary category and archives it through Settings > Manage Categories.
+- Downloads a backend backup and verifies it contains the edited contact and archived category marker.
+- Resets the backend ledger and verifies the edited contact is no longer present.
+- Restores the downloaded backup and verifies the edited contact returns.
+- Deletes the temporary workspace with the service-role client in the test cleanup block.
+
+Verification:
+- `npx playwright test tests/e2e/auctus-disposable-workspace.spec.ts --project=chromium` passed.
+
+Documentation:
+- Marked “Create, edit, archive, export, restore, and reset a disposable trial workspace” complete in `docs/MVP_HARDENING.md`.

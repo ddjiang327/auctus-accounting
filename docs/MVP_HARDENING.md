@@ -120,14 +120,14 @@ Pre-trial verification:
 - [x] `npx tsc -p apps/mobile/tsconfig.json --noEmit`
 - [x] `npm run e2e`
 - [x] Create a test user and test business on production Supabase.
-- [ ] Create, edit, archive, export, restore, and reset a disposable trial workspace.
+- [x] Create, edit, archive, export, restore, and reset a disposable trial workspace.
 
 Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
 - `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 9 Playwright tests (7 cloud + 1 local-mode + 1 real-role UI), including:
+- `npm run e2e` passed: 10 Playwright tests (8 cloud + 1 local-mode + 1 real-role UI), including:
   - Cloud export → restore → pre-restore backup recovery.
   - Local backup download → restore → safety backup download → recovery from pre-restore backup.
   - Recoverable API error UX (unreachable, 401, 403).
@@ -137,6 +137,7 @@ Latest automated verification: 2026-05-12.
 - Local backup smoke uses a second Playwright project (`local-mode`) targeting port 5174 (Vite dev server started with empty Supabase vars so the app runs without auth).
 - API permission tests now assert owner/admin can export, restore, import, and reset ledger data while bookkeeper/viewer receive 403 for the same actions.
 - Real-role UI smoke now asserts owner/admin can see settings, period lock, backup/restore/reset, account controls, and category management; bookkeeper keeps day-to-day accounting controls without admin-only controls; viewer is read-only and receives a real API 403 for backup.
+- Disposable workspace lifecycle smoke creates a unique target-Supabase workspace, creates and edits a contact, creates and archives a category, downloads a backend backup, resets the backend ledger, restores the backup, verifies the contact returns, and deletes the temporary workspace afterward.
 - Off-platform project backup confirmed at `/Users/david/Documents/Claude/Projects/backup/auctus` (430M, copied 2026-05-12 before further trial reset/import work).
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
