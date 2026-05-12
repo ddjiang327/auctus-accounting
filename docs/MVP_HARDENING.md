@@ -45,11 +45,11 @@ VITE_SUPABASE_ANON_KEY=<supabase-anon-key>
 
 Production rules:
 
-- [ ] Do not set `VITE_AUCTUS_DEV_EMAIL` or `VITE_AUCTUS_DEV_PASSWORD` in production.
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` exists only on the API host.
-- [ ] `API_CORS_ORIGIN` exactly matches the production web origin.
+- [x] Do not set `VITE_AUCTUS_DEV_EMAIL` or `VITE_AUCTUS_DEV_PASSWORD` in production.
+- [x] `SUPABASE_SERVICE_ROLE_KEY` exists only on the API host.
+- [x] `API_CORS_ORIGIN` exactly matches the production web origin.
 - [ ] Supabase Auth allowed redirect/site URLs include the production web host.
-- [ ] API `/health` is monitored.
+- [x] API `/health` is monitored.
 
 Deployment setup steps are tracked in `docs/PRODUCTION_DEPLOYMENT.md`.
 
@@ -59,7 +59,7 @@ Local repository/env audit on 2026-05-12:
 - `apps/web/.env.local` currently includes local dev login variables for E2E/local testing; do not copy these to production hosting.
 - `SUPABASE_SERVICE_ROLE_KEY` appears in API env examples/docs only, not in Web env examples or Web source.
 - `apps/api/README.md` documents `SUPABASE_SERVICE_ROLE_KEY` as server-only and `API_CORS_ORIGIN` as the exact production web origin.
-- Supabase Auth production `site_url` / redirect URL and hosting provider env values still need console verification before this section is fully complete.
+- Supabase Auth production `site_url` / redirect URL still needs console verification before this section is fully complete.
 
 Target environment audit on 2026-05-12:
 
@@ -67,8 +67,9 @@ Target environment audit on 2026-05-12:
 - Local API/Web env values are development-only for runtime origins: API is `http://127.0.0.1:4010`, Web API target is `http://127.0.0.1:4010`, and `API_CORS_ORIGIN` is `http://127.0.0.1:5173`.
 - `supabase migration list` confirmed the linked remote project is aligned with local migrations through `20260507010000`.
 - `supabase projects list` could not verify project metadata because the Supabase Management API access token is not available in this shell. Supabase Auth site URL / redirect URL still needs dashboard or `SUPABASE_ACCESS_TOKEN` verification.
-- Vercel API and Netlify Web deployment config now exists in `vercel.json`, `api/[...path].mjs`, and `netlify.toml`; Web/API production env values and `/health` monitoring still need verification after real hosts exist.
-- `npm run audit:production` now performs the local/target pre-trial audit without printing secrets. It currently reports warnings for local dev auto-login credentials, missing production Web/API/CORS URLs, skipped production Web shell, CORS preflight, and `/health` checks, and unavailable Supabase CLI access token in this shell.
+- Vercel API and Netlify Web deployment config now exists in `vercel.json`, `api/[...path].mjs`, `api/health.mjs`, `api/v1/[...path].mjs`, and `netlify.toml`.
+- Production Web/API verification passed for `https://auctus-web.netlify.app` and `https://auctus-api.vercel.app`: Web shell, exact CORS origin, CORS preflight, API `/health`, and unauthenticated `/v1/businesses` returning 401.
+- `npm run audit:production` passed with production URL inputs: 15 passed, 1 warning, 0 failures. The remaining warning is local-only dev auto-login credentials in `apps/web/.env.local`.
 
 ## Supabase RLS / Role Manual Audit
 
@@ -107,11 +108,11 @@ order by tablename, policyname;
 Record the real trial deployment here before inviting users.
 
 - Supabase project: `zvcbnocynsxzyrvxcsbn` / `https://zvcbnocynsxzyrvxcsbn.supabase.co`
-- API host: `https://<api-host>`
-- Web host: `https://<web-host>`
-- API health: `https://<api-host>/health`
-- Web build command: `npm run build:web`
-- API build command: `npm run build:api`
+- API host: `https://auctus-api.vercel.app`
+- Web host: `https://auctus-web.netlify.app`
+- API health: `https://auctus-api.vercel.app/health`
+- Web build command: `npm run build:packages && npm run build:web`
+- API build command: `npm run build:packages && npm run build:api`
 - Supabase migrations: `supabase db push`
 
 Pre-trial verification:
@@ -128,7 +129,7 @@ Pre-trial verification:
 Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
-- `npm run audit:production` passed with warnings only: local dev auto-login credentials, no recorded production Web/API/CORS URLs, skipped production Web shell, CORS preflight, and `/health` checks, and no Supabase CLI access token available to this shell.
+- `npm run audit:production` passed with production URL inputs: 15 passed, 1 warning, 0 failures. It confirmed the Netlify Web shell, Vercel API health check, exact production CORS origin, production CORS preflight, and Supabase migrations through `20260507010000`.
 - `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
 - `npm run e2e` passed: 10 Playwright tests (8 cloud + 1 local-mode + 1 real-role UI), including:

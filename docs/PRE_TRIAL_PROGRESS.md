@@ -353,3 +353,25 @@ Verification:
 
 Documentation:
 - Linked the runbook from `docs/MVP_HARDENING.md` and the pending deployment notes above.
+
+### 20) Production deployment verification
+
+Production hosts:
+- Web: `https://auctus-web.netlify.app`
+- API: `https://auctus-api.vercel.app`
+- Health: `https://auctus-api.vercel.app/health`
+
+Deployment fixes:
+- Configured Git author email to `dd.jiang.claire@gmail.com` so Vercel accepts new commits.
+- Added an env-independent Vercel health handler so `/health` can verify the API deployment before Supabase env is needed.
+- Added explicit Vercel `api/health.mjs` and `api/v1/[...path].mjs` handlers so `/health` and `/v1/*` both reach the API runtime.
+
+Verification:
+- `https://auctus-web.netlify.app` returned the production Web shell with `div#root`.
+- `https://auctus-api.vercel.app/health` returned `{"ok":true,"service":"auctus-api"}`.
+- `OPTIONS https://auctus-api.vercel.app/v1/businesses` returned 204 with `access-control-allow-origin: https://auctus-web.netlify.app`.
+- `GET https://auctus-api.vercel.app/v1/businesses` returned 401 `{"error":"unauthorized"}`, confirming the production business API route is live and protected.
+- `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 15 checks, 1 warning, 0 failures.
+
+Remaining production console item:
+- Confirm Supabase Auth Site URL and allowed redirect URLs include `https://auctus-web.netlify.app`.
