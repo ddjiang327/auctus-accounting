@@ -266,7 +266,8 @@ Documentation:
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
 
 - Runtime/error and role smoke are now covered by Playwright plus API permission tests.
-- Remaining manual work is mainly production-control-plane verification and disposable production-trial workspace validation.
+- Disposable workspace validation is now covered by Playwright against the target Supabase project.
+- Remaining manual work is production-control-plane verification.
 
 ### B) Trial deployment record in docs
 
@@ -296,3 +297,25 @@ Verification:
 
 Documentation:
 - Marked “Create, edit, archive, export, restore, and reset a disposable trial workspace” complete in `docs/MVP_HARDENING.md`.
+
+### 17) Repeatable pre-trial audit command
+
+Added `scripts/pretrial-audit.mjs` and `npm run audit:pretrial`.
+
+The audit checks without printing secrets:
+- Local API/Web env files exist.
+- API and Web point at the same Supabase project.
+- `SUPABASE_SERVICE_ROLE_KEY` exists for local API checks and is absent from Web local/example env.
+- API env example documents the server-only service role variable.
+- Local dev auto-login credentials are called out as a production warning.
+- Local API URL and CORS origin are present.
+- Repo deployment config is present or missing.
+- Optional `AUCTUS_PRODUCTION_WEB_URL` and `AUCTUS_PRODUCTION_API_URL` are supplied when a deployment exists.
+- `supabase migration list` can run when Supabase CLI auth is available.
+
+Verification:
+- `npm run audit:pretrial` passed with warnings only.
+- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API URLs not supplied, and this shell has no Supabase CLI access token for `supabase migration list`.
+
+Documentation:
+- Recorded the audit command and current warnings in `docs/MVP_HARDENING.md`.

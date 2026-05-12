@@ -66,6 +66,7 @@ Target environment audit on 2026-05-12:
 - `supabase migration list` confirmed the linked remote project is aligned with local migrations through `20260507010000`.
 - `supabase projects list` could not verify project metadata because the Supabase Management API access token is not available in this shell. Supabase Auth site URL / redirect URL still needs dashboard or `SUPABASE_ACCESS_TOKEN` verification.
 - No repository deployment config was found for Vercel, Render, Fly, Netlify, or another production host, so Web/API production env values and `/health` monitoring remain unverified.
+- `npm run audit:pretrial` now performs the local/target pre-trial audit without printing secrets. It currently reports warnings for local dev auto-login credentials, missing production Web/API URLs, missing repo deployment config, and unavailable Supabase CLI access token in this shell.
 
 ## Supabase RLS / Role Manual Audit
 
@@ -125,6 +126,7 @@ Pre-trial verification:
 Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
+- `npm run audit:pretrial` passed with warnings only: local dev auto-login credentials, no recorded production Web/API URLs, no repo deployment config, and no Supabase CLI access token available to this shell.
 - `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
 - `npm run e2e` passed: 10 Playwright tests (8 cloud + 1 local-mode + 1 real-role UI), including:

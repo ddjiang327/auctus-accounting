@@ -14,6 +14,7 @@
     "build:api": "npm run build -w apps/api",
     "build:web": "npm run build -w apps/web",
     "build:packages": "npm run build -w packages/shared-types && npm run build -w packages/accounting-core",
+    "audit:pretrial": "node scripts/pretrial-audit.mjs",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:install": "playwright install chromium"
