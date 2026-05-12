@@ -71,7 +71,7 @@ The API uses the service role key and must enforce business membership and roles
 - [x] Push `20260507010000_harden_direct_workspace_writes.sql` to the target Supabase project.
 - [x] Confirm the same RLS state on the target Supabase project after migrations are pushed.
 - [x] Reviewed direct authenticated owner/admin policies for `businesses`, `business_members`, and `business_settings`: they should not stay enabled for trial/production while member-management UI/API is not productized.
-- [ ] Confirm cross-business read attempts return no rows for anon/authenticated client queries.
+- [x] Confirm cross-business read attempts return no rows for anon/authenticated client queries.
 - [ ] Confirm API role matrix manually:
   - owner/admin: settings, period locks, export/restore/reset, account/category management.
   - bookkeeper: ordinary accounting writes, no export/restore/reset or unlock.
@@ -131,4 +131,5 @@ Latest automated verification: 2026-05-12.
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.
+- Remote Supabase RLS direct-read smoke created two temporary users/businesses and confirmed anon reads returned 0 rows, each authenticated user could read their own business, and cross-business reads of `businesses`, `business_settings`, and `business_members` returned 0 rows.
 - Full target schema audit output was not available in this shell because `supabase db query --linked` can require `SUPABASE_DB_PASSWORD`; keep `supabase/rls_audit.sql` for SQL editor or `psql` verification when credentials are available.

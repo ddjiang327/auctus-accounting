@@ -192,6 +192,31 @@ Not completed from local repo inspection:
 - Supabase Auth production `site_url` and `additional_redirect_urls` still need control-plane verification.
 - API `/health` monitoring still needs the real deployed health URL.
 
+### 13) Remote Supabase RLS direct-read smoke
+
+Ran a one-off remote Supabase RLS smoke using local API env credentials without printing secret values.
+
+Setup:
+- Created two temporary confirmed auth users through the service-role admin client.
+- Created one temporary business for each user through the service-role client.
+- Inserted owner memberships and default business settings for both businesses.
+- Signed in each user through the anon client.
+
+Assertions:
+- Unauthenticated anon client reading Alice's `businesses` row returned `0` rows.
+- Unauthenticated anon client reading Alice's `business_settings` row returned `0` rows.
+- Alice authenticated client reading Alice's own `businesses` row returned `1` row.
+- Alice authenticated client reading Bob's `businesses` row returned `0` rows.
+- Alice authenticated client reading Bob's `business_settings` row returned `0` rows.
+- Bob authenticated client reading Alice's `businesses` row returned `0` rows.
+- Bob authenticated client reading Alice's `business_members` rows returned `0` rows.
+
+Cleanup:
+- Deleted the temporary `business_settings`, `business_members`, `businesses`, and auth users in the script `finally` block.
+
+Documentation:
+- Marked “Confirm cross-business read attempts return no rows for anon/authenticated client queries” complete in `docs/MVP_HARDENING.md`.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
