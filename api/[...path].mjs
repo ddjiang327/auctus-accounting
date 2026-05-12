@@ -38,7 +38,7 @@ function getContext() {
   return context;
 }
 
-function normalizeUrl(request) {
+export function normalizeUrl(request) {
   const originalUrl = request.url ?? "/";
   request.url = originalUrl.replace(/^\/api(?=\/(?:health|v1)(?:[/?]|$))/, "") || "/";
 }

@@ -3,16 +3,18 @@
   "functions": {
     "api/[...path].mjs": {
       "includeFiles": "apps/api/dist/**"
+    },
+    "api/health.mjs": {
+      "includeFiles": "apps/api/dist/**"
+    },
+    "api/v1/[...path].mjs": {
+      "includeFiles": "apps/api/dist/**"
     }
   },
   "rewrites": [
     {
       "source": "/health",
       "destination": "/api/health"
-    },
-    {
-      "source": "/v1",
-      "destination": "/api/v1"
     },
     {
       "source": "/v1/:path*",
