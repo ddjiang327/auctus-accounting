@@ -239,6 +239,28 @@ Verification:
 Documentation:
 - Marked the real-role UI/403 pass and API role matrix checklist items complete in `docs/MVP_HARDENING.md`.
 
+### 15) Target environment audit
+
+Checked the local repo and CLI-accessible deployment state without printing secret values.
+
+Confirmed:
+- Local API env points at Supabase project `zvcbnocynsxzyrvxcsbn`.
+- Local Web env points at the same Supabase project.
+- Local runtime origins are development-only: API `http://127.0.0.1:4010`, Web API target `http://127.0.0.1:4010`, and `API_CORS_ORIGIN=http://127.0.0.1:5173`.
+- `supabase migration list` passed and confirmed the linked remote project is aligned with local migrations through `20260507010000`.
+- The real-role UI smoke has already created temporary users and a temporary business on the target Supabase project and cleaned them up.
+
+Not confirmed from this shell:
+- `supabase projects list` requires `SUPABASE_ACCESS_TOKEN`; the token is not available here.
+- Supabase Auth `site_url` and `additional_redirect_urls` still need dashboard verification or a Supabase Management API token.
+- No repo deployment config was found for Vercel, Render, Fly, Netlify, or another production host.
+- Production Web/API env values and API `/health` monitoring still need control-plane verification.
+
+Documentation:
+- Filled the Supabase project ref/URL in `docs/MVP_HARDENING.md`.
+- Marked “Create a test user and test business on production Supabase” complete because the target Supabase project has now been exercised by temporary-user RLS and real-role UI smokes.
+- Left production host/env/Auth URL/health monitoring items unchecked.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
@@ -249,7 +271,6 @@ Documentation:
 ### B) Trial deployment record in docs
 
 Fill real deployment details into `docs/MVP_HARDENING.md`:
-- Supabase project ref / URL
 - API host / health URL
 - Web host
 - Production env configuration values (no secrets committed)

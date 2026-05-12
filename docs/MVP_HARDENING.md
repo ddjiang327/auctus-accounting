@@ -59,6 +59,14 @@ Local repository/env audit on 2026-05-12:
 - `apps/api/README.md` documents `SUPABASE_SERVICE_ROLE_KEY` as server-only and `API_CORS_ORIGIN` as the exact production web origin.
 - Supabase Auth production `site_url` / redirect URL and hosting provider env values still need console verification before this section is fully complete.
 
+Target environment audit on 2026-05-12:
+
+- Local API env points at Supabase project `zvcbnocynsxzyrvxcsbn`; local Web env points at the same project.
+- Local API/Web env values are development-only for runtime origins: API is `http://127.0.0.1:4010`, Web API target is `http://127.0.0.1:4010`, and `API_CORS_ORIGIN` is `http://127.0.0.1:5173`.
+- `supabase migration list` confirmed the linked remote project is aligned with local migrations through `20260507010000`.
+- `supabase projects list` could not verify project metadata because the Supabase Management API access token is not available in this shell. Supabase Auth site URL / redirect URL still needs dashboard or `SUPABASE_ACCESS_TOKEN` verification.
+- No repository deployment config was found for Vercel, Render, Fly, Netlify, or another production host, so Web/API production env values and `/health` monitoring remain unverified.
+
 ## Supabase RLS / Role Manual Audit
 
 The API uses the service role key and must enforce business membership and roles server-side. RLS still matters for direct anon/authenticated client access.
@@ -95,7 +103,7 @@ order by tablename, policyname;
 
 Record the real trial deployment here before inviting users.
 
-- Supabase project: `<project-ref>` / `https://<project-ref>.supabase.co`
+- Supabase project: `zvcbnocynsxzyrvxcsbn` / `https://zvcbnocynsxzyrvxcsbn.supabase.co`
 - API host: `https://<api-host>`
 - Web host: `https://<web-host>`
 - API health: `https://<api-host>/health`
@@ -111,7 +119,7 @@ Pre-trial verification:
 - [x] `npm run test -w apps/api`
 - [x] `npx tsc -p apps/mobile/tsconfig.json --noEmit`
 - [x] `npm run e2e`
-- [ ] Create a test user and test business on production Supabase.
+- [x] Create a test user and test business on production Supabase.
 - [ ] Create, edit, archive, export, restore, and reset a disposable trial workspace.
 
 Latest automated verification: 2026-05-12.
@@ -134,4 +142,6 @@ Latest automated verification: 2026-05-12.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.
 - Remote Supabase RLS direct-read smoke created two temporary users/businesses and confirmed anon reads returned 0 rows, each authenticated user could read their own business, and cross-business reads of `businesses`, `business_settings`, and `business_members` returned 0 rows.
+- Real-role UI smoke created temporary owner/admin/bookkeeper/viewer users and a temporary business on the target Supabase project, then cleaned them up after successful UI/API role assertions.
+- Target environment audit confirmed local env points at Supabase project `zvcbnocynsxzyrvxcsbn`, but no production Web/API hosts are recorded in the repo and Supabase Management API access is not available in this shell for Auth URL verification.
 - Full target schema audit output was not available in this shell because `supabase db query --linked` can require `SUPABASE_DB_PASSWORD`; keep `supabase/rls_audit.sql` for SQL editor or `psql` verification when credentials are available.
