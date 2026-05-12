@@ -9,6 +9,7 @@ Project notes and migration plans live here.
 - `MVP_HARDENING.md`: pre-trial hardening, production environment, RLS audit, and deployment checklist.
 - `PERMISSIONS.md`: owner/admin/bookkeeper/viewer capabilities aligned with API tests.
 - `PRODUCTION_DEPLOYMENT.md`: production Web/API/Supabase Auth setup and post-deploy verification.
+- `TRIAL_ACCEPTANCE_CHECKLIST.md`: final manual production acceptance checklist before inviting trial users.
 
 Useful commands:
 
