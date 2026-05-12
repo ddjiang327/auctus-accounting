@@ -366,7 +366,7 @@ Deployment fixes:
 - Added an env-independent Vercel health handler so `/health` can verify the API deployment before Supabase env is needed.
 - Added explicit Vercel `api/health.mjs` and `api/v1/[...path].mjs` handlers so `/health` and `/v1/*` both reach the API runtime.
 - Added `api/router.mjs` and rewired Vercel rewrites through a single router endpoint so deep API paths such as `/v1/businesses/:id/ledger` reach the API runtime.
-- Added `scripts/production-browser-smoke.mjs` and `npm run smoke:production` for repeatable production login/workspace smoke tests.
+- Added `scripts/production-browser-smoke.mjs` and `npm run smoke:production` for repeatable production login/workspace/business-cycle smoke tests.
 
 Verification:
 - `https://auctus-web.netlify.app` returned the production Web shell with `div#root`.
@@ -375,7 +375,8 @@ Verification:
 - `GET https://auctus-api.vercel.app/v1/businesses` returned 401 `{"error":"unauthorized"}`, confirming the production business API route is live and protected.
 - `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 15 checks, 1 warning, 0 failures.
 - Supabase Auth Site URL is `https://auctus-web.netlify.app`; allowed redirect URLs include `https://auctus-web.netlify.app` and `https://auctus-web.netlify.app/`.
-- `npm run smoke:production` passed after the router fix: it created a temporary confirmed Supabase user, signed in through the production Netlify Web app, created a temporary workspace through the Vercel API, loaded Home/Net Worth, and cleaned up the temporary user/workspace.
+- `npm run smoke:production` passed after the router fix: it created a temporary confirmed Supabase user, signed in through the production Netlify Web app, created a temporary workspace through the Vercel API, loaded Home/Net Worth, created a contact, created a category, created a transaction, downloaded a backend backup, verified the backup markers, reset the temporary backend ledger, restored the backup, verified the transaction returned, and cleaned up the temporary user/workspace.
+- Re-ran `npm run audit:production` after the expanded browser smoke: 15 checks, 1 warning, 0 failures. The remaining warning is local-only dev auto-login credentials in `apps/web/.env.local`.
 - Deep production API path smoke changed from 404 to 401 for unauthenticated `GET https://auctus-api.vercel.app/v1/businesses/test-id/ledger`, confirming the Vercel router handles nested `/v1/*` routes.
 
 Remaining production console item:
