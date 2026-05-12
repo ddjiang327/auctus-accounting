@@ -115,6 +115,34 @@ Verification:
   - Marked “Manually verify backend backup download, backend restore, and recovery from the pre-restore backup” as completed by the cloud recovery smoke above.
   - Added automated recoverable-error UX coverage for API unreachable, expired session, and 403 responses.
 
+### 9) Local backup download → restore → pre-restore recovery smoke
+
+Added `tests/e2e/auctus-local-backup.spec.ts` targeting a separate Playwright project (`local-mode`) that starts the Vite dev server on port 5174 with `VITE_SUPABASE_URL=""` and `VITE_SUPABASE_ANON_KEY=""` so the web app runs in local (no-auth) mode.
+
+Steps covered by the test:
+1. Clear localStorage to start with the default ledger (no contacts, no transactions).
+2. Add contact marker A via the Contacts UI.
+3. Click "Download Backup" in Settings — capture the downloaded JSON file; assert it contains marker A.
+4. Add contact marker B — state is now A + B.
+5. Restore backup A (A only) via the file input in Settings.
+   - `window.confirm` is auto-accepted by Playwright.
+   - App downloads a pre-restore safety backup (contains A + B) before replacing state.
+   - App state becomes backup A content (A only).
+6. Assert the pre-restore safety backup JSON contains both marker A and marker B.
+7. Assert the Contacts view shows marker A and not marker B.
+8. Restore from the pre-restore backup — another safety backup (A only) is downloaded.
+9. Assert the Contacts view now shows both marker A and marker B (full recovery confirmed).
+
+`playwright.config.ts` changes:
+- Added `testIgnore: '**/auctus-local-backup.spec.ts'` to the existing `chromium` project so cloud tests are unaffected.
+- Added `local-mode` project with `testMatch: '**/auctus-local-backup.spec.ts'` and `baseURL: 'http://127.0.0.1:5174'`.
+- Added a third `webServer` entry that starts a second Vite dev instance on port 5174 with empty Supabase env vars.
+
+Verification:
+- `npm run e2e` passed (8 tests: 7 cloud [chromium] + 1 local-mode).
+- `npm run build` passed.
+- `npm run test -w apps/api` passed (45 tests).
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)

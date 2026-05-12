@@ -17,7 +17,7 @@ Use this before any real trial workspace is created.
 
 - [x] Restore/import file is parsed and checked for required ledger sections before replacing data.
 - [x] Restore downloads a safety backup of the current ledger before replacing local or backend data.
-- [ ] Manually verify local backup download, local restore, and recovery from the pre-restore backup.
+- [x] Manually verify local backup download, local restore, and recovery from the pre-restore backup.
 - [x] Manually verify backend backup download, backend restore, and recovery from the pre-restore backup.
 - [ ] Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot.
 - [ ] Keep at least one off-platform backup before trial data is reset or imported.
@@ -111,9 +111,13 @@ Latest automated verification: 2026-05-12.
 - `npm run build` passed.
 - `npm run test -w apps/api` passed: 7 files, 45 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 7 Playwright tests, including cloud export → restore → pre-restore backup recovery and recoverable API error UX.
+- `npm run e2e` passed: 8 Playwright tests (7 cloud + 1 local-mode), including:
+  - Cloud export → restore → pre-restore backup recovery.
+  - Local backup download → restore → safety backup download → recovery from pre-restore backup.
+  - Recoverable API error UX (unreachable, 401, 403).
 - Playwright now asserts newly created cloud workspaces show `No transactions yet`.
 - Playwright now asserts API unreachable, 401 session expiry, and 403 forbidden responses render user-visible recovery messages instead of browser alerts.
+- Local backup smoke uses a second Playwright project (`local-mode`) targeting port 5174 (Vite dev server started with empty Supabase vars so the app runs without auth).
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.

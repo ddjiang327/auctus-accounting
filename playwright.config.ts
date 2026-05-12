@@ -17,6 +17,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: '**/auctus-local-backup.spec.ts',
+    },
+    {
+      name: 'local-mode',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5174' },
+      testMatch: '**/auctus-local-backup.spec.ts',
     },
   ],
   webServer: [
@@ -29,6 +35,12 @@ export default defineConfig({
     {
       command: 'npm run dev -w apps/web -- --host 127.0.0.1 --port 5173',
       url: 'http://127.0.0.1:5173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: 'VITE_SUPABASE_URL="" VITE_SUPABASE_ANON_KEY="" npm run dev -w apps/web -- --host 127.0.0.1 --port 5174',
+      url: 'http://127.0.0.1:5174',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
