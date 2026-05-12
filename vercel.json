@@ -1,0 +1,18 @@
+{
+  "buildCommand": "npm run build:packages && npm run build:api",
+  "functions": {
+    "api/[...path].mjs": {
+      "includeFiles": "apps/api/dist/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/v1/:path*",
+      "destination": "/api/v1/:path*"
+    }
+  ]
+}

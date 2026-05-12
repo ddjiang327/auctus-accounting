@@ -13,23 +13,26 @@ Record these in `docs/MVP_HARDENING.md` after deployment:
 
 ## API Host
 
+The first trial API deployment is configured for Vercel through `vercel.json` and
+`api/[...path].mjs`. Import the repository into Vercel as an API project from the
+repo root.
+
 Build command:
 
 ```bash
-npm run build:api
+npm run build:packages && npm run build:api
 ```
 
-Start command:
+Runtime:
 
-```bash
-npm run start -w apps/api
-```
+- Vercel Function entry: `api/[...path].mjs`
+- Public paths:
+  - `https://<api-host>/health`
+  - `https://<api-host>/v1/*`
 
 Environment:
 
 ```bash
-PORT=4010
-HOST=0.0.0.0
 SUPABASE_URL=https://zvcbnocynsxzyrvxcsbn.supabase.co
 SUPABASE_ANON_KEY=<supabase-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<supabase-service-role-key>
@@ -40,14 +43,17 @@ Rules:
 
 - Keep `SUPABASE_SERVICE_ROLE_KEY` only on the API host.
 - Set `API_CORS_ORIGIN` to the exact Web origin, with no trailing path.
-- Configure the platform health check to `GET /health`.
+- Verify `GET /health` after deploy.
 
 ## Web Host
+
+The first trial Web deployment is configured for Netlify through `netlify.toml`.
+Import the repository into Netlify from the repo root.
 
 Build command:
 
 ```bash
-npm run build:web
+npm run build:packages && npm run build:web
 ```
 
 Output directory:

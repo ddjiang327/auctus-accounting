@@ -253,7 +253,7 @@ Confirmed:
 Not confirmed from this shell:
 - `supabase projects list` requires `SUPABASE_ACCESS_TOKEN`; the token is not available here.
 - Supabase Auth `site_url` and `additional_redirect_urls` still need dashboard verification or a Supabase Management API token.
-- No repo deployment config was found for Vercel, Render, Fly, Netlify, or another production host.
+- At this point no repo deployment config had been found for Vercel, Render, Fly, Netlify, or another production host. Vercel API and Netlify Web config was added later in section 19.
 - Production Web/API env values and API `/health` monitoring still need control-plane verification.
 
 Documentation:
@@ -319,8 +319,8 @@ The audit checks without printing secrets:
 - `supabase migration list` can run when Supabase CLI auth is available.
 
 Verification:
-- `npm run audit:pretrial` passed with warnings only.
-- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API/CORS URLs not supplied, production Web shell/CORS preflight/`/health` checks skipped, and this shell has no Supabase CLI access token for `supabase migration list`.
+- `npm run audit:production` passed with warnings only.
+- Current warnings: Web local env has dev auto-login credentials, production Web/API/CORS URLs not supplied, production Web shell/CORS preflight/`/health` checks skipped, and this shell has no Supabase CLI access token for `supabase migration list`.
 
 Documentation:
 - Recorded the audit command and current warnings in `docs/MVP_HARDENING.md`.
@@ -332,10 +332,24 @@ Added `docs/PRODUCTION_DEPLOYMENT.md`.
 
 The runbook records:
 - Required Web/API/health host placeholders.
-- API build/start commands and required server-only env.
-- Web build output and required browser-safe env.
+- Vercel API function entry, rewrites, build command, and required server-only env.
+- Netlify Web build output and required browser-safe env.
 - Supabase Auth Site URL and redirect URL checks.
-- Post-deploy verification commands, including `npm run audit:pretrial` with production URL inputs.
+- Post-deploy verification commands, including `npm run audit:production` with production URL inputs.
+
+### 19) Netlify Web and Vercel API deployment config
+
+Added first-pass production host config:
+- `api/[...path].mjs`: Vercel function adapter that reuses the built API router and normalizes `/api/health` and `/api/v1/*` to the existing `/health` and `/v1/*` routes.
+- `vercel.json`: builds packages + API, includes API dist files, and rewrites `/health` and `/v1/*` to the Vercel function.
+- `netlify.toml`: builds packages + Web, publishes `apps/web/dist`, and routes SPA fallback traffic to `index.html`.
+
+Verification:
+- `npm run build` passed.
+- `node --check api/[...path].mjs` passed.
+- Local adapter smoke passed for `/api/health` and `/health`.
+- `npm run audit:production` passed with 9 checks, 7 warnings, and 0 failures; deployment config files are now detected.
+- `npm run test -w apps/api` passed: 7 files, 44 tests.
 
 Documentation:
 - Linked the runbook from `docs/MVP_HARDENING.md` and the pending deployment notes above.
