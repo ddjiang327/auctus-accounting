@@ -101,7 +101,9 @@ npm run audit:pretrial
 Expected result:
 
 - No failures.
+- `Production Web shell check passed` passes.
 - `Production API CORS origin matches Web origin` passes.
+- `Production API CORS preflight passed` passes.
 - `Production API health check passed` passes.
 - Any remaining warnings are reviewed before trial users are invited.
 

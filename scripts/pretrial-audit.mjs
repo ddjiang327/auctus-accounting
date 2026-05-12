@@ -50,6 +50,35 @@ async function checkHealth(url) {
   };
 }
 
+async function checkWebShell(url) {
+  const response = await fetch(url, {
+    headers: { accept: 'text/html' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const body = await response.text().catch(() => '');
+  return {
+    ok: response.ok && /<div\s+id=["']root["']/.test(body),
+    status: response.status,
+  };
+}
+
+async function checkCorsPreflight(url, allowedOrigin) {
+  const response = await fetch(joinUrl(url, 'health'), {
+    method: 'OPTIONS',
+    headers: {
+      origin: allowedOrigin,
+      'access-control-request-method': 'GET',
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const allowOrigin = response.headers.get('access-control-allow-origin') || '';
+  return {
+    ok: response.status === 204 && allowOrigin === allowedOrigin,
+    status: response.status,
+    allowOrigin,
+  };
+}
+
 const checks = [];
 
 function pass(label, detail = '') {
@@ -129,6 +158,21 @@ if (prodWeb && prodApi) {
   warn('Production Web/API URLs not supplied', 'Optional: set AUCTUS_PRODUCTION_WEB_URL and AUCTUS_PRODUCTION_API_URL when the deployment exists.');
 }
 
+if (prodWeb) {
+  try {
+    const webShell = await checkWebShell(prodWeb);
+    if (webShell.ok) {
+      pass('Production Web shell check passed', prodWeb);
+    } else {
+      fail('Production Web shell check returned an unexpected response', `status=${webShell.status}`);
+    }
+  } catch (error) {
+    fail('Production Web shell check failed', error instanceof Error ? error.message : String(error));
+  }
+} else {
+  warn('Production Web shell check skipped', 'Set AUCTUS_PRODUCTION_WEB_URL to verify the deployed Web app loads.');
+}
+
 if (prodWeb && prodCors) {
   if (origin(prodWeb) === origin(prodCors)) {
     pass('Production API CORS origin matches Web origin', origin(prodWeb));
@@ -139,6 +183,22 @@ if (prodWeb && prodCors) {
   warn('Production Web URL or CORS origin is missing', 'Set both AUCTUS_PRODUCTION_WEB_URL and AUCTUS_PRODUCTION_API_CORS_ORIGIN to verify exact CORS.');
 } else {
   warn('Production CORS origin not supplied', 'Optional: set AUCTUS_PRODUCTION_API_CORS_ORIGIN when the deployment exists.');
+}
+
+if (prodApi && prodWeb) {
+  const allowedOrigin = origin(prodWeb);
+  try {
+    const cors = await checkCorsPreflight(prodApi, allowedOrigin);
+    if (cors.ok) {
+      pass('Production API CORS preflight passed', allowedOrigin);
+    } else {
+      fail('Production API CORS preflight returned an unexpected response', `status=${cors.status} allow-origin=${cors.allowOrigin || 'missing'}`);
+    }
+  } catch (error) {
+    fail('Production API CORS preflight failed', error instanceof Error ? error.message : String(error));
+  }
+} else {
+  warn('Production API CORS preflight skipped', 'Set AUCTUS_PRODUCTION_WEB_URL and AUCTUS_PRODUCTION_API_URL to verify deployed CORS headers.');
 }
 
 if (prodApi) {

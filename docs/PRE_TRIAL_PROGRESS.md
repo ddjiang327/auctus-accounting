@@ -312,13 +312,15 @@ The audit checks without printing secrets:
 - Local API URL and CORS origin are present.
 - Repo deployment config is present or missing.
 - Optional `AUCTUS_PRODUCTION_WEB_URL` and `AUCTUS_PRODUCTION_API_URL` are supplied when a deployment exists.
+- Production Web returns the app HTML shell when `AUCTUS_PRODUCTION_WEB_URL` is supplied.
 - Optional `AUCTUS_PRODUCTION_API_CORS_ORIGIN` matches the production Web origin.
+- Production API CORS preflight allows the production Web origin when Web/API URLs are supplied.
 - Production `GET /health` returns the expected Auctus API health payload when `AUCTUS_PRODUCTION_API_URL` is supplied.
 - `supabase migration list` can run when Supabase CLI auth is available.
 
 Verification:
 - `npm run audit:pretrial` passed with warnings only.
-- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API/CORS URLs not supplied, production `/health` skipped, and this shell has no Supabase CLI access token for `supabase migration list`.
+- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API/CORS URLs not supplied, production Web shell/CORS preflight/`/health` checks skipped, and this shell has no Supabase CLI access token for `supabase migration list`.
 
 Documentation:
 - Recorded the audit command and current warnings in `docs/MVP_HARDENING.md`.
