@@ -301,7 +301,7 @@ Documentation:
 
 ### 17) Repeatable pre-trial audit command
 
-Added `scripts/pretrial-audit.mjs` and `npm run audit:pretrial`.
+Added `scripts/pretrial-audit.mjs`, `npm run audit:pretrial`, and `npm run audit:production`.
 
 The audit checks without printing secrets:
 - Local API/Web env files exist.
@@ -324,6 +324,7 @@ Verification:
 
 Documentation:
 - Recorded the audit command and current warnings in `docs/MVP_HARDENING.md`.
+- Added the production deployment runbook and audit commands to `docs/README.md`.
 
 ### 18) Production deployment runbook
 

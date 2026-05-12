@@ -95,7 +95,7 @@ After production hosts exist, run:
 AUCTUS_PRODUCTION_WEB_URL=https://<web-host> \
 AUCTUS_PRODUCTION_API_URL=https://<api-host> \
 AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://<web-host> \
-npm run audit:pretrial
+npm run audit:production
 ```
 
 Expected result:
