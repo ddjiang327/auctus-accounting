@@ -1,4 +1,4 @@
-# Pre-trial Progress Report (2026-05-10)
+# Pre-trial Progress Report (2026-05-12)
 
 This note summarizes the recent hardening work completed without requiring local `.env` secrets, plus the remaining items to run when the local environment is available.
 
@@ -97,21 +97,30 @@ Verification:
 - `npm run build:web` passed.
 - `npm run e2e` passed (4 Playwright tests, including the new recovery smoke).
 
+### 8) Recoverable API error UX smoke
+
+Added `tests/e2e/auctus-error-ux.spec.ts` to keep user-facing error recovery covered without relying on process-level API shutdown:
+- API unreachable on `Download Backup` → visible banner: "Cannot reach the server. Check your connection and retry." plus Retry action.
+- `401` on `Download Backup` → returns to sign-in and shows: "Session expired. Please sign in again."
+- `403` on `Download Backup` → visible permissions message: "You do not have permission to perform this action."
+
+Verification:
+- `npx playwright test tests/e2e/auctus-error-ux.spec.ts` passed (3 tests).
+
 ## Documentation Updates
 
 - Updated `docs/MVP_HARDENING.md`:
   - Marked “Push `20260507010000_harden_direct_workspace_writes.sql` to the target Supabase project” as completed.
   - Marked “Run a manual UI pass on an empty workspace after creating a brand-new business” as completed.
   - Marked “Manually verify backend backup download, backend restore, and recovery from the pre-restore backup” as completed by the cloud recovery smoke above.
+  - Added automated recoverable-error UX coverage for API unreachable, expired session, and 403 responses.
 
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
 
 - Validate error UX end-to-end:
-  - API offline: confirm user-visible error banner/text + retry path (not only a failed request)
-  - session expired: confirm the login screen shows the expiry notice and the re-login path is clear
-  - 403 viewer: confirm forbidden actions surface as a permissions message (not a generic failure)
+  - Manual real-role pass is still pending for 403 viewer behavior.
 - Click-through role validation:
   - owner/admin/bookkeeper/viewer permissions across key screens and actions
 

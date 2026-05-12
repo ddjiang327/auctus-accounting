@@ -10,6 +10,7 @@ Use this before any real trial workspace is created.
 - [x] Workspace selector has an empty state when a signed-in user has no businesses.
 - [x] Playwright smoke confirms a newly created cloud workspace opens with an empty transaction list.
 - [x] Run a manual UI pass on an empty workspace after creating a brand-new business.
+- [x] Playwright recoverable-error smoke confirms API offline, expired session, and 403 responses surface clear in-app messages.
 - [ ] Run a manual UI pass with API offline, expired session, and a 403 viewer role.
 
 ## Export / Import Recovery Path
@@ -105,13 +106,14 @@ Pre-trial verification:
 - [ ] Create a test user and test business on production Supabase.
 - [ ] Create, edit, archive, export, restore, and reset a disposable trial workspace.
 
-Latest automated verification: 2026-05-10.
+Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
-- `npm run test -w apps/api` passed: 7 files, 42 tests.
+- `npm run test -w apps/api` passed: 7 files, 45 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 4 Playwright tests, including cloud export → restore → pre-restore backup recovery.
+- `npm run e2e` passed: 7 Playwright tests, including cloud export → restore → pre-restore backup recovery and recoverable API error UX.
 - Playwright now asserts newly created cloud workspaces show `No transactions yet`.
+- Playwright now asserts API unreachable, 401 session expiry, and 403 forbidden responses render user-visible recovery messages instead of browser alerts.
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.
