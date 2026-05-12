@@ -278,6 +278,7 @@ Fill real deployment details into `docs/MVP_HARDENING.md`:
 - Confirm no production Web `VITE_AUCTUS_DEV_EMAIL` / `VITE_AUCTUS_DEV_PASSWORD`
 - Confirm production API-only `SUPABASE_SERVICE_ROLE_KEY`
 - Confirm production `API_CORS_ORIGIN`, Supabase Auth URLs, and `/health` monitoring
+- Follow `docs/PRODUCTION_DEPLOYMENT.md` for the exact host env, Supabase Auth, health check, and post-deploy audit steps.
 
 ### 16) Disposable trial workspace lifecycle smoke
 
@@ -311,11 +312,27 @@ The audit checks without printing secrets:
 - Local API URL and CORS origin are present.
 - Repo deployment config is present or missing.
 - Optional `AUCTUS_PRODUCTION_WEB_URL` and `AUCTUS_PRODUCTION_API_URL` are supplied when a deployment exists.
+- Optional `AUCTUS_PRODUCTION_API_CORS_ORIGIN` matches the production Web origin.
+- Production `GET /health` returns the expected Auctus API health payload when `AUCTUS_PRODUCTION_API_URL` is supplied.
 - `supabase migration list` can run when Supabase CLI auth is available.
 
 Verification:
 - `npm run audit:pretrial` passed with warnings only.
-- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API URLs not supplied, and this shell has no Supabase CLI access token for `supabase migration list`.
+- Current warnings: Web local env has dev auto-login credentials, no production deployment config found in repo, production Web/API/CORS URLs not supplied, production `/health` skipped, and this shell has no Supabase CLI access token for `supabase migration list`.
 
 Documentation:
 - Recorded the audit command and current warnings in `docs/MVP_HARDENING.md`.
+
+### 18) Production deployment runbook
+
+Added `docs/PRODUCTION_DEPLOYMENT.md`.
+
+The runbook records:
+- Required Web/API/health host placeholders.
+- API build/start commands and required server-only env.
+- Web build output and required browser-safe env.
+- Supabase Auth Site URL and redirect URL checks.
+- Post-deploy verification commands, including `npm run audit:pretrial` with production URL inputs.
+
+Documentation:
+- Linked the runbook from `docs/MVP_HARDENING.md` and the pending deployment notes above.

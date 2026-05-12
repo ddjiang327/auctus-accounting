@@ -33,6 +33,23 @@ function hasAny(env, keys) {
   return keys.some((key) => Boolean(env[key]));
 }
 
+function joinUrl(base, path) {
+  return new URL(path, `${base.replace(/\/+$/, '')}/`).toString();
+}
+
+async function checkHealth(url) {
+  const response = await fetch(joinUrl(url, 'health'), {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const body = await response.json().catch(() => ({}));
+  return {
+    ok: response.ok && body?.ok === true && body?.service === 'auctus-api',
+    status: response.status,
+    body,
+  };
+}
+
 const checks = [];
 
 function pass(label, detail = '') {
@@ -105,10 +122,38 @@ else warn('No production deployment config found in repo', 'Record real Web/API 
 
 const prodWeb = process.env.AUCTUS_PRODUCTION_WEB_URL || '';
 const prodApi = process.env.AUCTUS_PRODUCTION_API_URL || '';
+const prodCors = process.env.AUCTUS_PRODUCTION_API_CORS_ORIGIN || '';
 if (prodWeb && prodApi) {
   pass('Production Web/API URLs supplied to audit', `Web=${origin(prodWeb)} API=${origin(prodApi)}`);
 } else {
   warn('Production Web/API URLs not supplied', 'Optional: set AUCTUS_PRODUCTION_WEB_URL and AUCTUS_PRODUCTION_API_URL when the deployment exists.');
+}
+
+if (prodWeb && prodCors) {
+  if (origin(prodWeb) === origin(prodCors)) {
+    pass('Production API CORS origin matches Web origin', origin(prodWeb));
+  } else {
+    fail('Production API CORS origin does not match Web origin', `Web=${origin(prodWeb)} CORS=${origin(prodCors)}`);
+  }
+} else if (prodWeb || prodCors) {
+  warn('Production Web URL or CORS origin is missing', 'Set both AUCTUS_PRODUCTION_WEB_URL and AUCTUS_PRODUCTION_API_CORS_ORIGIN to verify exact CORS.');
+} else {
+  warn('Production CORS origin not supplied', 'Optional: set AUCTUS_PRODUCTION_API_CORS_ORIGIN when the deployment exists.');
+}
+
+if (prodApi) {
+  try {
+    const health = await checkHealth(prodApi);
+    if (health.ok) {
+      pass('Production API health check passed', joinUrl(prodApi, 'health'));
+    } else {
+      fail('Production API health check returned an unexpected response', `status=${health.status}`);
+    }
+  } catch (error) {
+    fail('Production API health check failed', error instanceof Error ? error.message : String(error));
+  }
+} else {
+  warn('Production API health check skipped', 'Set AUCTUS_PRODUCTION_API_URL to verify /health.');
 }
 
 try {
