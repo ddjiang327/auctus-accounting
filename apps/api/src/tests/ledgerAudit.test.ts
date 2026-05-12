@@ -12,74 +12,50 @@ vi.mock("../audit/service.js", () => ({
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../ledger/seed.js", () => ({
+  seedAccountingFoundation: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockedGetLedgerSnapshot = vi.mocked(getLedgerSnapshot);
 const mockedRecordAuditEvent = vi.mocked(recordAuditEvent);
 
 describe("ledger backup / restore / import / reset permissions", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns 403 when a bookkeeper tries to export a backup", async () => {
-    mockedGetLedgerSnapshot.mockResolvedValue({
-      business: { id: "biz_1", role: "bookkeeper" },
-      ledger: ledgerData(),
-    });
+  const adminActions = [
+    { label: "export a backup", method: "GET", path: "/v1/businesses/biz_1/backup", body: undefined },
+    { label: "restore a backup", method: "POST", path: "/v1/businesses/biz_1/restore", body: { ledger: ledgerData() } },
+    { label: "import ledger data", method: "POST", path: "/v1/businesses/biz_1/import", body: { ledger: ledgerData() } },
+    { label: "reset the ledger", method: "POST", path: "/v1/businesses/biz_1/reset", body: undefined },
+  ];
 
-    const result = await invokeApi("GET", "/v1/businesses/biz_1/backup");
+  it.each(["owner", "admin"] as const)("allows a %s to export, restore, import, and reset ledger data", async (role) => {
+    for (const action of adminActions) {
+      vi.clearAllMocks();
+      mockedGetLedgerSnapshot.mockResolvedValue({
+        business: { id: "biz_1", role },
+        ledger: ledgerData(),
+      });
 
-    expect(result.statusCode).toBe(403);
-    expect(result.body).toMatchObject({ error: "forbidden" });
+      const result = await invokeApi(action.method, action.path, action.body);
+
+      expect(result.statusCode, `${role} should be allowed to ${action.label}`).toBe(200);
+    }
   });
 
-  it("returns 403 when a viewer tries to export a backup", async () => {
-    mockedGetLedgerSnapshot.mockResolvedValue({
-      business: { id: "biz_1", role: "viewer" },
-      ledger: ledgerData(),
-    });
+  it.each(["bookkeeper", "viewer"] as const)("returns 403 when a %s tries to export, restore, import, or reset ledger data", async (role) => {
+    for (const action of adminActions) {
+      vi.clearAllMocks();
+      mockedGetLedgerSnapshot.mockResolvedValue({
+        business: { id: "biz_1", role },
+        ledger: ledgerData(),
+      });
 
-    const result = await invokeApi("GET", "/v1/businesses/biz_1/backup");
+      const result = await invokeApi(action.method, action.path, action.body);
 
-    expect(result.statusCode).toBe(403);
-  });
-
-  it("returns 403 when a bookkeeper tries to restore a backup", async () => {
-    mockedGetLedgerSnapshot.mockResolvedValue({
-      business: { id: "biz_1", role: "bookkeeper" },
-      ledger: ledgerData(),
-    });
-
-    const result = await invokeApi(
-      "POST",
-      "/v1/businesses/biz_1/restore",
-      { ledger: ledgerData() },
-    );
-
-    expect(result.statusCode).toBe(403);
-  });
-
-  it("returns 403 when a viewer tries to import ledger data", async () => {
-    mockedGetLedgerSnapshot.mockResolvedValue({
-      business: { id: "biz_1", role: "viewer" },
-      ledger: ledgerData(),
-    });
-
-    const result = await invokeApi(
-      "POST",
-      "/v1/businesses/biz_1/import",
-      { ledger: ledgerData() },
-    );
-
-    expect(result.statusCode).toBe(403);
-  });
-
-  it("returns 403 when a bookkeeper tries to reset the ledger", async () => {
-    mockedGetLedgerSnapshot.mockResolvedValue({
-      business: { id: "biz_1", role: "bookkeeper" },
-      ledger: ledgerData(),
-    });
-
-    const result = await invokeApi("POST", "/v1/businesses/biz_1/reset");
-
-    expect(result.statusCode).toBe(403);
+      expect(result.statusCode, `${role} should not be allowed to ${action.label}`).toBe(403);
+      expect(result.body).toMatchObject({ error: "forbidden" });
+    }
   });
 });
 

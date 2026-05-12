@@ -19,7 +19,7 @@ Use this before any real trial workspace is created.
 - [x] Restore downloads a safety backup of the current ledger before replacing local or backend data.
 - [x] Manually verify local backup download, local restore, and recovery from the pre-restore backup.
 - [x] Manually verify backend backup download, backend restore, and recovery from the pre-restore backup.
-- [ ] Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot.
+- [x] Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot.
 - [ ] Keep at least one off-platform backup before trial data is reset or imported.
 
 ## Production Environment
@@ -109,7 +109,7 @@ Pre-trial verification:
 Latest automated verification: 2026-05-12.
 
 - `npm run build` passed.
-- `npm run test -w apps/api` passed: 7 files, 45 tests.
+- `npm run test -w apps/api` passed: 7 files, 44 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
 - `npm run e2e` passed: 8 Playwright tests (7 cloud + 1 local-mode), including:
   - Cloud export → restore → pre-restore backup recovery.
@@ -118,6 +118,7 @@ Latest automated verification: 2026-05-12.
 - Playwright now asserts newly created cloud workspaces show `No transactions yet`.
 - Playwright now asserts API unreachable, 401 session expiry, and 403 forbidden responses render user-visible recovery messages instead of browser alerts.
 - Local backup smoke uses a second Playwright project (`local-mode`) targeting port 5174 (Vite dev server started with empty Supabase vars so the app runs without auth).
+- API permission tests now assert owner/admin can export, restore, import, and reset ledger data while bookkeeper/viewer receive 403 for the same actions.
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.

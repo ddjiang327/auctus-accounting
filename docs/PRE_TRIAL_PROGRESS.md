@@ -143,6 +143,25 @@ Verification:
 - `npm run build` passed.
 - `npm run test -w apps/api` passed (45 tests).
 
+### 10) Export / restore / import / reset API role matrix
+
+Updated `apps/api/src/tests/ledgerAudit.test.ts` so ledger-data administration permissions are covered as an explicit matrix:
+
+- `owner` and `admin` must receive `200` for:
+  - `GET /v1/businesses/:businessId/backup`
+  - `POST /v1/businesses/:businessId/restore`
+  - `POST /v1/businesses/:businessId/import`
+  - `POST /v1/businesses/:businessId/reset`
+- `bookkeeper` and `viewer` must receive `403 forbidden` for the same four actions.
+
+The test mocks `seedAccountingFoundation` inside this file so the reset allow-path verifies permission routing without depending on seed-table mock details.
+
+Verification:
+- `npm run test -w apps/api` passed (7 files, 44 tests).
+
+Documentation:
+- Marked “Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot” complete in `docs/MVP_HARDENING.md`.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)
@@ -150,7 +169,8 @@ Verification:
 - Validate error UX end-to-end:
   - Manual real-role pass is still pending for 403 viewer behavior.
 - Click-through role validation:
-  - owner/admin/bookkeeper/viewer permissions across key screens and actions
+  - full owner/admin/bookkeeper/viewer permissions across key screens and actions
+  - export/restore/import/reset API role matrix is now automated
 
 ### B) Trial deployment record in docs
 
