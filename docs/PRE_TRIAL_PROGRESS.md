@@ -188,9 +188,7 @@ Audited repository-tracked env examples and local env file placement without rec
 - `apps/api/README.md` already documents `SUPABASE_SERVICE_ROLE_KEY` as server-only, exact `API_CORS_ORIGIN`, and `GET /health` as the deployment health check.
 
 Not completed from local repo inspection:
-- Production hosting provider env values still need control-plane verification.
-- Supabase Auth production `site_url` and `additional_redirect_urls` still need control-plane verification.
-- API `/health` monitoring still needs the real deployed health URL.
+- These production control-plane items were completed later in sections 19 and 20.
 
 ### 13) Remote Supabase RLS direct-read smoke
 
@@ -252,7 +250,7 @@ Confirmed:
 
 Not confirmed from this shell:
 - `supabase projects list` requires `SUPABASE_ACCESS_TOKEN`; the token is not available here.
-- Supabase Auth `site_url` and `additional_redirect_urls` still need dashboard verification or a Supabase Management API token.
+- At this point Supabase Auth `site_url` and `additional_redirect_urls` still needed dashboard verification. They were confirmed later in section 20.
 - At this point no repo deployment config had been found for Vercel, Render, Fly, Netlify, or another production host. Vercel API and Netlify Web config was added later in section 19.
 - Production Web/API env values and API `/health` monitoring still need control-plane verification.
 
@@ -279,6 +277,8 @@ Fill real deployment details into `docs/MVP_HARDENING.md`:
 - Confirm production API-only `SUPABASE_SERVICE_ROLE_KEY`
 - Confirm production `API_CORS_ORIGIN`, Supabase Auth URLs, and `/health` monitoring
 - Follow `docs/PRODUCTION_DEPLOYMENT.md` for the exact host env, Supabase Auth, health check, and post-deploy audit steps.
+
+This manual work was completed later in sections 19 and 20.
 
 ### 16) Disposable trial workspace lifecycle smoke
 
@@ -372,6 +372,7 @@ Verification:
 - `OPTIONS https://auctus-api.vercel.app/v1/businesses` returned 204 with `access-control-allow-origin: https://auctus-web.netlify.app`.
 - `GET https://auctus-api.vercel.app/v1/businesses` returned 401 `{"error":"unauthorized"}`, confirming the production business API route is live and protected.
 - `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 15 checks, 1 warning, 0 failures.
+- Supabase Auth Site URL is `https://auctus-web.netlify.app`; allowed redirect URLs include `https://auctus-web.netlify.app` and `https://auctus-web.netlify.app/`.
 
 Remaining production console item:
-- Confirm Supabase Auth Site URL and allowed redirect URLs include `https://auctus-web.netlify.app`.
+- None for the first trial deployment record.

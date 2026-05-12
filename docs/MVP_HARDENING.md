@@ -48,7 +48,7 @@ Production rules:
 - [x] Do not set `VITE_AUCTUS_DEV_EMAIL` or `VITE_AUCTUS_DEV_PASSWORD` in production.
 - [x] `SUPABASE_SERVICE_ROLE_KEY` exists only on the API host.
 - [x] `API_CORS_ORIGIN` exactly matches the production web origin.
-- [ ] Supabase Auth allowed redirect/site URLs include the production web host.
+- [x] Supabase Auth allowed redirect/site URLs include the production web host.
 - [x] API `/health` is monitored.
 
 Deployment setup steps are tracked in `docs/PRODUCTION_DEPLOYMENT.md`.
@@ -59,7 +59,7 @@ Local repository/env audit on 2026-05-12:
 - `apps/web/.env.local` currently includes local dev login variables for E2E/local testing; do not copy these to production hosting.
 - `SUPABASE_SERVICE_ROLE_KEY` appears in API env examples/docs only, not in Web env examples or Web source.
 - `apps/api/README.md` documents `SUPABASE_SERVICE_ROLE_KEY` as server-only and `API_CORS_ORIGIN` as the exact production web origin.
-- Supabase Auth production `site_url` / redirect URL still needs console verification before this section is fully complete.
+- Supabase Auth production `site_url` is `https://auctus-web.netlify.app`; allowed redirect URLs include `https://auctus-web.netlify.app` and `https://auctus-web.netlify.app/`.
 
 Target environment audit on 2026-05-12:
 
@@ -70,6 +70,7 @@ Target environment audit on 2026-05-12:
 - Vercel API and Netlify Web deployment config now exists in `vercel.json`, `api/[...path].mjs`, `api/health.mjs`, `api/v1/[...path].mjs`, and `netlify.toml`.
 - Production Web/API verification passed for `https://auctus-web.netlify.app` and `https://auctus-api.vercel.app`: Web shell, exact CORS origin, CORS preflight, API `/health`, and unauthenticated `/v1/businesses` returning 401.
 - `npm run audit:production` passed with production URL inputs: 15 passed, 1 warning, 0 failures. The remaining warning is local-only dev auto-login credentials in `apps/web/.env.local`.
+- Supabase Auth Site URL and allowed redirect URLs were verified in the Supabase dashboard for `https://auctus-web.netlify.app`.
 
 ## Supabase RLS / Role Manual Audit
 
