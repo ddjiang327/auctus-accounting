@@ -162,6 +162,18 @@ Verification:
 Documentation:
 - Marked “Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot” complete in `docs/MVP_HARDENING.md`.
 
+### 11) Off-platform project backup recorded
+
+Confirmed a copied project backup exists outside the working repository:
+
+- Path: `/Users/david/Documents/Claude/Projects/backup/auctus`
+- Size: `430M`
+- Checked on: 2026-05-12
+- Contents include `.git`, `apps`, `docs`, `packages`, `supabase`, `tests`, and root project config files.
+
+Documentation:
+- Marked “Keep at least one off-platform backup before trial data is reset or imported” complete in `docs/MVP_HARDENING.md`.
+
 ## Pending (needs local runtime / env)
 
 ### A) Manual pre-trial smoke (per `docs/MVP_HARDENING.md`)

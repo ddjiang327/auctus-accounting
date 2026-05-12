@@ -20,7 +20,7 @@ Use this before any real trial workspace is created.
 - [x] Manually verify local backup download, local restore, and recovery from the pre-restore backup.
 - [x] Manually verify backend backup download, backend restore, and recovery from the pre-restore backup.
 - [x] Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot.
-- [ ] Keep at least one off-platform backup before trial data is reset or imported.
+- [x] Keep at least one off-platform backup before trial data is reset or imported.
 
 ## Production Environment
 
@@ -119,6 +119,7 @@ Latest automated verification: 2026-05-12.
 - Playwright now asserts API unreachable, 401 session expiry, and 403 forbidden responses render user-visible recovery messages instead of browser alerts.
 - Local backup smoke uses a second Playwright project (`local-mode`) targeting port 5174 (Vite dev server started with empty Supabase vars so the app runs without auth).
 - API permission tests now assert owner/admin can export, restore, import, and reset ledger data while bookkeeper/viewer receive 403 for the same actions.
+- Off-platform project backup confirmed at `/Users/david/Documents/Claude/Projects/backup/auctus` (430M, copied 2026-05-12 before further trial reset/import work).
 - `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
 - `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
 - Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.
