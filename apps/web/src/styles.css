@@ -132,6 +132,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 14px;
   font-weight: 800;
 }
+.top-add:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
 
 .content {
   flex: 1;
@@ -1722,6 +1726,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .mode-badge {
@@ -1737,15 +1742,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .sync-chip {
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  max-width: min(320px, 42vw);
+  padding: 7px 11px;
   border-radius: 999px;
+  background: var(--chip);
+  color: var(--text);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   white-space: nowrap;
 }
 
+.sync-chip.busy,
 .sync-chip.syncing {
-  background: rgba(74, 85, 104, 0.1);
+  background: var(--soft-blue);
   color: var(--blue);
 }
 
@@ -1757,6 +1770,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .sync-chip.error:hover {
   background: rgba(138, 74, 58, 0.18);
+}
+
+.inline-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .app-alert {

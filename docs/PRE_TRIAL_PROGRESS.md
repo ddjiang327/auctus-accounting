@@ -463,3 +463,23 @@ Viewer Manual Pass:
 ### Final decision
 
 Trial acceptance is conditionally passed for first trial exposure, with the explicit condition that Bookkeeper and Viewer manual role checks remain pending before broader user invitation or before assigning those roles to real trial users.
+
+### 22) Web UI polish: action feedback and period-lock guidance
+
+Added the first Web UI polish pass from manual trial feedback:
+
+- Added a top-bar busy chip with a spinner for cloud write/export/restore/reset actions so users can see that clicks were received while network work is pending.
+- Added action labels for saving transactions, contacts, accounts, categories, journals, settings, period locks, payments, backups, restores, and backend reset.
+- Disabled the top `New Transaction` action while a cloud action is pending.
+- Added proactive period-lock guidance when users click:
+  - `New Transaction` while today is locked.
+  - `Create Invoice` / `Enter Bill` while today is locked.
+  - `Create Credit Note` / `Enter Supplier Credit` while today is locked.
+  - An existing transaction dated inside a locked period.
+- Added a local-mode Playwright regression test that creates a period lock, clicks `New Transaction`, and asserts the user sees the clear period-lock message.
+
+Verification:
+- `npx tsc -p apps/web/tsconfig.json --noEmit` passed.
+- `npm run build:web` passed.
+- `npx playwright test tests/e2e/auctus-local-backup.spec.ts --project=local-mode` passed: 2 tests.
+- `npm run e2e` passed: 11 tests.

@@ -14,6 +14,7 @@ interface ShellProps {
   userRole?: string;
   syncState?: SyncState;
   syncError?: string | null;
+  busyLabel?: string | null;
   onDismissSyncError?: () => void;
   onRetrySync?: () => void;
   onLogout?: () => void;
@@ -33,7 +34,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: 'settings', label: 'Settings', icon: <Settings size={23} /> },
 ];
 
-export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole, syncState, syncError, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
+export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole, syncState, syncError, busyLabel, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
   const active = navItems.find((item) => item.key === view) || navItems[0];
   return (
     <div className="viewport">
@@ -81,14 +82,15 @@ export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole,
             <h2>{active.label}</h2>
           </div>
           <div className="top-bar-end">
-            {syncState === 'syncing' && <span className="sync-chip syncing">Syncing…</span>}
+            {busyLabel ? <span className="sync-chip busy"><span className="inline-spinner" />{busyLabel}</span> : null}
+            {syncState === 'syncing' && !busyLabel && <span className="sync-chip syncing">Syncing…</span>}
             {syncState === 'error' && syncError && (
               <button className="sync-chip error" onClick={onDismissSyncError} title={syncError}>
                 Sync error ×
               </button>
             )}
             {onAdd ? (
-              <button className="top-add" onClick={onAdd}>
+              <button className="top-add" onClick={onAdd} disabled={!!busyLabel}>
                 <Plus size={18} />
                 <span>New Transaction</span>
               </button>

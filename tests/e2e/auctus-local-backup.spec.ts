@@ -86,4 +86,20 @@ test.describe('Auctus web local backup recovery', () => {
     await expect(page.getByText(markerA)).toBeVisible();
     await expect(page.getByText(markerB)).toBeVisible();
   });
+
+  test('shows a clear period lock message when starting a locked transaction', async ({ page }) => {
+    await page.goto('/');
+    await waitForHome(page);
+
+    const today = new Date().toISOString().slice(0, 10);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Period Lock' }).click();
+    await page.getByLabel('Locked Through').fill(today);
+    await page.getByRole('button', { name: 'Save Period Lock' }).click();
+
+    await page.getByRole('button', { name: /New Transaction/i }).click();
+    await expect(page.getByText(/Period lock is active through/)).toBeVisible();
+    await expect(page.getByText(/New transactions dated today cannot be created/)).toBeVisible();
+  });
 });

@@ -47,10 +47,21 @@ export default function App() {
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessSummary | null>(null);
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [syncError, setSyncError] = useState<SyncError | null>(null);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [initialLedgerLoaded, setInitialLedgerLoaded] = useState(() => !isAuctusApiConfigured());
 
   const mode: AppMode = isAuctusApiConfigured() ? 'cloud' : 'local';
   const permissions = permissionsForRole(selectedBusiness?.role, mode);
+  const lockedThrough = latestLockedThrough(data);
+
+  async function runAction<T>(label: string, action: () => Promise<T>) {
+    setBusyLabel(label);
+    try {
+      return await action();
+    } finally {
+      setBusyLabel(null);
+    }
+  }
 
   useEffect(() => {
     if (mode !== 'cloud') {
@@ -216,6 +227,10 @@ export default function App() {
   }
 
   function openNewTransaction() {
+    if (isDateLocked(data, todayStr())) {
+      reportError(new Error(`Period lock is active through ${lockedThrough}. New transactions dated today cannot be created until the lock is cleared or a later date is used.`));
+      return;
+    }
     setEditingTx(null);
     setTxDefaults(null);
     setTxModalOpen(true);
@@ -224,6 +239,10 @@ export default function App() {
   function openNewDocument(kind: 'invoices' | 'bills') {
     const type = kind === 'invoices' ? 'income' : 'expense';
     const today = new Date().toISOString().slice(0, 10);
+    if (isDateLocked(data, today)) {
+      reportError(new Error(`Period lock is active through ${lockedThrough}. New ${kind === 'invoices' ? 'invoices' : 'bills'} dated today cannot be created until the lock is cleared or a later date is used.`));
+      return;
+    }
     setEditingTx(null);
     setTxDefaults({
       type,
@@ -244,6 +263,10 @@ export default function App() {
   function openNewCreditNote(kind: 'invoices' | 'bills') {
     const type = kind === 'invoices' ? 'income' : 'expense';
     const today = new Date().toISOString().slice(0, 10);
+    if (isDateLocked(data, today)) {
+      reportError(new Error(`Period lock is active through ${lockedThrough}. New credit notes dated today cannot be created until the lock is cleared or a later date is used.`));
+      return;
+    }
     setEditingTx(null);
     setTxDefaults({
       type,
@@ -260,6 +283,10 @@ export default function App() {
   }
 
   function openEditTransaction(tx: Transaction) {
+    if (isDateLocked(data, tx.date)) {
+      reportError(new Error(`This document or transaction is dated ${tx.date}, which is in a locked period. It cannot be edited until the lock is cleared.`));
+      return;
+    }
     setEditingTx(tx);
     setTxDefaults(null);
     setTxModalOpen(true);
@@ -270,16 +297,18 @@ export default function App() {
       const existing = data.transactions.find((item) => item.id === tx.id);
       if (existing) {
         try {
-          const existingPaymentIds = new Set(existing.payments?.map((p) => p.id) || []);
-          const newPayments = (tx.payments || [])
-            .filter((payment) => !existingPaymentIds.has(payment.id))
-            .map((payment) => ({
-              amount: payment.amount,
-              date: payment.date,
-              accountId: payment.accountId,
-            }));
-          await auctusApi.updateTransaction(tx, newPayments);
-          await refreshRemoteLedger();
+          await runAction('Saving transaction…', async () => {
+            const existingPaymentIds = new Set(existing.payments?.map((p) => p.id) || []);
+            const newPayments = (tx.payments || [])
+              .filter((payment) => !existingPaymentIds.has(payment.id))
+              .map((payment) => ({
+                amount: payment.amount,
+                date: payment.date,
+                accountId: payment.accountId,
+              }));
+            await auctusApi.updateTransaction(tx, newPayments);
+            await refreshRemoteLedger();
+          });
           setTxModalOpen(false);
           setEditingTx(null);
           setTxDefaults(null);
@@ -289,15 +318,17 @@ export default function App() {
         return;
       }
       try {
-        const created = await auctusApi.createTransaction(tx);
-        for (const payment of tx.payments || []) {
-          await auctusApi.recordPayment(created.id, {
-            amount: payment.amount,
-            date: payment.date,
-            accountId: payment.accountId,
-          });
-        }
-        await refreshRemoteLedger();
+        await runAction('Saving transaction…', async () => {
+          const created = await auctusApi.createTransaction(tx);
+          for (const payment of tx.payments || []) {
+            await auctusApi.recordPayment(created.id, {
+              amount: payment.amount,
+              date: payment.date,
+              accountId: payment.accountId,
+            });
+          }
+          await refreshRemoteLedger();
+        });
         setTxModalOpen(false);
         setEditingTx(null);
         setTxDefaults(null);
@@ -348,10 +379,12 @@ export default function App() {
 
   async function saveAccount(account: Account) {
     if (mode === 'cloud') {
-      const exists = data.accounts.some((item) => item.id === account.id);
-      if (exists) await auctusApi.updatePaymentAccount(account);
-      else await auctusApi.createPaymentAccount(account);
-      await refreshRemoteLedger();
+      await runAction('Saving account…', async () => {
+        const exists = data.accounts.some((item) => item.id === account.id);
+        if (exists) await auctusApi.updatePaymentAccount(account);
+        else await auctusApi.createPaymentAccount(account);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -368,8 +401,10 @@ export default function App() {
 
   async function archiveAccount(accountId: string) {
     if (mode === 'cloud') {
-      await auctusApi.archivePaymentAccount(accountId);
-      await refreshRemoteLedger();
+      await runAction('Archiving account…', async () => {
+        await auctusApi.archivePaymentAccount(accountId);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -429,10 +464,12 @@ export default function App() {
   async function saveContact(contact: Contact) {
     if (mode === 'cloud') {
       try {
-        const exists = data.contacts.some((item) => item.id === contact.id);
-        if (exists) await auctusApi.updateContact(contact);
-        else await auctusApi.createContact(contact);
-        await refreshRemoteLedger();
+        await runAction('Saving contact…', async () => {
+          const exists = data.contacts.some((item) => item.id === contact.id);
+          if (exists) await auctusApi.updateContact(contact);
+          else await auctusApi.createContact(contact);
+          await refreshRemoteLedger();
+        });
       } catch (error) {
         reportError(error, 'Contact save failed.');
       }
@@ -509,8 +546,10 @@ export default function App() {
       return;
     }
     if (mode === 'cloud') {
-      auctusApi.recordPayment(tx.id, payment)
-        .then(() => refreshRemoteLedger())
+      runAction('Recording payment…', async () => {
+        await auctusApi.recordPayment(tx.id, payment);
+        await refreshRemoteLedger();
+      })
         .catch((error) => {
           reportError(error, 'Payment record failed.');
         });
@@ -544,7 +583,7 @@ export default function App() {
   function resetData() {
     if (mode === 'cloud') {
       if (!window.confirm('Reset backend ledger data to the default accounting foundation? This replaces transactions, contacts, accounts, journals, bank feed rows, reconciliations and period locks.')) return;
-      auctusApi.resetLedger()
+      runAction('Resetting ledger…', () => auctusApi.resetLedger())
         .then((next) => {
           setData(next);
           ledgerDataAdapter.save(next);
@@ -568,8 +607,10 @@ export default function App() {
 
   async function updateBusinessSettings(settings: Partial<LedgerData['settings']>) {
     if (mode === 'cloud') {
-      await auctusApi.updateBusinessSettings(settings);
-      await refreshRemoteLedger();
+      await runAction('Saving settings…', async () => {
+        await auctusApi.updateBusinessSettings(settings);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -585,8 +626,10 @@ export default function App() {
 
   async function updateBusinessProfile(businessProfile: BusinessProfile) {
     if (mode === 'cloud') {
-      await auctusApi.updateBusinessProfile(businessProfile);
-      await refreshRemoteLedger();
+      await runAction('Saving business profile…', async () => {
+        await auctusApi.updateBusinessProfile(businessProfile);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -602,13 +645,15 @@ export default function App() {
 
   async function saveCategory(category: Category, type: 'income' | 'expense') {
     if (mode === 'cloud') {
-      const exists = [...data.categories.income, ...data.categories.expense].some((item) => item.id === category.id);
-      if (exists) {
-        await auctusApi.updateCategory({ ...category, type });
-      } else {
-        await auctusApi.createCategory(type, category);
-      }
-      await refreshRemoteLedger();
+      await runAction('Saving category…', async () => {
+        const exists = [...data.categories.income, ...data.categories.expense].some((item) => item.id === category.id);
+        if (exists) {
+          await auctusApi.updateCategory({ ...category, type });
+        } else {
+          await auctusApi.createCategory(type, category);
+        }
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -633,8 +678,10 @@ export default function App() {
 
   async function archiveCategory(categoryId: string) {
     if (mode === 'cloud') {
-      await auctusApi.archiveCategory(categoryId);
-      await refreshRemoteLedger();
+      await runAction('Archiving category…', async () => {
+        await auctusApi.archiveCategory(categoryId);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -654,8 +701,10 @@ export default function App() {
 
   async function createPeriodLock(lockedThrough: string, note: string) {
     if (mode === 'cloud') {
-      await auctusApi.createPeriodLock(lockedThrough, note);
-      await refreshRemoteLedger();
+      await runAction('Saving period lock…', async () => {
+        await auctusApi.createPeriodLock(lockedThrough, note);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -672,10 +721,12 @@ export default function App() {
 
   async function saveManualJournal(journal: ManualJournal) {
     if (mode === 'cloud') {
-      const exists = data.manualJournals.some((item) => item.id === journal.id);
-      if (exists) await auctusApi.updateManualJournal(journal);
-      else await auctusApi.createManualJournal(journal);
-      await refreshRemoteLedger();
+      await runAction('Saving journal…', async () => {
+        const exists = data.manualJournals.some((item) => item.id === journal.id);
+        if (exists) await auctusApi.updateManualJournal(journal);
+        else await auctusApi.createManualJournal(journal);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -700,8 +751,10 @@ export default function App() {
 
   async function voidManualJournal(journal: ManualJournal) {
     if (mode === 'cloud') {
-      await auctusApi.voidManualJournal(journal.id);
-      await refreshRemoteLedger();
+      await runAction('Voiding journal…', async () => {
+        await auctusApi.voidManualJournal(journal.id);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -719,8 +772,10 @@ export default function App() {
 
   async function reverseManualJournal(journal: ManualJournal) {
     if (mode === 'cloud') {
-      await auctusApi.reverseManualJournal(journal.id);
-      await refreshRemoteLedger();
+      await runAction('Reversing journal…', async () => {
+        await auctusApi.reverseManualJournal(journal.id);
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -748,8 +803,10 @@ export default function App() {
     if (!window.confirm('Clear all period locks? This allows editing previously closed periods and will be recorded in the audit log.')) return;
 
     if (mode === 'cloud') {
-      await auctusApi.clearPeriodLocks();
-      await refreshRemoteLedger();
+      await runAction('Clearing period locks…', async () => {
+        await auctusApi.clearPeriodLocks();
+        await refreshRemoteLedger();
+      });
       return;
     }
 
@@ -764,7 +821,9 @@ export default function App() {
   }
 
   function backupData() {
-    Promise.resolve(mode === 'cloud' ? auctusApi.exportBackup() : ledgerDataAdapter.exportBackup(data))
+    Promise.resolve(mode === 'cloud'
+      ? runAction('Preparing backup…', () => auctusApi.exportBackup())
+      : ledgerDataAdapter.exportBackup(data))
       .then((blob) => {
         downloadBlob(blob, `auctus-backup-${new Date().toISOString().slice(0, 10)}.json`);
       })
@@ -781,11 +840,11 @@ export default function App() {
         const summary = describeBackupCandidate(raw);
         if (mode === 'cloud') {
           if (!window.confirm(`Restore backup with ${summary.transactions} transactions, ${summary.accounts} accounts and ${summary.contacts} contacts to this backend workspace? A safety backup of the current workspace will be downloaded first.`)) return;
-          auctusApi.exportBackup()
-            .then((blob) => {
-              downloadBlob(blob, `auctus-pre-restore-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-              return auctusApi.restoreBackup(raw);
-            })
+          runAction('Restoring backup…', async () => {
+            const blob = await auctusApi.exportBackup();
+            downloadBlob(blob, `auctus-pre-restore-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+            return auctusApi.restoreBackup(raw);
+          })
             .then((restored) => {
               setData(restored);
               ledgerDataAdapter.save(restored);
@@ -912,12 +971,13 @@ export default function App() {
         userRole={selectedBusiness?.role}
         syncState={syncState}
         syncError={syncError?.message || null}
+        busyLabel={busyLabel}
         onDismissSyncError={dismissSyncError}
         onRetrySync={mode === 'cloud' ? refreshRemoteLedger : undefined}
         onLogout={mode === 'cloud' ? handleLogout : undefined}
         onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
       >
-      {view === 'dashboard' ? <Dashboard data={data} onEditTransaction={openEditTransaction} canEditTransactions={permissions.canWriteAccounting} /> : null}
+        {view === 'dashboard' ? <Dashboard data={data} onEditTransaction={openEditTransaction} canEditTransactions={permissions.canWriteAccounting} /> : null}
       {view === 'activity' ? <Activity data={data} onEditTransaction={openEditTransaction} onRecordPayment={recordPayment} canWrite={permissions.canWriteAccounting} /> : null}
       {view === 'sales' ? (
         <Documents
