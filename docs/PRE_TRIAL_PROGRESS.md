@@ -483,3 +483,5 @@ Verification:
 - `npm run build:web` passed.
 - `npx playwright test tests/e2e/auctus-local-backup.spec.ts --project=local-mode` passed: 2 tests.
 - `npm run e2e` passed: 11 tests.
+- `npm run smoke:production` passed after deployment: production login/workspace/contact/category/transaction/backup/reset/restore cycle completed.
+- `npm run audit:production` passed after deployment: 15 checks, 1 warning, 0 failures. The remaining warning is local-only dev auto-login variables in `apps/web/.env.local`.
