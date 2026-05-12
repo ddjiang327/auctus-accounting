@@ -16,6 +16,7 @@ import {
   totalAssets,
 } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
+import { useAppAlerts } from '../../components/AppAlerts';
 import type { Account, AccountType, BankFeedItem, BankReconciliation, ChartAccountClass, LedgerData, Transaction } from '../../domain/models';
 
 interface AccountsProps {
@@ -381,6 +382,7 @@ function BankFeedModal({
   onRecordBankFeedItem?: (item: BankFeedItem, transaction: Transaction) => Promise<void>;
   onFinalizeBankReconciliation?: (reconciliation: BankReconciliation) => Promise<void>;
 }) {
+  const { reportError } = useAppAlerts();
   const accounts = paymentAccounts(data);
   const [accountId, setAccountId] = useState(accounts.find((account) => account.type === 'bank')?.id || accounts[0]?.id || '');
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -414,22 +416,22 @@ function BankFeedModal({
     reader.onload = async () => {
       const rows = parseBankStatementCsv(String(reader.result || ''));
       if (!rows.length) {
-        window.alert('No rows found. CSV needs a date column and either amount or debit/credit columns.');
+        reportError(new Error('No rows found. CSV needs a date column and either amount or debit/credit columns.'));
         return;
       }
       const existingHashes = new Set((data.bankFeedItems || []).map((item) => item.rawHash));
       const newItems = buildBankFeedItems(accountId, rows, existingHashes);
       if (!newItems.length) {
-        window.alert('Nothing imported. These rows already exist for this account.');
+        reportError(new Error('Nothing imported. These rows already exist for this account.'));
         return;
       }
       const matched = matchBankFeedItems(data, accountId, newItems);
       if (onImportBankFeedItems) {
         try {
           await onImportBankFeedItems(accountId, matched);
-          window.alert(`${matched.length} rows imported. ${matched.filter((item) => item.matchedSourceId).length} matched automatically.`);
+          reportError(new Error(`${matched.length} rows imported. ${matched.filter((item) => item.matchedSourceId).length} matched automatically.`));
         } catch (error) {
-          window.alert(error instanceof Error ? error.message : 'Bank feed import failed.');
+          reportError(error instanceof Error ? error : new Error('Bank feed import failed.'));
         }
         return;
       }
@@ -438,7 +440,7 @@ function BankFeedModal({
         bankFeedItems: [...(data.bankFeedItems || []), ...matched],
         auditLog: [...(data.auditLog || []), auditEntry('import', 'bank_feed', accountId, `${matched.length} CSV rows imported; ${matched.filter((item) => item.matchedSourceId).length} matched`)],
       });
-      window.alert(`${matched.length} rows imported. ${matched.filter((item) => item.matchedSourceId).length} matched automatically.`);
+      reportError(new Error(`${matched.length} rows imported. ${matched.filter((item) => item.matchedSourceId).length} matched automatically.`));
     };
     reader.readAsText(file);
   }
@@ -455,7 +457,7 @@ function BankFeedModal({
           }
         }
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed auto match failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed auto match failed.'));
       }
       return;
     }
@@ -471,7 +473,7 @@ function BankFeedModal({
       try {
         await onMatchBankFeedItem(itemId, sourceId || undefined);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed match failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed match failed.'));
       }
       return;
     }
@@ -484,7 +486,7 @@ function BankFeedModal({
 
   async function clearMatched() {
     if (!clearableItems.length) {
-      window.alert('Import or match bank feed rows before clearing.');
+      reportError(new Error('Import or match bank feed rows before clearing.'));
       return;
     }
     const sourceIds = new Set(clearableItems.map((item) => item.matchedSourceId as string));
@@ -492,7 +494,7 @@ function BankFeedModal({
     const total = matchedRowsTotal(rows, sourceIds);
     const statementDate = clearableItems.map((item) => item.date).sort((a, b) => b.localeCompare(a))[0] || todayStr();
     if (isDateLocked(data, statementDate)) {
-      window.alert(`Matched bank feed rows dated through ${statementDate} cannot be cleared because the period is locked.`);
+      reportError(new Error(`Matched bank feed rows dated through ${statementDate} cannot be cleared because the period is locked.`));
       return;
     }
     const now = new Date().toISOString();
@@ -511,7 +513,7 @@ function BankFeedModal({
       try {
         await onFinalizeBankReconciliation(reconciliation);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed reconciliation failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed reconciliation failed.'));
       }
       return;
     }
@@ -528,7 +530,7 @@ function BankFeedModal({
       try {
         await onIgnoreBankFeedItem(itemId);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed ignore failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed ignore failed.'));
       }
       return;
     }
@@ -545,7 +547,7 @@ function BankFeedModal({
       try {
         await onUnignoreBankFeedItem(itemId);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed restore failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed restore failed.'));
       }
       return;
     }
@@ -558,7 +560,7 @@ function BankFeedModal({
 
   async function recordUnmatched(item: BankFeedItem) {
     if (isDateLocked(data, item.date)) {
-      window.alert(`Bank feed rows dated ${item.date} cannot create entries because the period is locked.`);
+      reportError(new Error(`Bank feed rows dated ${item.date} cannot create entries because the period is locked.`));
       return;
     }
     const type = item.amount >= 0 ? 'income' : 'expense';
@@ -578,7 +580,7 @@ function BankFeedModal({
       try {
         await onRecordBankFeedItem(item, tx);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank feed record failed.');
+        reportError(error instanceof Error ? error : new Error('Bank feed record failed.'));
       }
       return;
     }
@@ -719,6 +721,7 @@ function ReconciliationModal({
   onFinalizeBankReconciliation?: (reconciliation: BankReconciliation) => Promise<void>;
   onVoidBankReconciliation?: (reconciliation: BankReconciliation) => Promise<void>;
 }) {
+  const { reportError } = useAppAlerts();
   const accounts = paymentAccounts(data);
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
   const [statementDate, setStatementDate] = useState(todayStr());
@@ -756,24 +759,24 @@ function ReconciliationModal({
 
   async function submit() {
     if (!accountId) {
-      window.alert('Select an account to reconcile.');
+      reportError(new Error('Select an account to reconcile.'));
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(statementDate)) {
-      window.alert('Use YYYY-MM-DD for statement date.');
+      reportError(new Error('Use YYYY-MM-DD for statement date.'));
       return;
     }
     if (isDateLocked(data, statementDate)) {
-      window.alert(`Reconciliations dated ${statementDate} cannot be finalized because the period is locked.`);
+      reportError(new Error(`Reconciliations dated ${statementDate} cannot be finalized because the period is locked.`));
       return;
     }
     const balance = Number(statementBalance);
     if (!Number.isFinite(balance)) {
-      window.alert('Enter the statement ending balance.');
+      reportError(new Error('Enter the statement ending balance.'));
       return;
     }
     if (Math.abs(difference) > 0.01) {
-      window.alert('The difference must be zero before finalising.');
+      reportError(new Error('The difference must be zero before finalising.'));
       return;
     }
     const now = new Date().toISOString();
@@ -794,7 +797,7 @@ function ReconciliationModal({
         setSelected([]);
         setStatementBalance('');
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank reconciliation failed.');
+        reportError(error instanceof Error ? error : new Error('Bank reconciliation failed.'));
       }
       return;
     }
@@ -809,14 +812,14 @@ function ReconciliationModal({
 
   async function voidReconciliation(reconciliation: BankReconciliation) {
     if (isDateLocked(data, reconciliation.statementDate)) {
-      window.alert(`Reconciliation ${reconciliation.statementDate} cannot be voided because the period is locked.`);
+      reportError(new Error(`Reconciliation ${reconciliation.statementDate} cannot be voided because the period is locked.`));
       return;
     }
     if (onVoidBankReconciliation) {
       try {
         await onVoidBankReconciliation(reconciliation);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Bank reconciliation void failed.');
+        reportError(error instanceof Error ? error : new Error('Bank reconciliation void failed.'));
       }
       return;
     }
@@ -910,6 +913,7 @@ function AccountModal({
   onSave: (account: Account) => void | Promise<void>;
   onArchive: (accountId: string) => void | Promise<void>;
 }) {
+  const { reportError } = useAppAlerts();
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('bank');
   const [initBalance, setInitBalance] = useState('0');
@@ -936,7 +940,7 @@ function AccountModal({
   async function submit() {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      window.alert('Account name is required.');
+      reportError(new Error('Account name is required.'));
       return;
     }
     try {
@@ -950,7 +954,7 @@ function AccountModal({
         chartAccountId: chartAccountId || defaultChartForType(data, type),
       });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Account save failed.');
+      reportError(error instanceof Error ? error : new Error('Account save failed.'));
     }
   }
 
@@ -960,7 +964,7 @@ function AccountModal({
     try {
       await onArchive(account.id);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Account archive failed.');
+      reportError(error instanceof Error ? error : new Error('Account archive failed.'));
     }
   }
 

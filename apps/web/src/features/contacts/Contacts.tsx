@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../../components/Modal';
+import { useAppAlerts } from '../../components/AppAlerts';
 import { paymentTermsLabel, uid } from '../../domain/accounting';
 import type { Contact, ContactType, LedgerData, PaymentTerms } from '../../domain/models';
 
@@ -105,6 +106,7 @@ function ContactModal({
   onClose: () => void;
   onSave: (contact: Contact) => void;
 }) {
+  const { reportError } = useAppAlerts();
   const [type, setType] = useState<ContactType>('customer');
   const [name, setName] = useState('');
   const [abn, setAbn] = useState('');
@@ -127,7 +129,7 @@ function ContactModal({
   function submit() {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      window.alert('Contact name is required.');
+      reportError(new Error('Contact name is required.'));
       return;
     }
     onSave({

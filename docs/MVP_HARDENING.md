@@ -9,7 +9,7 @@ Use this before any real trial workspace is created.
 - [x] Initial cloud workspace loading blocks the app from showing stale local demo data.
 - [x] Workspace selector has an empty state when a signed-in user has no businesses.
 - [x] Playwright smoke confirms a newly created cloud workspace opens with an empty transaction list.
-- [ ] Run a manual UI pass on an empty workspace after creating a brand-new business.
+- [x] Run a manual UI pass on an empty workspace after creating a brand-new business.
 - [ ] Run a manual UI pass with API offline, expired session, and a 403 viewer role.
 
 ## Export / Import Recovery Path
@@ -17,7 +17,7 @@ Use this before any real trial workspace is created.
 - [x] Restore/import file is parsed and checked for required ledger sections before replacing data.
 - [x] Restore downloads a safety backup of the current ledger before replacing local or backend data.
 - [ ] Manually verify local backup download, local restore, and recovery from the pre-restore backup.
-- [ ] Manually verify backend backup download, backend restore, and recovery from the pre-restore backup.
+- [x] Manually verify backend backup download, backend restore, and recovery from the pre-restore backup.
 - [ ] Verify owner/admin can export/restore/reset and bookkeeper/viewer cannot.
 - [ ] Keep at least one off-platform backup before trial data is reset or imported.
 
@@ -59,8 +59,8 @@ The API uses the service role key and must enforce business membership and roles
 - [x] Static migration audit confirms accounting tables expose member read policies only; normal accounting writes go through the API service-role path.
 - [x] Remote Supabase migration list matches local migrations through `20260502013000`.
 - [x] Added migration `20260507010000_harden_direct_workspace_writes.sql` to remove direct authenticated owner/admin writes to workspace, membership, and settings rows; API service-role writes remain the intended write path.
-- [ ] Push `20260507010000_harden_direct_workspace_writes.sql` to the target Supabase project.
-- [ ] Confirm the same RLS state on the target Supabase project after migrations are pushed.
+- [x] Push `20260507010000_harden_direct_workspace_writes.sql` to the target Supabase project.
+- [x] Confirm the same RLS state on the target Supabase project after migrations are pushed.
 - [x] Reviewed direct authenticated owner/admin policies for `businesses`, `business_members`, and `business_settings`: they should not stay enabled for trial/production while member-management UI/API is not productized.
 - [ ] Confirm cross-business read attempts return no rows for anon/authenticated client queries.
 - [ ] Confirm API role matrix manually:
@@ -105,14 +105,14 @@ Pre-trial verification:
 - [ ] Create a test user and test business on production Supabase.
 - [ ] Create, edit, archive, export, restore, and reset a disposable trial workspace.
 
-Latest automated verification: 2026-05-07.
+Latest automated verification: 2026-05-10.
 
 - `npm run build` passed.
 - `npm run test -w apps/api` passed: 7 files, 42 tests.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 3 Playwright smoke tests.
+- `npm run e2e` passed: 4 Playwright tests, including cloud export → restore → pre-restore backup recovery.
 - Playwright now asserts newly created cloud workspaces show `No transactions yet`.
-- `supabase migration list` passed and showed local/remote migrations aligned through `20260502013000`.
-- After adding `20260507010000_harden_direct_workspace_writes.sql`, `supabase migration list` shows that migration is local-only and still needs `supabase db push` before the target project is hardened.
-- `supabase db push --dry-run` passed and reports it would push only `20260507010000_harden_direct_workspace_writes.sql`.
-- Target schema dump was not available in this shell because Supabase CLI needs `supabase login` or `SUPABASE_ACCESS_TOKEN`; run `supabase/rls_audit.sql` after pushing the new hardening migration.
+- `supabase migration list` passed and showed local/remote migrations aligned through `20260507010000`.
+- `supabase db push --dry-run` passed and reported it would push only `20260507010000_harden_direct_workspace_writes.sql`; the migration was then pushed to the target Supabase project.
+- Remote policy audit confirmed the remaining direct authenticated write surface is `profiles_update_self`; workspace/accounting direct writes are removed.
+- Full target schema audit output was not available in this shell because `supabase db query --linked` can require `SUPABASE_DB_PASSWORD`; keep `supabase/rls_audit.sql` for SQL editor or `psql` verification when credentials are available.

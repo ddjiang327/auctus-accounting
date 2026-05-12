@@ -8,6 +8,16 @@ const DEV_PASSWORD = import.meta.env.VITE_AUCTUS_DEV_PASSWORD || '';
 
 const BUSINESS_ID_KEY = 'auctus_api_business_id';
 
+export class AuctusApiError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.name = 'AuctusApiError';
+    this.statusCode = statusCode;
+  }
+}
+
 export type BusinessSummary = {
   id: string;
   name: string;
@@ -43,7 +53,7 @@ async function getAccessToken(): Promise<string> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) {
-    throw new Error('Not authenticated. Please sign in.');
+    throw new AuctusApiError(401, 'Session expired. Please sign in again.');
   }
   return token;
 }
@@ -61,7 +71,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       },
     });
   } catch (error) {
-    throw new Error(error instanceof Error ? `Cannot reach Auctus API: ${error.message}` : 'Cannot reach Auctus API.');
+    throw new AuctusApiError(0, error instanceof Error ? `Cannot reach Auctus API: ${error.message}` : 'Cannot reach Auctus API.');
   }
 
   const text = await response.text();
@@ -73,7 +83,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     const message = body && typeof body === 'object' && 'message' in body ? String(body.message) : text;
-    throw new Error(message || `Auctus API request failed: ${response.status}`);
+    throw new AuctusApiError(response.status, message || `Auctus API request failed: ${response.status}`);
   }
 
   return body as T;

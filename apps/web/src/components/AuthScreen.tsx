@@ -6,9 +6,10 @@ type AuthMode = 'login' | 'signup';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
+  notice?: string | null;
 }
 
-export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
+export function AuthScreen({ onAuthenticated, notice }: AuthScreenProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,6 +88,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             />
           </div>
 
+          {notice ? <div className="auth-error">{notice}</div> : null}
           {error ? <div className="auth-error">{error}</div> : null}
 
           <button type="submit" className="btn-primary" disabled={loading}>

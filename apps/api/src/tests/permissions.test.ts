@@ -49,6 +49,72 @@ describe("API permissions", () => {
     expect(result.body).toMatchObject({ error: "forbidden" });
   });
 
+  it("returns 403 when a viewer tries to create a contact", async () => {
+    mockedGetLedgerSnapshot.mockResolvedValue({
+      business: { id: "biz_1", role: "viewer" },
+      ledger: ledgerData(),
+    });
+
+    const result = await invokeApi(
+      "POST",
+      "/v1/businesses/biz_1/contacts",
+      {
+        type: "customer",
+        name: "Test Customer",
+        paymentTerms: "due_on_receipt",
+      },
+    );
+
+    expect(result.statusCode).toBe(403);
+    expect(result.body).toMatchObject({ error: "forbidden" });
+  });
+
+  it("returns 403 when a viewer tries to create a payment account", async () => {
+    mockedGetLedgerSnapshot.mockResolvedValue({
+      business: { id: "biz_1", role: "viewer" },
+      ledger: ledgerData(),
+    });
+
+    const result = await invokeApi(
+      "POST",
+      "/v1/businesses/biz_1/payment-accounts",
+      {
+        name: "Test Account",
+        type: "bank",
+        initBalance: 0,
+        icon: "bank",
+        color: "#2563eb",
+        chartAccountId: "ca_bank",
+      },
+    );
+
+    expect(result.statusCode).toBe(403);
+    expect(result.body).toMatchObject({ error: "forbidden" });
+  });
+
+  it("returns 403 when a viewer tries to create a manual journal", async () => {
+    mockedGetLedgerSnapshot.mockResolvedValue({
+      business: { id: "biz_1", role: "viewer" },
+      ledger: ledgerData(),
+    });
+
+    const result = await invokeApi(
+      "POST",
+      "/v1/businesses/biz_1/manual-journals",
+      {
+        date: "2026-02-01",
+        memo: "Test journal",
+        lines: [
+          { chartAccountId: "ca_bank", debit: 100, credit: 0 },
+          { chartAccountId: "ca_sales", debit: 0, credit: 100 },
+        ],
+      },
+    );
+
+    expect(result.statusCode).toBe(403);
+    expect(result.body).toMatchObject({ error: "forbidden" });
+  });
+
   it("returns 403 when a bookkeeper tries to update admin settings", async () => {
     const supabase = createSupabaseMock({
       users: { token: testUser },

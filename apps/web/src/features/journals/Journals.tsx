@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../../components/Modal';
+import { useAppAlerts } from '../../components/AppAlerts';
 import { chartAccountName, fmtMoney, todayStr, uid } from '../../domain/accounting';
 import type { AuditLogEntry, JournalLine, LedgerData, ManualJournal } from '../../domain/models';
 
@@ -20,6 +21,7 @@ interface JournalsProps {
 }
 
 export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal, canWrite = true }: JournalsProps) {
+  const { reportError } = useAppAlerts();
   const [tab, setTab] = useState<JournalTab>('journals');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingJournal, setEditingJournal] = useState<ManualJournal | null>(null);
@@ -38,7 +40,7 @@ export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal,
       setEditingJournal(null);
       setModalOpen(false);
     }).catch((error) => {
-      window.alert(error instanceof Error ? error.message : 'Manual journal save failed.');
+      reportError(error instanceof Error ? error : new Error('Manual journal save failed.'));
     });
   }
 
@@ -75,12 +77,12 @@ export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal,
             }}
             onVoid={(journal) => {
               Promise.resolve(onVoidJournal(journal)).catch((error) => {
-                window.alert(error instanceof Error ? error.message : 'Manual journal void failed.');
+                reportError(error instanceof Error ? error : new Error('Manual journal void failed.'));
               });
             }}
             onReverse={(journal) => {
               Promise.resolve(onReverseJournal(journal)).catch((error) => {
-                window.alert(error instanceof Error ? error.message : 'Manual journal reverse failed.');
+                reportError(error instanceof Error ? error : new Error('Manual journal reverse failed.'));
               });
             }}
             canWrite={canWrite}
@@ -179,6 +181,7 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
   onClose: () => void;
   onSave: (journal: ManualJournal) => void;
 }) {
+  const { reportError } = useAppAlerts();
   const blankLines = useMemo(() => [
     { chartAccountId: data.chartOfAccounts[0]?.id || '', debit: '', credit: '' },
     { chartAccountId: data.chartOfAccounts[1]?.id || data.chartOfAccounts[0]?.id || '', debit: '', credit: '' },
@@ -217,21 +220,21 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
       .map((line) => ({ chartAccountId: line.chartAccountId, debit: Number(line.debit) || 0, credit: Number(line.credit) || 0 }))
       .filter((line) => line.chartAccountId && (line.debit > 0 || line.credit > 0));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      window.alert('Use YYYY-MM-DD for journal date.');
+      reportError(new Error('Use YYYY-MM-DD for journal date.'));
       return;
     }
     if (parsed.length < 2) {
-      window.alert('Use at least two posting lines.');
+      reportError(new Error('Use at least two posting lines.'));
       return;
     }
     if (parsed.some((line) => line.debit > 0 && line.credit > 0)) {
-      window.alert('A line cannot have both debit and credit.');
+      reportError(new Error('A line cannot have both debit and credit.'));
       return;
     }
     const debit = parsed.reduce((sum, line) => sum + line.debit, 0);
     const credit = parsed.reduce((sum, line) => sum + line.credit, 0);
     if (Math.abs(debit - credit) > 0.005) {
-      window.alert('Total debits must equal total credits.');
+      reportError(new Error('Total debits must equal total credits.'));
       return;
     }
     onSave({

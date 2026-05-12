@@ -32,16 +32,24 @@ async function authenticate(page: Page) {
     .first()
     .waitFor({ state: 'visible', timeout: 15_000 });
 
+  const ready = page.getByText('Select a workspace').or(page.getByRole('heading', { name: 'Home' }));
+  if (await ready.isVisible().catch(() => false)) return;
+
   if (await page.getByRole('button', { name: 'Dev Auto-Login' }).isVisible().catch(() => false)) {
     await page.getByRole('button', { name: 'Dev Auto-Login' }).click();
-  } else if (await page.locator('#auth-email').isVisible().catch(() => false)) {
+    await ready.first().waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {});
+  }
+
+  if (await ready.isVisible().catch(() => false)) return;
+
+  if (await page.locator('#auth-email').isVisible().catch(() => false)) {
     await page.locator('#auth-email').fill(testEmail);
     await page.locator('#auth-password').fill(testPassword);
     await page.locator('form.auth-form').getByRole('button', { name: /^Sign In$/ }).click();
   }
 
   await expect(
-    page.getByText('Select a workspace').or(page.getByRole('heading', { name: 'Home' })),
+    ready,
   ).toBeVisible();
 }
 

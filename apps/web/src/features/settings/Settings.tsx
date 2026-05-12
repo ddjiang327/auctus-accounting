@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '../../components/Modal';
+import { useAppAlerts } from '../../components/AppAlerts';
 import { chartAccountName, latestLockedThrough, todayStr } from '../../domain/accounting';
 import type { BasBasis, BusinessProfile, Category, LedgerData } from '../../domain/models';
 import type { UiPermissions } from '../../domain/permissions';
@@ -41,6 +42,7 @@ export function Settings({
   onArchiveCategory,
   permissions,
 }: SettingsProps) {
+  const { reportError } = useAppAlerts();
   const [periodLockOpen, setPeriodLockOpen] = useState(false);
   const [numberingOpen, setNumberingOpen] = useState(false);
   const [businessOpen, setBusinessOpen] = useState(false);
@@ -57,7 +59,7 @@ export function Settings({
 
   function runSettingsAction(action: () => void | Promise<void>) {
     Promise.resolve(action()).catch((error) => {
-      window.alert(error instanceof Error ? error.message : 'Settings update failed.');
+      reportError(error instanceof Error ? error : new Error('Settings update failed.'));
     });
   }
 
@@ -207,7 +209,7 @@ export function Settings({
           Promise.resolve(onCreatePeriodLock(nextLockedThrough, note)).then(() => {
             setPeriodLockOpen(false);
           }).catch((error) => {
-            window.alert(error instanceof Error ? error.message : 'Period lock save failed.');
+            reportError(error instanceof Error ? error : new Error('Period lock save failed.'));
           });
         }}
         onClear={() => {
@@ -222,7 +224,7 @@ export function Settings({
           Promise.resolve(onUpdateSettings(settings)).then(() => {
             setNumberingOpen(false);
           }).catch((error) => {
-            window.alert(error instanceof Error ? error.message : 'Document numbering save failed.');
+            reportError(error instanceof Error ? error : new Error('Document numbering save failed.'));
           });
         }}
       /> : null}
@@ -234,7 +236,7 @@ export function Settings({
           Promise.resolve(onUpdateBusinessProfile(businessProfile)).then(() => {
             setBusinessOpen(false);
           }).catch((error) => {
-            window.alert(error instanceof Error ? error.message : 'Business profile save failed.');
+            reportError(error instanceof Error ? error : new Error('Business profile save failed.'));
           });
         }}
       /> : null}
@@ -246,14 +248,14 @@ export function Settings({
           try {
             await onSaveCategory(category, type);
           } catch (error) {
-            window.alert(error instanceof Error ? error.message : 'Category save failed.');
+            reportError(error instanceof Error ? error : new Error('Category save failed.'));
           }
         }}
         onArchive={async (categoryId) => {
           try {
             await onArchiveCategory(categoryId);
           } catch (error) {
-            window.alert(error instanceof Error ? error.message : 'Category archive failed.');
+            reportError(error instanceof Error ? error : new Error('Category archive failed.'));
           }
         }}
       /> : null}
@@ -267,6 +269,7 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
   onClose: () => void;
   onSave: (profile: BusinessProfile) => void;
 }) {
+  const { reportError } = useAppAlerts();
   const [name, setName] = useState('');
   const [abn, setAbn] = useState('');
   const [email, setEmail] = useState('');
@@ -288,7 +291,7 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
 
   function submit() {
     if (!name.trim()) {
-      window.alert('Business name is required.');
+      reportError(new Error('Business name is required.'));
       return;
     }
     onSave({
@@ -351,6 +354,7 @@ function NumberingModal({ open, data, onClose, onSave }: {
   onClose: () => void;
   onSave: (settings: NumberingSettings) => void;
 }) {
+  const { reportError } = useAppAlerts();
   const [invoicePrefix, setInvoicePrefix] = useState('');
   const [billPrefix, setBillPrefix] = useState('');
   const [creditNotePrefix, setCreditNotePrefix] = useState('');
@@ -388,7 +392,7 @@ function NumberingModal({ open, data, onClose, onSave }: {
     const supplierCredit = positiveInteger(nextSupplierCreditNumber);
     const receipt = positiveInteger(nextReceiptNumber);
     if (!invoice || !bill || !credit || !supplierCredit || !receipt) {
-      window.alert('Next numbers must be whole numbers above zero.');
+      reportError(new Error('Next numbers must be whole numbers above zero.'));
       return;
     }
     onSave({
@@ -435,6 +439,7 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
   onSave: (lockedThrough: string, note: string) => void;
   onClear: () => void;
 }) {
+  const { reportError } = useAppAlerts();
   const [lockedThrough, setLockedThrough] = useState('');
   const [note, setNote] = useState('');
 
@@ -446,7 +451,7 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
 
   function submit() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(lockedThrough)) {
-      window.alert('Use YYYY-MM-DD for the lock date.');
+      reportError(new Error('Use YYYY-MM-DD for the lock date.'));
       return;
     }
     onSave(lockedThrough, note.trim());
@@ -486,6 +491,7 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
   onSave: (category: Category, type: 'income' | 'expense') => void | Promise<void>;
   onArchive: (categoryId: string) => void | Promise<void>;
 }) {
+  const { reportError } = useAppAlerts();
   const [tab, setTab] = useState<'income' | 'expense'>('expense');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -533,7 +539,7 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
   async function submit() {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      window.alert('Category name is required.');
+      reportError(new Error('Category name is required.'));
       return;
     }
     await onSave(

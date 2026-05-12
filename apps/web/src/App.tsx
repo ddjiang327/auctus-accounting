@@ -3,7 +3,7 @@ import { AppLock } from './components/AppLock';
 import { Shell, type ViewKey } from './components/Shell';
 import { accountBalance, auditEntry, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
 import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, LedgerData, ManualJournal, Period, Transaction } from './domain/models';
-import { auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
+import { AuctusApiError, auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
 import { getCurrentUser } from './api/supabaseClient';
 import { Activity } from './features/activity/Activity';
 import { TransactionModal } from './features/activity/TransactionModal';
@@ -19,10 +19,12 @@ import { clearLockState, loadLockState, saveLockState } from './storage/lockStor
 import { AuthScreen } from './components/AuthScreen';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { permissionsForRole } from './domain/permissions';
+import { AppAlertsProvider } from './components/AppAlerts';
 
 type AuthPhase = 'checking' | 'login' | 'workspace' | 'app';
 type AppMode = 'local' | 'cloud';
 type SyncState = 'idle' | 'syncing' | 'error';
+type SyncError = { message: string; nonce: number };
 
 export default function App() {
   const [data, setData] = useState<LedgerData>(() => ledgerDataAdapter.load());
@@ -35,10 +37,11 @@ export default function App() {
   const [txModalOpen, setTxModalOpen] = useState(false);
 
   const [authPhase, setAuthPhase] = useState<AuthPhase>('checking');
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessSummary | null>(null);
   const [syncState, setSyncState] = useState<SyncState>('idle');
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<SyncError | null>(null);
   const [initialLedgerLoaded, setInitialLedgerLoaded] = useState(() => !isAuctusApiConfigured());
 
   const mode: AppMode = isAuctusApiConfigured() ? 'cloud' : 'local';
@@ -75,6 +78,25 @@ export default function App() {
     initAuth();
   }, [mode]);
 
+  function reportError(error: unknown, fallbackMessage = 'Request failed.') {
+    if (error instanceof AuctusApiError && error.statusCode === 401) {
+      setAuthNotice('Session expired. Please sign in again.');
+      void handleLogout();
+      return;
+    }
+
+    const message = error instanceof AuctusApiError && error.statusCode === 403
+      ? 'You do not have permission to perform this action.'
+      : error instanceof AuctusApiError && error.statusCode === 0
+        ? 'Cannot reach the server. Check your connection and retry.'
+        : error instanceof Error
+          ? error.message
+          : fallbackMessage;
+
+    setSyncState('error');
+    setSyncError({ message, nonce: Date.now() });
+  }
+
   async function loadWorkspaces() {
     try {
       const list = await getBusinesses();
@@ -93,17 +115,19 @@ export default function App() {
         setAuthPhase('workspace');
       }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to load workspaces');
+      reportError(error, 'Failed to load workspaces');
       setAuthPhase('login');
     }
   }
 
   function handleAuthenticated() {
+    setAuthNotice(null);
     loadWorkspaces();
   }
 
   function handleSelectBusiness(business: BusinessSummary) {
     selectBusiness(business.id);
+    setBusinesses((current) => current.some((item) => item.id === business.id) ? current : [...current, business]);
     setSelectedBusiness(business);
     setInitialLedgerLoaded(false);
     setAuthPhase('app');
@@ -149,8 +173,7 @@ export default function App() {
       setInitialLedgerLoaded(true);
       setSyncState('idle');
     } catch (error) {
-      setSyncState('error');
-      setSyncError(error instanceof Error ? error.message : 'Sync failed');
+      reportError(error, 'Sync failed');
     }
   }
 
@@ -256,7 +279,7 @@ export default function App() {
           setEditingTx(null);
           setTxDefaults(null);
         } catch (error) {
-          window.alert(error instanceof Error ? error.message : 'Transaction update failed.');
+          reportError(error, 'Transaction update failed.');
         }
         return;
       }
@@ -274,19 +297,19 @@ export default function App() {
         setEditingTx(null);
         setTxDefaults(null);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Transaction save failed.');
+        reportError(error, 'Transaction save failed.');
       }
       return;
     }
 
     const existing = data.transactions.find((item) => item.id === tx.id);
     if (existing && isDateLocked(data, existing.date)) {
-      window.alert(`This document or transaction is dated ${existing.date}, which is in a locked period. It cannot be edited.`);
+      reportError(new Error(`This document or transaction is dated ${existing.date}, which is in a locked period. It cannot be edited.`));
       return;
     }
     const validation = validateTransactionInput(data, tx);
     if (!validation.ok) {
-      window.alert(validation.errors.join('\n'));
+      reportError(new Error(validation.errors.join('\n')));
       return;
     }
     setData((current) => {
@@ -406,7 +429,7 @@ export default function App() {
         else await auctusApi.createContact(contact);
         await refreshRemoteLedger();
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Contact save failed.');
+        reportError(error, 'Contact save failed.');
       }
       return;
     }
@@ -426,20 +449,20 @@ export default function App() {
     if (mode === 'cloud') {
       const result = validateCreditAllocations(data, allocations);
       if (!result.ok) {
-        window.alert(result.errors.join('\n'));
+        reportError(new Error(result.errors.join('\n')));
         return false;
       }
       Promise.all(allocations.map((allocation) => auctusApi.createCreditAllocation(allocation)))
         .then(() => refreshRemoteLedger())
         .catch((error) => {
-          window.alert(error instanceof Error ? error.message : 'Credit allocation failed.');
+          reportError(error, 'Credit allocation failed.');
         });
       return true;
     }
 
     const result = validateCreditAllocations(data, allocations);
     if (!result.ok) {
-      window.alert(result.errors.join('\n'));
+      reportError(new Error(result.errors.join('\n')));
       return false;
     }
     setData((current) => {
@@ -477,14 +500,14 @@ export default function App() {
     };
     const validation = validatePaymentInput(data, tx, payment);
     if (!validation.ok) {
-      window.alert(validation.errors.join('\n'));
+      reportError(new Error(validation.errors.join('\n')));
       return;
     }
     if (mode === 'cloud') {
       auctusApi.recordPayment(tx.id, payment)
         .then(() => refreshRemoteLedger())
         .catch((error) => {
-          window.alert(error instanceof Error ? error.message : 'Payment record failed.');
+          reportError(error, 'Payment record failed.');
         });
       return;
     }
@@ -522,7 +545,7 @@ export default function App() {
           ledgerDataAdapter.save(next);
         })
         .catch((error) => {
-          window.alert(error instanceof Error ? error.message : 'Backend reset failed.');
+          reportError(error, 'Backend reset failed.');
         });
       return;
     }
@@ -653,11 +676,11 @@ export default function App() {
 
     const existingJournal = data.manualJournals.find((item) => item.id === journal.id);
     if (existingJournal && isDateLocked(data, existingJournal.date)) {
-      window.alert(`Manual journals dated ${existingJournal.date} cannot be changed because the period is locked.`);
+      reportError(new Error(`Manual journals dated ${existingJournal.date} cannot be changed because the period is locked.`));
       return;
     }
     if (isDateLocked(data, journal.date)) {
-      window.alert(`Manual journals dated ${journal.date} cannot be posted because the period is locked.`);
+      reportError(new Error(`Manual journals dated ${journal.date} cannot be posted because the period is locked.`));
       return;
     }
     const exists = data.manualJournals.some((item) => item.id === journal.id);
@@ -678,7 +701,7 @@ export default function App() {
     }
 
     if (isDateLocked(data, journal.date)) {
-      window.alert(`Manual journal dated ${journal.date} cannot be voided because the period is locked.`);
+      reportError(new Error(`Manual journal dated ${journal.date} cannot be voided because the period is locked.`));
       return;
     }
     const now = new Date().toISOString();
@@ -697,7 +720,7 @@ export default function App() {
     }
 
     if (isDateLocked(data, todayStr())) {
-      window.alert('Cannot post a reversal dated today because the period is locked.');
+      reportError(new Error('Cannot post a reversal dated today because the period is locked.'));
       return;
     }
     const now = new Date().toISOString();
@@ -741,7 +764,7 @@ export default function App() {
         downloadBlob(blob, `auctus-backup-${new Date().toISOString().slice(0, 10)}.json`);
       })
       .catch((error) => {
-        window.alert(error instanceof Error ? error.message : 'Backup failed.');
+        reportError(error, 'Backup failed.');
       });
   }
 
@@ -764,7 +787,7 @@ export default function App() {
               setInitialLedgerLoaded(true);
             })
             .catch((error) => {
-              window.alert(error instanceof Error ? `Restore failed: ${error.message}` : 'Restore failed');
+              reportError(error instanceof Error ? new Error(`Restore failed: ${error.message}`) : error, 'Restore failed');
             });
           return;
         }
@@ -780,7 +803,7 @@ export default function App() {
           ],
         });
       } catch (error) {
-        window.alert(error instanceof Error ? `Restore failed: ${error.message}` : 'Restore failed');
+        reportError(error instanceof Error ? new Error(`Restore failed: ${error.message}`) : error, 'Restore failed');
       }
     };
     reader.readAsText(file);
@@ -797,7 +820,7 @@ export default function App() {
     const pin = window.prompt('Set app PIN');
     if (!pin) return;
     if (pin.length < 4) {
-      window.alert('PIN must be at least 4 characters.');
+      reportError(new Error('PIN must be at least 4 characters.'));
       return;
     }
     const next = { enabled: true, pin };
@@ -809,7 +832,7 @@ export default function App() {
   function disableLock() {
     const pin = window.prompt('Enter current PIN to disable app lock');
     if (pin !== lockState.pin) {
-      window.alert('Wrong PIN');
+      reportError(new Error('Wrong PIN'));
       return;
     }
     clearLockState();
@@ -845,7 +868,7 @@ export default function App() {
   }
 
   if (authPhase === 'login') {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    return <AuthScreen onAuthenticated={handleAuthenticated} notice={authNotice} />;
   }
 
   if (authPhase === 'workspace') {
@@ -863,7 +886,7 @@ export default function App() {
               <small>{syncState === 'error' ? 'Could not load workspace data' : 'Loading workspace data…'}</small>
             </div>
           </div>
-          {syncState === 'error' && syncError ? <div className="auth-error">{syncError}</div> : null}
+          {syncState === 'error' && syncError ? <div className="auth-error">{syncError.message}</div> : null}
           <div className="workspace-actions">
             <button className="btn-secondary" onClick={handleSwitchWorkspace}>Switch Workspace</button>
             <button className="btn-primary" onClick={refreshRemoteLedger}>{syncState === 'syncing' ? 'Loading…' : 'Retry'}</button>
@@ -874,20 +897,21 @@ export default function App() {
   }
 
   return (
-    <Shell
-      view={view}
-      onViewChange={setView}
-      onAdd={permissions.canWriteAccounting ? openNewTransaction : undefined}
-      mode={mode}
-      businessName={selectedBusiness?.name}
-      userRole={selectedBusiness?.role}
-      syncState={syncState}
-      syncError={syncError}
-      onDismissSyncError={dismissSyncError}
-      onRetrySync={mode === 'cloud' ? refreshRemoteLedger : undefined}
-      onLogout={mode === 'cloud' ? handleLogout : undefined}
-      onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
-    >
+    <AppAlertsProvider reportError={reportError}>
+      <Shell
+        view={view}
+        onViewChange={setView}
+        onAdd={permissions.canWriteAccounting ? openNewTransaction : undefined}
+        mode={mode}
+        businessName={selectedBusiness?.name}
+        userRole={selectedBusiness?.role}
+        syncState={syncState}
+        syncError={syncError?.message || null}
+        onDismissSyncError={dismissSyncError}
+        onRetrySync={mode === 'cloud' ? refreshRemoteLedger : undefined}
+        onLogout={mode === 'cloud' ? handleLogout : undefined}
+        onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
+      >
       {view === 'dashboard' ? <Dashboard data={data} onEditTransaction={openEditTransaction} canEditTransactions={permissions.canWriteAccounting} /> : null}
       {view === 'activity' ? <Activity data={data} onEditTransaction={openEditTransaction} onRecordPayment={recordPayment} canWrite={permissions.canWriteAccounting} /> : null}
       {view === 'sales' ? (
@@ -975,6 +999,7 @@ export default function App() {
       <footer className="dev-watermark">
         Cash accounts: {data.accounts.map((account) => `${account.name} ${accountBalance(data, account.id).toFixed(2)}`).join(' · ')}
       </footer>
-    </Shell>
+      </Shell>
+    </AppAlertsProvider>
   );
 }
