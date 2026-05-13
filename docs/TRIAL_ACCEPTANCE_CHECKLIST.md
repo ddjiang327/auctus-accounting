@@ -18,6 +18,7 @@ npm run test -w apps/api
 npx tsc -p apps/mobile/tsconfig.json --noEmit
 npm run e2e
 npm run smoke:production
+npm run acceptance:production-roles
 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production
 ```
 

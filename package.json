@@ -16,6 +16,7 @@
     "build:packages": "npm run build -w packages/shared-types && npm run build -w packages/accounting-core",
     "audit:pretrial": "node scripts/pretrial-audit.mjs",
     "audit:production": "node scripts/pretrial-audit.mjs",
+    "acceptance:production-roles": "node scripts/production-role-acceptance.mjs",
     "smoke:production": "node scripts/production-browser-smoke.mjs",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",

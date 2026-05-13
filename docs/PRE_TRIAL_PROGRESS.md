@@ -396,7 +396,7 @@ Tester:
 
 ### Result
 
-Conditional pass.
+Pass.
 
 ### Completed
 
@@ -448,21 +448,19 @@ Cleanup:
 - Deleted temporary auth users created only for acceptance testing.
 - Removed downloaded backup files from local/shared download folders.
 
-### Pending / skipped
+### Initially pending / skipped
 
 Bookkeeper Manual Pass:
-- Skipped / pending.
-- Risk: bookkeeper role permissions were not manually verified in production during this pass.
-- Mitigation: automated role UI and API permission tests passed in the E2E suite.
+- Initially skipped in this pass.
+- Completed later in section 25 with a production role acceptance smoke.
 
 Viewer Manual Pass:
-- Skipped / pending.
-- Risk: viewer read-only UI and direct backup 403 behavior were not manually verified in production during this pass.
-- Mitigation: automated role UI and viewer 403 tests passed in the E2E suite.
+- Initially skipped in this pass.
+- Completed later in section 25 with a production role acceptance smoke.
 
 ### Final decision
 
-Trial acceptance is conditionally passed for first trial exposure, with the explicit condition that Bookkeeper and Viewer manual role checks remain pending before broader user invitation or before assigning those roles to real trial users.
+Trial acceptance is passed for first trial exposure after the follow-up production Bookkeeper/Viewer role acceptance check in section 25.
 
 ### 22) Web UI polish: action feedback and period-lock guidance
 
@@ -530,3 +528,32 @@ Verification:
 - `npm run e2e` passed: 11 tests.
 - `npm run smoke:production` passed after deployment: production login/workspace/contact/category/transaction/backup/reset/restore cycle completed.
 - `npm run audit:production` passed after deployment: 15 checks, 1 warning, 0 failures. The remaining warning is local-only dev auto-login variables in `apps/web/.env.local`.
+
+### 25) Production Bookkeeper / Viewer role acceptance
+
+Added `scripts/production-role-acceptance.mjs` and `npm run acceptance:production-roles`.
+
+The script runs against production Web/API/Supabase and cleans up its temporary data:
+
+- Creates temporary confirmed Supabase users for `owner`, `bookkeeper`, and `viewer`.
+- Creates a temporary production workspace and inserts real memberships.
+- Signs in through the production Netlify Web login form.
+- Verifies bookkeeper can:
+  - Open the production workspace.
+  - Create a contact.
+  - Create a transaction.
+  - See day-to-day accounting controls such as category management.
+  - Not see admin-only controls: Track GST, Period Lock, Download Backup, Restore Backup, Reset Backend Ledger.
+- Verifies viewer can:
+  - Open Home/Activity/Contacts/Accounts/Settings in read-only mode.
+  - Read the bookkeeper-created contact and transaction.
+  - Not see New Transaction, Add Contact, account write controls, category management, backup/restore/reset, or Period Lock.
+  - Receive a real production API `403` from `GET /v1/businesses/:businessId/backup`.
+
+Verification:
+- `node --check scripts/production-role-acceptance.mjs` passed.
+- `npm run acceptance:production-roles` passed against:
+  - Web: `https://auctus-web.netlify.app`
+  - API: `https://auctus-api.vercel.app`
+  - Supabase project: `zvcbnocynsxzyrvxcsbn`
+- Temporary production role users and workspace were cleaned up after the check.
