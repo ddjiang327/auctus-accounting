@@ -82,6 +82,8 @@ async function createWorkspace(page: Page, name: string) {
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await expect(page.getByText('NET WORTH')).toBeVisible();
   await expect(page.getByText(name)).toBeVisible();
+  await expect(page.getByText('Set up the first entries for this workspace')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add Transaction' })).toBeVisible();
   await expect(page.getByText('No transactions yet')).toBeVisible();
 }
 

@@ -512,3 +512,19 @@ Verification:
 - `npm run e2e` passed: 11 tests.
 - `npm run smoke:production` passed after deployment: production login/workspace/contact/category/transaction/backup/reset/restore cycle completed.
 - `npm run audit:production` passed after deployment: 15 checks, 1 warning, 0 failures. The remaining warning is local-only dev auto-login variables in `apps/web/.env.local`.
+
+### 24) Web UI polish: empty workspace onboarding
+
+Added a focused onboarding panel to the Home screen for brand-new empty workspaces:
+
+- Shows when the workspace has no transactions and no contacts.
+- Keeps the existing `No transactions yet` empty state for continuity and tests.
+- Adds first-step actions for adding a transaction, opening the people list, and reviewing setup.
+- Adds helper copy on Activity explaining what will appear after the first transaction is saved.
+- Avoided duplicate accessible names with the sidebar navigation so Playwright and assistive tech can distinguish onboarding actions from primary navigation.
+
+Verification:
+- `npx tsc -p apps/web/tsconfig.json --noEmit` passed.
+- `npm run build:web` passed.
+- `npx playwright test tests/e2e/auctus-smoke.spec.ts --project=chromium` passed: 3 tests.
+- `npm run e2e` passed: 11 tests.

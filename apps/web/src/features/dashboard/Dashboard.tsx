@@ -5,13 +5,17 @@ interface DashboardProps {
   data: LedgerData;
   onEditTransaction: (tx: Transaction) => void;
   canEditTransactions?: boolean;
+  onCreateTransaction?: () => void;
+  onOpenContacts?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function Dashboard({ data, onEditTransaction, canEditTransactions = true }: DashboardProps) {
+export function Dashboard({ data, onEditTransaction, canEditTransactions = true, onCreateTransaction, onOpenContacts, onOpenSettings }: DashboardProps) {
   const assets = totalAssets(data);
   const month = aggregate(data, 'month');
   const today = aggregate(data, 'today');
   const recent = [...data.transactions].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 6);
+  const isEmptyWorkspace = data.transactions.length === 0 && data.contacts.filter((contact) => !contact.archivedAt).length === 0;
 
   return (
     <section className="view">
@@ -32,6 +36,20 @@ export function Dashboard({ data, onEditTransaction, canEditTransactions = true 
         <div className="stat-card"><span>Today's Spend</span><strong className="expense">{fmtMoney(today.expense)}</strong></div>
         <div className="stat-card"><span>Today's Income</span><strong className="income">{fmtMoney(today.income)}</strong></div>
       </div>
+      {isEmptyWorkspace && canEditTransactions ? (
+        <div className="onboarding-panel">
+          <div>
+            <span>Start here</span>
+            <h3>Set up the first entries for this workspace</h3>
+            <p>Add a customer or supplier, review categories, then record the first sale or purchase.</p>
+          </div>
+          <div className="onboarding-actions">
+            {onCreateTransaction ? <button className="primary" onClick={onCreateTransaction}>Add Transaction</button> : null}
+            {onOpenContacts ? <button className="primary secondary-action" onClick={onOpenContacts}>People List</button> : null}
+            {onOpenSettings ? <button className="primary secondary-action" onClick={onOpenSettings}>Review Setup</button> : null}
+          </div>
+        </div>
+      ) : null}
       <div className="section-header"><h3>Recent Transactions</h3></div>
       <TransactionList data={data} transactions={recent} onEditTransaction={onEditTransaction} canEditTransactions={canEditTransactions} />
     </section>

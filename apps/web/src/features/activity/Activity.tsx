@@ -51,6 +51,11 @@ export function Activity({ data, onEditTransaction, onRecordPayment, canWrite = 
         }) : <div className="empty-card flat">No outstanding invoices</div>}
       </div>
       <div className="section-header"><h3>All Transactions</h3></div>
+      {!data.transactions.length ? (
+        <div className="empty-helper">
+          Activity will list every sale, purchase, transfer, invoice, bill, payment and credit note after the first transaction is saved.
+        </div>
+      ) : null}
       <TransactionList data={data} transactions={[...data.transactions].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id))} onEditTransaction={onEditTransaction} canEditTransactions={canWrite} />
     </section>
   );

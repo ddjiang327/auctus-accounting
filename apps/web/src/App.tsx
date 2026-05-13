@@ -983,7 +983,16 @@ export default function App() {
         onLogout={mode === 'cloud' ? handleLogout : undefined}
         onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
       >
-        {view === 'dashboard' ? <Dashboard data={data} onEditTransaction={openEditTransaction} canEditTransactions={permissions.canWriteAccounting} /> : null}
+        {view === 'dashboard' ? (
+          <Dashboard
+            data={data}
+            onEditTransaction={openEditTransaction}
+            canEditTransactions={permissions.canWriteAccounting}
+            onCreateTransaction={permissions.canWriteAccounting ? openNewTransaction : undefined}
+            onOpenContacts={() => setView('contacts')}
+            onOpenSettings={() => setView('settings')}
+          />
+        ) : null}
       {view === 'activity' ? <Activity data={data} onEditTransaction={openEditTransaction} onRecordPayment={recordPayment} canWrite={permissions.canWriteAccounting} /> : null}
       {view === 'sales' ? (
         <Documents
