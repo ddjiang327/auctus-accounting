@@ -485,3 +485,28 @@ Verification:
 - `npm run e2e` passed: 11 tests.
 - `npm run smoke:production` passed after deployment: production login/workspace/contact/category/transaction/backup/reset/restore cycle completed.
 - `npm run audit:production` passed after deployment: 15 checks, 1 warning, 0 failures. The remaining warning is local-only dev auto-login variables in `apps/web/.env.local`.
+
+### 23) Web UI polish: dangerous settings copy and modal save feedback
+
+Added the second Web UI polish pass:
+
+- Clarified Settings > Data copy for backup/restore/reset:
+  - Backup is a JSON copy of the current workspace.
+  - Restore first downloads a safety backup, then replaces the workspace with the selected file.
+  - Reset warns users to download a backup first.
+- Expanded the Period Lock modal explanation so users understand locked dates block transactions, payments, journals, reconciliations, and document changes.
+- Added modal-level duplicate-submit protection and `Saving…` / `Archiving…` / `Clearing…` labels for:
+  - Transactions.
+  - Contacts.
+  - Accounts.
+  - Business profile.
+  - Document numbering.
+  - Period locks.
+  - Categories.
+  - Manual journals.
+
+Verification:
+- `npx tsc -p apps/web/tsconfig.json --noEmit` passed.
+- `npm run build:web` passed.
+- `npx playwright test tests/e2e/auctus-role-ui.spec.ts --project=role-ui` passed after copy adjustments.
+- `npm run e2e` passed: 11 tests.

@@ -9,10 +9,11 @@ interface TransactionModalProps {
   transaction?: Transaction | null;
   defaults?: Partial<Transaction> | null;
   onClose: () => void;
-  onSave: (tx: Transaction) => void;
+  onSave: (tx: Transaction) => void | Promise<void>;
+  saving?: boolean;
 }
 
-export function TransactionModal({ open, data, transaction, defaults, onClose, onSave }: TransactionModalProps) {
+export function TransactionModal({ open, data, transaction, defaults, onClose, onSave, saving = false }: TransactionModalProps) {
   const [type, setType] = useState<TransactionType>('expense');
   const [entryMode, setEntryMode] = useState<EntryMode>('cash');
   const [amount, setAmount] = useState('0');
@@ -108,6 +109,7 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
   const isDocument = entryMode === 'invoice' || entryMode === 'credit_note';
 
   function submit() {
+    if (saving) return;
     const numericAmount = Number(amount);
     if (!numericAmount || numericAmount <= 0) return;
     const tx: Transaction = {
@@ -148,7 +150,7 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
       open={open}
       title={existing ? 'Edit Transaction' : 'New Transaction'}
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>}
     >
       <div className="seg-control">
         {(['expense', 'income', 'transfer'] as TransactionType[]).map((item) => (

@@ -36,7 +36,7 @@ export function Journals({ data, onSaveJournal, onVoidJournal, onReverseJournal,
   }
 
   function saveJournal(journal: ManualJournal) {
-    Promise.resolve(onSaveJournal(journal)).then(() => {
+    return Promise.resolve(onSaveJournal(journal)).then(() => {
       setEditingJournal(null);
       setModalOpen(false);
     }).catch((error) => {
@@ -179,9 +179,10 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
   data: LedgerData;
   journal: ManualJournal | null;
   onClose: () => void;
-  onSave: (journal: ManualJournal) => void;
+  onSave: (journal: ManualJournal) => void | Promise<void>;
 }) {
   const { reportError } = useAppAlerts();
+  const [saving, setSaving] = useState(false);
   const blankLines = useMemo(() => [
     { chartAccountId: data.chartOfAccounts[0]?.id || '', debit: '', credit: '' },
     { chartAccountId: data.chartOfAccounts[1]?.id || data.chartOfAccounts[0]?.id || '', debit: '', credit: '' },
@@ -216,6 +217,7 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
   }
 
   function submit() {
+    if (saving) return;
     const parsed = lines
       .map((line) => ({ chartAccountId: line.chartAccountId, debit: Number(line.debit) || 0, credit: Number(line.credit) || 0 }))
       .filter((line) => line.chartAccountId && (line.debit > 0 || line.credit > 0));
@@ -237,7 +239,8 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
       reportError(new Error('Total debits must equal total credits.'));
       return;
     }
-    onSave({
+    setSaving(true);
+    Promise.resolve(onSave({
       id: journal?.id || uid('mj_'),
       date,
       memo: memo.trim() || 'Manual journal',
@@ -245,7 +248,9 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
       createdAt: journal?.createdAt || new Date().toISOString(),
       reversalOf: journal?.reversalOf,
       reversedAt: journal?.reversedAt,
-    });
+    })).catch((error) => {
+      reportError(error instanceof Error ? error : new Error('Manual journal save failed.'));
+    }).finally(() => setSaving(false));
   }
 
   return (
@@ -253,7 +258,7 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
       open={open}
       title={journal ? 'Edit Manual Journal' : 'Manual Journal'}
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>{journal ? 'Save Journal' : 'Post Journal'}</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : journal ? 'Save Journal' : 'Post Journal'}</button>}
     >
       <div className="form-card">
         <label>Date <input value={date} onChange={(event) => setDate(event.target.value)} /></label>

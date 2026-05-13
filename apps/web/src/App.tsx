@@ -582,7 +582,13 @@ export default function App() {
 
   function resetData() {
     if (mode === 'cloud') {
-      if (!window.confirm('Reset backend ledger data to the default accounting foundation? This replaces transactions, contacts, accounts, journals, bank feed rows, reconciliations and period locks.')) return;
+      if (!window.confirm([
+        'Reset backend ledger data?',
+        '',
+        'This replaces transactions, contacts, accounts, journals, bank feed rows, reconciliations and period locks with the default accounting foundation.',
+        '',
+        'Download a backup first if you may need the current workspace data.',
+      ].join('\n'))) return;
       runAction('Resetting ledger…', () => auctusApi.resetLedger())
         .then((next) => {
           setData(next);
@@ -1060,6 +1066,7 @@ export default function App() {
           setTxDefaults(null);
         }}
         onSave={saveTransaction}
+        saving={busyLabel === 'Saving transaction…'}
       />
       <footer className="dev-watermark">
         Cash accounts: {data.accounts.map((account) => `${account.name} ${accountBalance(data, account.id).toFixed(2)}`).join(' · ')}

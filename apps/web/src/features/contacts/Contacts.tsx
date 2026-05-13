@@ -6,7 +6,7 @@ import type { Contact, ContactType, LedgerData, PaymentTerms } from '../../domai
 
 interface ContactsProps {
   data: LedgerData;
-  onSaveContact: (contact: Contact) => void;
+  onSaveContact: (contact: Contact) => void | Promise<void>;
   canWrite?: boolean;
 }
 
@@ -41,9 +41,10 @@ export function Contacts({ data, onSaveContact, canWrite = true }: ContactsProps
   }
 
   function saveContact(contact: Contact) {
-    onSaveContact(contact);
-    setModalOpen(false);
-    setEditing(null);
+    return Promise.resolve(onSaveContact(contact)).then(() => {
+      setModalOpen(false);
+      setEditing(null);
+    });
   }
 
   const customers = data.contacts.filter((contact) => !contact.archivedAt && (contact.type === 'customer' || contact.type === 'both')).length;
@@ -104,9 +105,10 @@ function ContactModal({
   open: boolean;
   contact: Contact | null;
   onClose: () => void;
-  onSave: (contact: Contact) => void;
+  onSave: (contact: Contact) => void | Promise<void>;
 }) {
   const { reportError } = useAppAlerts();
+  const [saving, setSaving] = useState(false);
   const [type, setType] = useState<ContactType>('customer');
   const [name, setName] = useState('');
   const [abn, setAbn] = useState('');
@@ -127,12 +129,14 @@ function ContactModal({
   }, [contact, open]);
 
   function submit() {
+    if (saving) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       reportError(new Error('Contact name is required.'));
       return;
     }
-    onSave({
+    setSaving(true);
+    Promise.resolve(onSave({
       id: contact?.id || uid('c'),
       type,
       name: trimmedName,
@@ -143,7 +147,9 @@ function ContactModal({
       paymentTerms: terms,
       createdAt: contact?.createdAt || new Date().toISOString(),
       archivedAt: contact?.archivedAt,
-    });
+    })).catch((error) => {
+      reportError(error instanceof Error ? error : new Error('Contact save failed.'));
+    }).finally(() => setSaving(false));
   }
 
   return (
@@ -151,7 +157,7 @@ function ContactModal({
       open={open}
       title={contact?.id ? 'Edit Contact' : 'New Contact'}
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save Contact</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Save Contact'}</button>}
     >
       <div className="seg-control">
         {contactTypes.map((item) => (

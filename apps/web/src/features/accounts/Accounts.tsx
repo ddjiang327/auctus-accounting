@@ -920,6 +920,8 @@ function AccountModal({
   const [icon, setIcon] = useState('🏦');
   const [color, setColor] = useState(defaultColors[0]);
   const [chartAccountId, setChartAccountId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const archiveGuard = account ? paymentAccountArchiveGuard(data, account) : null;
 
   useEffect(() => {
@@ -938,11 +940,13 @@ function AccountModal({
   }, [account, data, type]);
 
   async function submit() {
+    if (saving || archiving) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       reportError(new Error('Account name is required.'));
       return;
     }
+    setSaving(true);
     try {
       await onSave({
         id: account?.id || uid('a'),
@@ -955,16 +959,21 @@ function AccountModal({
       });
     } catch (error) {
       reportError(error instanceof Error ? error : new Error('Account save failed.'));
+    } finally {
+      setSaving(false);
     }
   }
 
   async function archiveAccount() {
-    if (!account || archiveGuard?.blocked) return;
+    if (!account || archiveGuard?.blocked || saving || archiving) return;
     if (!window.confirm(`Archive "${account.name}"? It will no longer appear in payment account pickers.`)) return;
+    setArchiving(true);
     try {
       await onArchive(account.id);
     } catch (error) {
       reportError(error instanceof Error ? error : new Error('Account archive failed.'));
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -975,9 +984,9 @@ function AccountModal({
       onClose={onClose}
       footer={(
         <>
-          <button className="primary wide" onClick={submit}>Save Account</button>
+          <button className="primary wide" onClick={submit} disabled={saving || archiving}>{saving ? 'Saving…' : 'Save Account'}</button>
           {account ? (
-            <button className="primary danger-action" onClick={archiveAccount} disabled={archiveGuard?.blocked}>Archive</button>
+            <button className="primary danger-action" onClick={archiveAccount} disabled={archiveGuard?.blocked || saving || archiving}>{archiving ? 'Archiving…' : 'Archive'}</button>
           ) : null}
         </>
       )}

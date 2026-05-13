@@ -190,12 +190,13 @@ export function Settings({
                 />
               </label>
             </div>
+            <p className="data-note">Download Backup saves a JSON copy of this workspace. Restoring a file first downloads a safety backup of the current workspace, then replaces this workspace with the selected file.</p>
             <p className="data-note">Backup files include settings, contacts, accounts, invoices, bills, journals, reconciliations and audit log entries.</p>
           </div>
           <div className="list compact-danger-list">
             <button className="list-row danger-row" onClick={onReset}>
               <span className="icon red">!</span>
-              <span className="row-body"><b>{remoteMode ? 'Reset Backend Ledger' : 'Reset Local Data'}</b><small>{remoteMode ? 'Replaces backend ledger data with the default accounting foundation after confirmation' : "Clears this browser's local app data after confirmation"}</small></span>
+              <span className="row-body"><b>{remoteMode ? 'Reset Backend Ledger' : 'Reset Local Data'}</b><small>{remoteMode ? 'Deletes this workspace ledger and rebuilds the default chart after confirmation. Download a backup first.' : "Clears this browser's local app data after confirmation. Download a backup first if needed."}</small></span>
             </button>
           </div>
         </>
@@ -206,7 +207,7 @@ export function Settings({
         data={data}
         onClose={() => setPeriodLockOpen(false)}
         onSave={(nextLockedThrough, note) => {
-          Promise.resolve(onCreatePeriodLock(nextLockedThrough, note)).then(() => {
+          return Promise.resolve(onCreatePeriodLock(nextLockedThrough, note)).then(() => {
             setPeriodLockOpen(false);
           }).catch((error) => {
             reportError(error instanceof Error ? error : new Error('Period lock save failed.'));
@@ -221,7 +222,7 @@ export function Settings({
         data={data}
         onClose={() => setNumberingOpen(false)}
         onSave={(settings) => {
-          Promise.resolve(onUpdateSettings(settings)).then(() => {
+          return Promise.resolve(onUpdateSettings(settings)).then(() => {
             setNumberingOpen(false);
           }).catch((error) => {
             reportError(error instanceof Error ? error : new Error('Document numbering save failed.'));
@@ -233,7 +234,7 @@ export function Settings({
         profile={profile}
         onClose={() => setBusinessOpen(false)}
         onSave={(businessProfile) => {
-          Promise.resolve(onUpdateBusinessProfile(businessProfile)).then(() => {
+          return Promise.resolve(onUpdateBusinessProfile(businessProfile)).then(() => {
             setBusinessOpen(false);
           }).catch((error) => {
             reportError(error instanceof Error ? error : new Error('Business profile save failed.'));
@@ -267,9 +268,10 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
   open: boolean;
   profile: BusinessProfile;
   onClose: () => void;
-  onSave: (profile: BusinessProfile) => void;
+  onSave: (profile: BusinessProfile) => void | Promise<void>;
 }) {
   const { reportError } = useAppAlerts();
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [abn, setAbn] = useState('');
   const [email, setEmail] = useState('');
@@ -290,11 +292,13 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
   }, [open, profile]);
 
   function submit() {
+    if (saving) return;
     if (!name.trim()) {
       reportError(new Error('Business name is required.'));
       return;
     }
-    onSave({
+    setSaving(true);
+    Promise.resolve(onSave({
       ...profile,
       name: name.trim(),
       logoText: profile.logoText || name.trim().slice(0, 1).toUpperCase(),
@@ -304,7 +308,7 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
       address: address.trim() || undefined,
       paymentInstructions: paymentInstructions.trim() || undefined,
       invoiceFooter: invoiceFooter.trim() || undefined,
-    });
+    })).finally(() => setSaving(false));
   }
 
   return (
@@ -312,7 +316,7 @@ function BusinessProfileModal({ open, profile, onClose, onSave }: {
       open={open}
       title="Business Profile"
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save Business Profile</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Save Business Profile'}</button>}
     >
       <div className="business-modal-summary">
         <span className="business-mark">{profile.logoText || name.slice(0, 1) || 'A'}</span>
@@ -352,9 +356,10 @@ function NumberingModal({ open, data, onClose, onSave }: {
   open: boolean;
   data: LedgerData;
   onClose: () => void;
-  onSave: (settings: NumberingSettings) => void;
+  onSave: (settings: NumberingSettings) => void | Promise<void>;
 }) {
   const { reportError } = useAppAlerts();
+  const [saving, setSaving] = useState(false);
   const [invoicePrefix, setInvoicePrefix] = useState('');
   const [billPrefix, setBillPrefix] = useState('');
   const [creditNotePrefix, setCreditNotePrefix] = useState('');
@@ -386,6 +391,7 @@ function NumberingModal({ open, data, onClose, onSave }: {
   }
 
   function submit() {
+    if (saving) return;
     const invoice = positiveInteger(nextInvoiceNumber);
     const bill = positiveInteger(nextBillNumber);
     const credit = positiveInteger(nextCreditNoteNumber);
@@ -395,7 +401,8 @@ function NumberingModal({ open, data, onClose, onSave }: {
       reportError(new Error('Next numbers must be whole numbers above zero.'));
       return;
     }
-    onSave({
+    setSaving(true);
+    Promise.resolve(onSave({
       invoicePrefix,
       billPrefix,
       creditNotePrefix,
@@ -406,7 +413,7 @@ function NumberingModal({ open, data, onClose, onSave }: {
       nextCreditNoteNumber: credit,
       nextSupplierCreditNumber: supplierCredit,
       nextReceiptNumber: receipt,
-    });
+    })).finally(() => setSaving(false));
   }
 
   return (
@@ -414,7 +421,7 @@ function NumberingModal({ open, data, onClose, onSave }: {
       open={open}
       title="Document Numbering"
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save Numbering</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Save Numbering'}</button>}
     >
       <div className="form-card">
         <label>Invoice Prefix <input value={invoicePrefix} onChange={(event) => setInvoicePrefix(event.target.value)} /></label>
@@ -436,10 +443,12 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
   open: boolean;
   data: LedgerData;
   onClose: () => void;
-  onSave: (lockedThrough: string, note: string) => void;
-  onClear: () => void;
+  onSave: (lockedThrough: string, note: string) => void | Promise<void>;
+  onClear: () => void | Promise<void>;
 }) {
   const { reportError } = useAppAlerts();
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [lockedThrough, setLockedThrough] = useState('');
   const [note, setNote] = useState('');
 
@@ -450,11 +459,19 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
   }, [data, open]);
 
   function submit() {
+    if (saving || clearing) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(lockedThrough)) {
       reportError(new Error('Use YYYY-MM-DD for the lock date.'));
       return;
     }
-    onSave(lockedThrough, note.trim());
+    setSaving(true);
+    Promise.resolve(onSave(lockedThrough, note.trim())).finally(() => setSaving(false));
+  }
+
+  function clearLocks() {
+    if (saving || clearing) return;
+    setClearing(true);
+    Promise.resolve(onClear()).finally(() => setClearing(false));
   }
 
   return (
@@ -462,7 +479,7 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
       open={open}
       title="Period Lock"
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit}>Save Period Lock</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving || clearing}>{saving ? 'Saving…' : 'Save Period Lock'}</button>}
     >
       <div className="form-card">
         <label>Current Lock <strong className="setting-value">{latestLockedThrough(data) || 'None'}</strong></label>
@@ -470,11 +487,11 @@ function PeriodLockModal({ open, data, onClose, onSave, onClear }: {
         <label>Note <input value={note} onChange={(event) => setNote(event.target.value)} /></label>
       </div>
       <div className="empty-card modal-note">
-        Transactions, payments, journals, reconciliations and document changes dated on or before the locked date are blocked by the workflows that already enforce period locks.
+        The lock closes all dates on or before the selected day. Users cannot create or edit transactions, invoice payments, journals, reconciliations, or document changes in the locked period. Use a later date or clear the lock to make changes.
       </div>
       {(data.periodLocks || []).length ? (
         <div className="modal-list">
-          <button className="primary danger-action wide" onClick={onClear}>Clear Period Locks</button>
+          <button className="primary danger-action wide" onClick={clearLocks} disabled={saving || clearing}>{clearing ? 'Clearing…' : 'Clear Period Locks'}</button>
         </div>
       ) : null}
     </Modal>
@@ -498,6 +515,8 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
   const [icon, setIcon] = useState('');
   const [color, setColor] = useState(categoryColors[0]);
   const [chartAccountId, setChartAccountId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const chartAccounts = data.chartOfAccounts.filter((account) => tab === 'income' ? account.class === 'revenue' : account.class === 'expense');
   const defaultChartAccountId = chartAccounts[0]?.id || '';
@@ -537,41 +556,52 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
   }
 
   async function submit() {
+    if (saving || archiving) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       reportError(new Error('Category name is required.'));
       return;
     }
-    await onSave(
-      {
-        id: editingCategory?.id || `cat_${Math.random().toString(36).slice(2, 9)}`,
-        name: trimmedName,
-        icon: icon.trim() || '🏷',
-        color,
-        chartAccountId: chartAccountId || undefined,
-      },
-      tab,
-    );
-    setEditingId(null);
-    setName('');
-    setIcon(tab === 'income' ? '💰' : '🏷');
-    setColor(categoryColors[0]);
-    setChartAccountId(defaultChartAccountId);
+    setSaving(true);
+    try {
+      await onSave(
+        {
+          id: editingCategory?.id || `cat_${Math.random().toString(36).slice(2, 9)}`,
+          name: trimmedName,
+          icon: icon.trim() || '🏷',
+          color,
+          chartAccountId: chartAccountId || undefined,
+        },
+        tab,
+      );
+      setEditingId(null);
+      setName('');
+      setIcon(tab === 'income' ? '💰' : '🏷');
+      setColor(categoryColors[0]);
+      setChartAccountId(defaultChartAccountId);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleArchive() {
-    if (!editingCategory) return;
+    if (!editingCategory || saving || archiving) return;
     const usageCount = data.transactions.filter((tx) => tx.categoryId === editingCategory.id).length;
     const usageNote = usageCount > 0
       ? `\n\n${usageCount} transaction${usageCount === 1 ? '' : 's'} use this category — they will continue to display correctly.`
       : '';
     if (!window.confirm(`Archive "${editingCategory.name}"? It will no longer appear in pickers for new transactions.${usageNote}`)) return;
-    await onArchive(editingCategory.id);
-    setEditingId(null);
-    setName('');
-    setIcon(tab === 'income' ? '💰' : '🏷');
-    setColor(categoryColors[0]);
-    setChartAccountId(defaultChartAccountId);
+    setArchiving(true);
+    try {
+      await onArchive(editingCategory.id);
+      setEditingId(null);
+      setName('');
+      setIcon(tab === 'income' ? '💰' : '🏷');
+      setColor(categoryColors[0]);
+      setChartAccountId(defaultChartAccountId);
+    } finally {
+      setArchiving(false);
+    }
   }
 
   return (
@@ -581,7 +611,7 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
       onClose={onClose}
       footer={(
         <>
-          <button className="primary wide" onClick={submit}>{editingCategory ? 'Save Category' : 'Add Category'}</button>
+          <button className="primary wide" onClick={submit} disabled={saving || archiving}>{saving ? 'Saving…' : editingCategory ? 'Save Category' : 'Add Category'}</button>
           {editingCategory ? (
             <>
               <button className="primary secondary-action" onClick={() => {
@@ -590,8 +620,8 @@ function CategoriesModal({ open, data, onClose, onSave, onArchive }: {
                 setIcon(tab === 'income' ? '💰' : '🏷');
                 setColor(categoryColors[0]);
                 setChartAccountId(defaultChartAccountId);
-              }}>New</button>
-              <button className="primary danger-action" onClick={handleArchive}>Archive</button>
+              }} disabled={saving || archiving}>New</button>
+              <button className="primary danger-action" onClick={handleArchive} disabled={saving || archiving}>{archiving ? 'Archiving…' : 'Archive'}</button>
             </>
           ) : null}
         </>

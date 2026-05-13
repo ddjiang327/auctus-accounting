@@ -312,6 +312,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--text);
 }
 .primary.wide { width: 100%; padding: 13px; font-size: 16px; }
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
 .document-row {
   display: grid;
   grid-template-columns: 38px minmax(180px, 1fr) minmax(130px, 0.35fr) minmax(160px, 0.28fr) auto;
