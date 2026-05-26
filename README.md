@@ -84,4 +84,4 @@ npm run e2e:headed
 
 ## License
 
-[MIT](LICENSE)
+[GPL v3](LICENSE)
