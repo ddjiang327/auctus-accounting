@@ -84,4 +84,12 @@ npm run e2e:headed
 
 ## License
 
-[AGPL v3](LICENSE)
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL v3)](LICENSE).
+
+AGPL v3 is a strong copyleft license. Key conditions:
+
+- **Use freely** — run, study, and modify the code for any purpose
+- **Share modifications** — if you distribute a modified version, you must release the source under AGPL v3
+- **Network use triggers copyleft** — if you run a modified version as a network service (e.g. SaaS), you must make the source code available to users. This is the key difference from GPL v3.
+
+For commercial licensing that does not require source disclosure, contact the project maintainers.
