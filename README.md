@@ -84,4 +84,4 @@ npm run e2e:headed
 
 ## License
 
-[GPL v3](LICENSE)
+[AGPL v3](LICENSE)
