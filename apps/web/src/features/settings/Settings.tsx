@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Cloud } from 'lucide-react';
 import { Modal } from '../../components/Modal';
 import { useAppAlerts } from '../../components/AppAlerts';
 import { chartAccountName, latestLockedThrough, todayStr } from '../../domain/accounting';
@@ -200,7 +201,7 @@ export function Settings({
           {!remoteMode && cloudAvailable && onSwitchToCloud ? (
             <div className="list compact-danger-list">
               <button className="list-row" onClick={onSwitchToCloud}>
-                <span className="icon">☁</span>
+                <span className="icon"><Cloud size={16} /></span>
                 <span className="row-body"><b>Switch to Cloud Mode</b><small>Sign in to sync data across devices. Your local data will remain on this browser.</small></span>
               </button>
             </div>

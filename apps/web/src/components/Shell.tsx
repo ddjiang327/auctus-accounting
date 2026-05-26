@@ -43,10 +43,7 @@ export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole,
           <img src="/logo-mark.svg" className="brand-mark" alt="Auctus" />
           <span>
             <b>Auctus</b>
-            {mode === 'local'
-              ? <small>Local</small>
-              : <small>{businessName ?? 'Cloud workspace'}{userRole ? ` · ${userRole}` : ''}</small>
-            }
+            {mode !== 'local' && <small>{businessName ?? 'Cloud workspace'}{userRole ? ` · ${userRole}` : ''}</small>}
           </span>
           {mode === 'local' && <span className="mode-badge">Local</span>}
         </div>
