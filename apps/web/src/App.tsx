@@ -18,10 +18,11 @@ import { ledgerDataAdapter } from './storage/ledgerDataAdapter';
 import { clearLockState, loadLockState, saveLockState } from './storage/lockStore';
 import { AuthScreen } from './components/AuthScreen';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
+import { ModeSelector } from './components/ModeSelector';
 import { permissionsForRole } from './domain/permissions';
 import { AppAlertsProvider } from './components/AppAlerts';
 
-type AuthPhase = 'checking' | 'login' | 'workspace' | 'app';
+type AuthPhase = 'checking' | 'login' | 'workspace' | 'mode-select' | 'app';
 type AppMode = 'local' | 'cloud';
 type SyncState = 'idle' | 'syncing' | 'error';
 type SyncError = { message: string; nonce: number };
@@ -29,6 +30,22 @@ type SyncError = { message: string; nonce: number };
 function isDevAutoLoginDisabled() {
   return import.meta.env.VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN === 'true'
     || localStorage.getItem('auctus_disable_dev_auto_login') === 'true';
+}
+
+const MODE_PREFERENCE_KEY = 'auctus_mode_preference';
+
+function getModePreference(): 'local' | 'cloud' | null {
+  const pref = localStorage.getItem(MODE_PREFERENCE_KEY);
+  if (pref === 'local' || pref === 'cloud') return pref;
+  return null;
+}
+
+function setModePreference(mode: 'local' | 'cloud') {
+  localStorage.setItem(MODE_PREFERENCE_KEY, mode);
+}
+
+function clearModePreference() {
+  localStorage.removeItem(MODE_PREFERENCE_KEY);
 }
 
 export default function App() {
@@ -50,7 +67,7 @@ export default function App() {
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [initialLedgerLoaded, setInitialLedgerLoaded] = useState(() => !isAuctusApiConfigured());
 
-  const mode: AppMode = isAuctusApiConfigured() ? 'cloud' : 'local';
+  const mode: AppMode = !isAuctusApiConfigured() || getModePreference() === 'local' ? 'local' : 'cloud';
   const permissions = permissionsForRole(selectedBusiness?.role, mode);
   const lockedThrough = latestLockedThrough(data);
 
@@ -64,8 +81,13 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (mode !== 'cloud') {
+    if (!isAuctusApiConfigured() || getModePreference() === 'local') {
       setAuthPhase('app');
+      return;
+    }
+
+    if (!getModePreference()) {
+      setAuthPhase('mode-select');
       return;
     }
 
@@ -92,7 +114,7 @@ export default function App() {
     }
 
     initAuth();
-  }, [mode]);
+  }, []);
 
   function reportError(error: unknown, fallbackMessage = 'Request failed.') {
     if (error instanceof AuctusApiError && error.statusCode === 401) {
@@ -139,6 +161,16 @@ export default function App() {
   function handleAuthenticated() {
     setAuthNotice(null);
     loadWorkspaces();
+  }
+
+  function handleChooseLocal() {
+    setModePreference('local');
+    setAuthPhase('app');
+  }
+
+  function handleChooseCloud() {
+    setModePreference('cloud');
+    setAuthPhase('login');
   }
 
   function handleSelectBusiness(business: BusinessSummary) {
@@ -937,6 +969,10 @@ export default function App() {
     );
   }
 
+  if (authPhase === 'mode-select') {
+    return <ModeSelector onChooseLocal={handleChooseLocal} onChooseCloud={handleChooseCloud} />;
+  }
+
   if (authPhase === 'login') {
     return <AuthScreen onAuthenticated={handleAuthenticated} notice={authNotice} />;
   }
@@ -1054,6 +1090,11 @@ export default function App() {
           onClearPeriodLocks={clearPeriodLocks}
           onReset={resetData}
           remoteMode={mode === 'cloud'}
+          cloudAvailable={isAuctusApiConfigured()}
+          onSwitchToCloud={mode === 'local' && isAuctusApiConfigured() ? () => {
+            clearModePreference();
+            window.location.reload();
+          } : undefined}
           lockEnabled={lockState.enabled}
           onEnableLock={enableLock}
           onDisableLock={disableLock}

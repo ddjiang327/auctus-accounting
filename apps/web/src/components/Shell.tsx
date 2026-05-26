@@ -44,11 +44,11 @@ export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole,
           <span>
             <b>Auctus</b>
             {mode === 'local'
-              ? <small>Local demo</small>
+              ? <small>Local</small>
               : <small>{businessName ?? 'Cloud workspace'}{userRole ? ` · ${userRole}` : ''}</small>
             }
           </span>
-          {mode === 'local' && <span className="mode-badge">Demo</span>}
+          {mode === 'local' && <span className="mode-badge">Local</span>}
         </div>
         <nav className="side-nav">
           {navItems.map((item) => (

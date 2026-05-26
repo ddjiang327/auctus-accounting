@@ -13,6 +13,8 @@ interface SettingsProps {
   onClearPeriodLocks: () => void;
   onReset: () => void;
   remoteMode?: boolean;
+  cloudAvailable?: boolean;
+  onSwitchToCloud?: () => void;
   lockEnabled: boolean;
   onEnableLock: () => void;
   onDisableLock: () => void;
@@ -32,6 +34,8 @@ export function Settings({
   onClearPeriodLocks,
   onReset,
   remoteMode = false,
+  cloudAvailable = false,
+  onSwitchToCloud,
   lockEnabled,
   onEnableLock,
   onDisableLock,
@@ -193,6 +197,14 @@ export function Settings({
             <p className="data-note">Download Backup saves a JSON copy of this workspace. Restoring a file first downloads a safety backup of the current workspace, then replaces this workspace with the selected file.</p>
             <p className="data-note">Backup files include settings, contacts, accounts, invoices, bills, journals, reconciliations and audit log entries.</p>
           </div>
+          {!remoteMode && cloudAvailable && onSwitchToCloud ? (
+            <div className="list compact-danger-list">
+              <button className="list-row" onClick={onSwitchToCloud}>
+                <span className="icon">☁</span>
+                <span className="row-body"><b>Switch to Cloud Mode</b><small>Sign in to sync data across devices. Your local data will remain on this browser.</small></span>
+              </button>
+            </div>
+          ) : null}
           <div className="list compact-danger-list">
             <button className="list-row danger-row" onClick={onReset}>
               <span className="icon red">!</span>
