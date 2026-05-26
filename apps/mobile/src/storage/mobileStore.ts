@@ -121,3 +121,23 @@ export async function importLedgerBackup() {
   const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
   return normalizeData(JSON.parse(raw) as LedgerData);
 }
+
+const MODE_PREFERENCE_KEY = 'auctus_mode_preference';
+
+export async function getModePreference(): Promise<'local' | 'cloud' | null> {
+  try {
+    const val = await AsyncStorage.getItem(MODE_PREFERENCE_KEY);
+    if (val === 'local' || val === 'cloud') return val;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setModePreference(mode: 'local' | 'cloud') {
+  await AsyncStorage.setItem(MODE_PREFERENCE_KEY, mode);
+}
+
+export async function clearModePreference() {
+  await AsyncStorage.removeItem(MODE_PREFERENCE_KEY);
+}

@@ -10,19 +10,20 @@ import type { Contact, CreditAllocation, EntryMode, LedgerData, RecurringTemplat
 import { AccountsScreen } from './src/screens/AccountsScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { ModeSelectorScreen } from './src/screens/ModeSelectorScreen';
 import { PurchasesScreen } from './src/screens/PurchasesScreen';
 import { ManualJournalModal, ReportsScreen } from './src/screens/ReportsScreen';
 import { SalesScreen } from './src/screens/SalesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { WorkspaceSelectorScreen } from './src/screens/WorkspaceSelectorScreen';
 import { disableLock, enableLock, loadLockEnabled, tryBiometricUnlock, verifyPin } from './src/storage/secureLock';
-import { exportLedgerBackup, importLedgerBackup, loadLedgerData, resetLedgerData, saveLedgerData } from './src/storage/mobileStore';
+import { clearModePreference, exportLedgerBackup, getModePreference, importLedgerBackup, loadLedgerData, resetLedgerData, saveLedgerData, setModePreference } from './src/storage/mobileStore';
 import type { BusinessSummary } from './src/api/cloudApi';
 import { getAccessToken, getSelectedBusinessId, listBusinesses, loadLedger, saveLedger, setSelectedBusinessId, signOut } from './src/api/cloudApi';
 import { isCloudConfigured } from './src/api/cloudConfig';
 
 type Tab = 'home' | 'sales' | 'purchases' | 'accounts' | 'reports' | 'settings';
-type AuthPhase = 'checking' | 'login' | 'workspace' | 'app';
+type AuthPhase = 'checking' | 'login' | 'mode-select' | 'workspace' | 'app';
 type SyncState = 'idle' | 'syncing' | 'error';
 
 function formatReceiptNumber(data: LedgerData) {
@@ -31,6 +32,7 @@ function formatReceiptNumber(data: LedgerData) {
 
 export default function App() {
   const [authPhase, setAuthPhase] = useState<AuthPhase>('checking');
+  const [appMode, setAppMode] = useState<'local' | 'cloud'>('local');
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessSummary | null>(null);
   const [data, setData] = useState<LedgerData | null>(null);
@@ -62,7 +64,19 @@ export default function App() {
     async function init() {
       if (!isCloudConfigured()) {
         setData(await loadLedgerData());
+        setAppMode('local');
         setAuthPhase('app');
+        return;
+      }
+      const modePref = await getModePreference();
+      if (modePref === 'local') {
+        setData(await loadLedgerData());
+        setAppMode('local');
+        setAuthPhase('app');
+        return;
+      }
+      if (!modePref) {
+        setAuthPhase('mode-select');
         return;
       }
       const token = await getAccessToken();
@@ -101,6 +115,7 @@ export default function App() {
       skipNextCloudSave.current = true;
       setData(ledger);
       setSyncState('idle');
+      setAppMode('cloud');
       setAuthPhase('app');
     } catch (error) {
       setSyncState('error');
@@ -116,6 +131,19 @@ export default function App() {
     setData(null);
     setSyncError('');
     setSyncState('idle');
+    setAuthPhase('login');
+  }
+
+  async function handleChooseLocal() {
+    await setModePreference('local');
+    setData(await loadLedgerData());
+    setAppMode('local');
+    setAuthPhase('app');
+  }
+
+  async function handleChooseCloud() {
+    await setModePreference('cloud');
+    setAppMode('cloud');
     setAuthPhase('login');
   }
 
@@ -223,6 +251,10 @@ export default function App() {
 
   if (authPhase === 'checking') {
     return <SafeAreaView style={styles.loading}><Text>Loading Auctus...</Text></SafeAreaView>;
+  }
+
+  if (authPhase === 'mode-select') {
+    return <ModeSelectorScreen onChooseLocal={handleChooseLocal} onChooseCloud={handleChooseCloud} />;
   }
 
   if (authPhase === 'login') {
@@ -613,10 +645,12 @@ export default function App() {
             onBackup={backup}
             onRestore={restore}
             onReset={async () => setData(await resetLedgerData())}
-            onSignOut={isCloudConfigured() ? handleSignOut : undefined}
-            onSwitchWorkspace={isCloudConfigured() ? () => setAuthPhase('workspace') : undefined}
+            onSignOut={appMode === 'cloud' ? handleSignOut : undefined}
+            onSwitchWorkspace={appMode === 'cloud' ? () => setAuthPhase('workspace') : undefined}
+            cloudAvailable={isCloudConfigured()}
+            onSwitchToCloud={appMode === 'local' && isCloudConfigured() ? async () => { await clearModePreference(); setData(null); setAppMode('cloud'); setAuthPhase('mode-select'); } : undefined}
             cloudWorkspace={selectedBusiness ? `${selectedBusiness.name} · ${selectedBusiness.role}` : undefined}
-            syncState={isCloudConfigured() ? syncState : undefined}
+            syncState={appMode === 'cloud' ? syncState : undefined}
             syncError={syncError || undefined}
           />
         )}

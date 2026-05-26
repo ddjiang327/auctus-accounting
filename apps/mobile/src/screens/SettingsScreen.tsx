@@ -19,6 +19,8 @@ export function SettingsScreen({
   onReset,
   onSignOut,
   onSwitchWorkspace,
+  cloudAvailable,
+  onSwitchToCloud,
   cloudWorkspace,
   syncState,
   syncError,
@@ -34,6 +36,8 @@ export function SettingsScreen({
   onReset: () => void;
   onSignOut?: () => void;
   onSwitchWorkspace?: () => void;
+  cloudAvailable?: boolean;
+  onSwitchToCloud?: () => void;
   cloudWorkspace?: string;
   syncState?: 'idle' | 'syncing' | 'error';
   syncError?: string;
@@ -96,6 +100,7 @@ export function SettingsScreen({
       {lockEnabled ? <ListRow title="Lock Now" icon="↩" color={colors.orange} onPress={onLockNow} /> : null}
       {onSwitchWorkspace ? <ListRow title="Switch Workspace" subtitle="Choose another cloud business" icon="⇄" color={colors.blue} onPress={onSwitchWorkspace} /> : null}
       {onSignOut ? <ListRow title="Sign Out" subtitle="Return to login screen" icon="→" color={colors.red} onPress={onSignOut} /> : null}
+      {!onSignOut && cloudAvailable && onSwitchToCloud ? <ListRow title="Switch to Cloud Mode" subtitle="Sign in and sync across devices" icon="☁" color={colors.blue} onPress={onSwitchToCloud} /> : null}
       <SectionTitle>Data</SectionTitle>
       <ListRow title="Back Up to File" subtitle="Share a JSON backup" icon="↓" color={colors.blue} onPress={onBackup} />
       <ListRow title="Restore from File" subtitle="Import a JSON backup" icon="↑" color={colors.orange} onPress={onRestore} />
