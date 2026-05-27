@@ -106,4 +106,4 @@ export {
   inventoryValuation,
 } from './inventory.js';
 
-export { allPayrollJournalEntries, calculatePayg, calculatePaySlip, payRunJournalEntries } from './payroll.js';
+export { allPayrollJournalEntries, allRemittanceJournalEntries, calculatePayg, calculatePaySlip, computeLeaveBalances, outstandingLiabilities, payRunJournalEntries, periodicLeaveAccrual, remittanceJournalEntry } from './payroll.js';

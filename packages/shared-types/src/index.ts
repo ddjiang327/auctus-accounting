@@ -238,6 +238,17 @@ export interface InventoryMovement {
 }
 
 
+export type RemittanceType = 'payg' | 'super';
+
+export interface Remittance {
+  id: string;
+  date: string;
+  type: RemittanceType;
+  amount: number;
+  payAccountId?: string;
+  memo?: string;
+}
+
 export type PayFrequency = 'weekly' | 'fortnightly' | 'monthly';
 export type PayType = 'salary' | 'hourly';
 export type PayRunStatus = 'draft' | 'finalised';
@@ -321,4 +332,5 @@ export interface LedgerData {
   inventoryMovements: InventoryMovement[];
   employees: Employee[];
   payRuns: PayRun[];
+  remittances: Remittance[];
 }

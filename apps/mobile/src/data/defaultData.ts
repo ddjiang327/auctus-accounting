@@ -154,4 +154,5 @@ export const DEFAULT_DATA: LedgerData = {
   inventoryMovements: [],
   employees: [],
   payRuns: [],
+  remittances: [],
 };

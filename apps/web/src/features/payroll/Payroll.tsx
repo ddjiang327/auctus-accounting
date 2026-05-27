@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { calculatePaySlip, fmtMoney, todayStr, uid } from '../../domain/accounting';
+import { calculatePaySlip, computeLeaveBalances, fmtMoney, outstandingLiabilities, todayStr, uid } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
-import type { Employee, LedgerData, PayFrequency, PayRun, PaySlip, PayType } from '../../domain/models';
+import type { Employee, LedgerData, PayFrequency, PayRun, PaySlip, PayType, Remittance, RemittanceType } from '../../domain/models';
 
 interface PayrollProps {
   data: LedgerData;
@@ -9,7 +9,7 @@ interface PayrollProps {
   canWrite?: boolean;
 }
 
-type Tab = 'employees' | 'payruns';
+type Tab = 'employees' | 'payruns' | 'remittances';
 
 const FREQ_LABELS: Record<PayFrequency, string> = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' };
 
@@ -25,6 +25,12 @@ function defaultPeriod(): { start: string; end: string; payDate: string } {
   return { start: start.toISOString().slice(0, 10), end, payDate: end };
 }
 
+function hoursToDisplay(hours: number): string {
+  const days = Math.floor(hours / 7.6);
+  const rem = Math.round((hours - days * 7.6) * 10) / 10;
+  return `${hours.toFixed(1)} hrs${days > 0 ? ` (${days}d${rem > 0 ? ` ${rem}h` : ''})` : ''}`;
+}
+
 export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   const [tab, setTab] = useState<Tab>('employees');
   const [empModal, setEmpModal] = useState(false);
@@ -34,10 +40,16 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   const [runModal, setRunModal] = useState(false);
   const [runPeriod, setRunPeriod] = useState(defaultPeriod());
   const [runAccountId, setRunAccountId] = useState('');
-  const [runSlips, setRunSlips] = useState<Record<string, string>>({}); // employeeId -> gross string
+  const [runSlips, setRunSlips] = useState<Record<string, string>>({});
+
+  const [remModal, setRemModal] = useState(false);
+  const [remForm, setRemForm] = useState<Omit<Remittance, 'id'>>({ date: todayStr(), type: 'payg', amount: 0, payAccountId: '', memo: '' });
 
   const activeEmployees = useMemo(() => (data.employees || []).filter((e) => !e.archivedAt), [data]);
   const payRuns = useMemo(() => [...(data.payRuns || [])].sort((a, b) => b.payDate.localeCompare(a.payDate)), [data]);
+  const remittances = useMemo(() => [...(data.remittances || [])].sort((a, b) => b.date.localeCompare(a.date)), [data]);
+  const leaveBalances = useMemo(() => computeLeaveBalances(data), [data]);
+  const outstanding = useMemo(() => outstandingLiabilities(data), [data]);
 
   const totalPayroll = useMemo(
     () => payRuns.filter((r) => r.status === 'finalised').reduce((s, r) => s + r.paySlips.reduce((ss, p) => ss + p.gross, 0), 0),
@@ -121,11 +133,31 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     });
   }
 
+  function openRemittance(type: RemittanceType) {
+    setRemForm({
+      date: todayStr(),
+      type,
+      amount: type === 'payg' ? outstanding.payg : outstanding.super,
+      payAccountId: data.accounts[0]?.id || '',
+      memo: '',
+    });
+    setRemModal(true);
+  }
+
+  function saveRemittance() {
+    if (!remForm.amount || remForm.amount <= 0) return;
+    const rem: Remittance = { ...remForm, id: uid() };
+    onDataChange({ ...data, remittances: [...(data.remittances || []), rem] });
+    setRemModal(false);
+  }
+
   const preview = runModal ? previewSlips() : [];
   const previewTotalGross = preview.reduce((s, p) => s + p.gross, 0);
   const previewTotalPayg = preview.reduce((s, p) => s + p.paygWithheld, 0);
   const previewTotalSuper = preview.reduce((s, p) => s + p.superAmount, 0);
   const previewTotalNet = preview.reduce((s, p) => s + p.netPay, 0);
+
+  const hasOutstanding = outstanding.payg > 0 || outstanding.super > 0;
 
   return (
     <div className="inv-root">
@@ -142,12 +174,18 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
           <span className="inv-stat-label">Total Wages Paid</span>
           <span className="inv-stat-value">{fmtMoney(totalPayroll)}</span>
         </div>
+        {hasOutstanding && (
+          <div className="inv-stat inv-stat-alert">
+            <span className="inv-stat-label">Outstanding Liabilities</span>
+            <span className="inv-stat-value">{fmtMoney(outstanding.payg + outstanding.super)}</span>
+          </div>
+        )}
       </div>
 
       <div className="inv-tabs">
-        {(['employees', 'payruns'] as Tab[]).map((t) => (
+        {(['employees', 'payruns', 'remittances'] as Tab[]).map((t) => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'employees' ? 'Employees' : 'Pay Runs'}
+            {t === 'employees' ? 'Employees' : t === 'payruns' ? 'Pay Runs' : 'Remittances'}
           </button>
         ))}
         {canWrite && tab === 'employees' && (
@@ -161,30 +199,34 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
       {tab === 'employees' && (
         <table className="ledger-table">
           <thead>
-            <tr><th>Name</th><th>Pay Type</th><th>Pay Rate</th><th>Frequency</th><th>Tax-Free Threshold</th><th>Super Fund</th><th></th></tr>
+            <tr><th>Name</th><th>Pay Type</th><th>Pay Rate</th><th>Frequency</th><th>Tax-Free</th><th className="num">Annual Leave</th><th className="num">Sick Leave</th><th></th></tr>
           </thead>
           <tbody>
             {activeEmployees.length === 0 && (
-              <tr><td colSpan={7} className="empty-row">No employees yet. Click "+ Add Employee" to get started.</td></tr>
+              <tr><td colSpan={8} className="empty-row">No employees yet. Click "+ Add Employee" to get started.</td></tr>
             )}
-            {activeEmployees.map((e) => (
-              <tr key={e.id}>
-                <td>{e.name}</td>
-                <td className="muted">{e.payType === 'salary' ? 'Salary' : 'Hourly'}</td>
-                <td className="num">{fmtMoney(e.payRate)}{e.payType === 'hourly' ? '/hr' : '/yr'}</td>
-                <td className="muted">{FREQ_LABELS[e.payFrequency]}</td>
-                <td className="muted">{e.taxFreeThreshold ? 'Yes' : 'No'}</td>
-                <td className="muted">{e.superFundName || '—'}</td>
-                <td style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  {canWrite && (
-                    <>
-                      <button className="btn-link" onClick={() => openEditEmployee(e)}>Edit</button>
-                      <button className="btn-link text-danger" onClick={() => archiveEmployee(e.id)}>Archive</button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {activeEmployees.map((e) => {
+              const bal = leaveBalances[e.id];
+              return (
+                <tr key={e.id}>
+                  <td>{e.name}</td>
+                  <td className="muted">{e.payType === 'salary' ? 'Salary' : 'Hourly'}</td>
+                  <td className="num">{fmtMoney(e.payRate)}{e.payType === 'hourly' ? '/hr' : '/yr'}</td>
+                  <td className="muted">{FREQ_LABELS[e.payFrequency]}</td>
+                  <td className="muted">{e.taxFreeThreshold ? 'Yes' : 'No'}</td>
+                  <td className="num muted">{bal ? hoursToDisplay(bal.annualLeaveHours) : '—'}</td>
+                  <td className="num muted">{bal ? hoursToDisplay(bal.sickLeaveHours) : '—'}</td>
+                  <td style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    {canWrite && (
+                      <>
+                        <button className="btn-link" onClick={() => openEditEmployee(e)}>Edit</button>
+                        <button className="btn-link text-danger" onClick={() => archiveEmployee(e.id)}>Archive</button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -222,6 +264,49 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
             })}
           </tbody>
         </table>
+      )}
+
+      {tab === 'remittances' && (
+        <>
+          <div className="remittance-summary">
+            <div className="remittance-card">
+              <div className="remittance-card-label">PAYG Withholding Payable</div>
+              <div className={`remittance-card-amount ${outstanding.payg > 0 ? 'outstanding' : 'clear'}`}>{fmtMoney(outstanding.payg)}</div>
+              {canWrite && outstanding.payg > 0 && (
+                <button className="btn-primary remittance-btn" onClick={() => openRemittance('payg')}>Record Remittance</button>
+              )}
+            </div>
+            <div className="remittance-card">
+              <div className="remittance-card-label">Superannuation Payable</div>
+              <div className={`remittance-card-amount ${outstanding.super > 0 ? 'outstanding' : 'clear'}`}>{fmtMoney(outstanding.super)}</div>
+              {canWrite && outstanding.super > 0 && (
+                <button className="btn-primary remittance-btn" onClick={() => openRemittance('super')}>Record Remittance</button>
+              )}
+            </div>
+          </div>
+          <table className="ledger-table" style={{ marginTop: 16 }}>
+            <thead>
+              <tr><th>Date</th><th>Type</th><th className="num">Amount</th><th>Account</th><th>Memo</th></tr>
+            </thead>
+            <tbody>
+              {remittances.length === 0 && (
+                <tr><td colSpan={5} className="empty-row">No remittances recorded yet.</td></tr>
+              )}
+              {remittances.map((r) => {
+                const account = data.accounts.find((a) => a.id === r.payAccountId);
+                return (
+                  <tr key={r.id}>
+                    <td>{r.date}</td>
+                    <td><span className={`badge badge-${r.type === 'payg' ? 'sale' : 'purchase'}`}>{r.type === 'payg' ? 'PAYG' : 'Super'}</span></td>
+                    <td className="num">{fmtMoney(r.amount)}</td>
+                    <td className="muted">{account ? `${account.icon || ''} ${account.name}` : '—'}</td>
+                    <td className="muted">{r.memo || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
       )}
 
       {empModal && (
@@ -305,6 +390,36 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
             <button onClick={() => setRunModal(false)}>Cancel</button>
             <button onClick={() => savePayRun(false)} disabled={preview.length === 0}>Save as Draft</button>
             <button className="btn-primary" onClick={() => savePayRun(true)} disabled={preview.length === 0}>Finalise & Post</button>
+          </div>
+        </Modal>
+      )}
+
+      {remModal && (
+        <Modal title="Record Remittance" open={remModal} onClose={() => setRemModal(false)}>
+          <div className="form-grid">
+            <label>Type
+              <select value={remForm.type} onChange={(e) => setRemForm({ ...remForm, type: e.target.value as RemittanceType })}>
+                <option value="payg">PAYG Withholding (to ATO)</option>
+                <option value="super">Superannuation (to fund)</option>
+              </select>
+            </label>
+            <label>Date<input type="date" value={remForm.date} onChange={(e) => setRemForm({ ...remForm, date: e.target.value })} /></label>
+            <label>Amount<input type="number" step="0.01" min="0" value={remForm.amount} onChange={(e) => setRemForm({ ...remForm, amount: parseFloat(e.target.value) || 0 })} /></label>
+            <label>Pay From Account
+              <select value={remForm.payAccountId || ''} onChange={(e) => setRemForm({ ...remForm, payAccountId: e.target.value })}>
+                {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
+              </select>
+            </label>
+            <label>Memo<input value={remForm.memo || ''} onChange={(e) => setRemForm({ ...remForm, memo: e.target.value })} placeholder="Optional" /></label>
+          </div>
+          <p className="form-hint">
+            {remForm.type === 'payg'
+              ? `Outstanding PAYG payable: ${fmtMoney(outstanding.payg)}`
+              : `Outstanding super payable: ${fmtMoney(outstanding.super)}`}
+          </p>
+          <div className="modal-actions">
+            <button onClick={() => setRemModal(false)}>Cancel</button>
+            <button className="btn-primary" onClick={saveRemittance} disabled={!remForm.amount || remForm.amount <= 0}>Save</button>
           </div>
         </Modal>
       )}

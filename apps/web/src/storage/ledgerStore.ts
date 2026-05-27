@@ -37,6 +37,7 @@ export function normalizeData(raw: Partial<LedgerData> | null | undefined): Ledg
     inventoryMovements: raw.inventoryMovements || [],
     employees: raw.employees || [],
     payRuns: raw.payRuns || [],
+    remittances: raw.remittances || [],
   };
   data.accounts = data.accounts.map((account) => {
     if (account.chartAccountId) return account;

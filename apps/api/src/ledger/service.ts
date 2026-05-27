@@ -329,6 +329,7 @@ const emptyLedgerData = (
   inventoryMovements: [],
   employees: [],
   payRuns: [],
+  remittances: [],
 });
 
 const mapCategory = (category: CategoryRow): Category => ({
