@@ -330,6 +330,7 @@ const emptyLedgerData = (
   employees: [],
   payRuns: [],
   remittances: [],
+  stpSubmissions: [],
 });
 
 const mapCategory = (category: CategoryRow): Category => ({

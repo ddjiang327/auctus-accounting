@@ -238,6 +238,17 @@ export interface InventoryMovement {
 }
 
 
+export type STPStatus = 'submitted' | 'accepted' | 'rejected';
+
+export interface STPSubmission {
+  id: string;
+  payRunId: string;
+  submittedAt: string;
+  status: STPStatus;
+  referenceNumber?: string;
+  memo?: string;
+}
+
 export type RemittanceType = 'payg' | 'super';
 
 export interface Remittance {
@@ -333,4 +344,5 @@ export interface LedgerData {
   employees: Employee[];
   payRuns: PayRun[];
   remittances: Remittance[];
+  stpSubmissions: STPSubmission[];
 }

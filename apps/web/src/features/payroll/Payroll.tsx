@@ -1,7 +1,29 @@
 import { useMemo, useState } from 'react';
-import { calculatePaySlip, computeLeaveBalances, fmtMoney, outstandingLiabilities, todayStr, uid } from '../../domain/accounting';
+import {
+  calculatePaySlip,
+  computeLeaveBalances,
+  currentFinancialYear,
+  fmtMoney,
+  generatePaymentSummaries,
+  generateSTPCSV,
+  markAllSubmitted,
+  outstandingLiabilities,
+  pendingSTPPayRuns,
+  todayStr,
+  uid,
+} from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
-import type { Employee, LedgerData, PayFrequency, PayRun, PaySlip, PayType, Remittance, RemittanceType } from '../../domain/models';
+import type {
+  Employee,
+  LedgerData,
+  PayFrequency,
+  PayRun,
+  PaySlip,
+  PayType,
+  Remittance,
+  RemittanceType,
+  STPSubmission,
+} from '../../domain/models';
 
 interface PayrollProps {
   data: LedgerData;
@@ -9,7 +31,7 @@ interface PayrollProps {
   canWrite?: boolean;
 }
 
-type Tab = 'employees' | 'payruns' | 'remittances';
+type Tab = 'employees' | 'payruns' | 'remittances' | 'stp';
 
 const FREQ_LABELS: Record<PayFrequency, string> = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' };
 
@@ -31,6 +53,16 @@ function hoursToDisplay(hours: number): string {
   return `${hours.toFixed(1)} hrs${days > 0 ? ` (${days}d${rem > 0 ? ` ${rem}h` : ''})` : ''}`;
 }
 
+function downloadCSV(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   const [tab, setTab] = useState<Tab>('employees');
   const [empModal, setEmpModal] = useState(false);
@@ -45,11 +77,22 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   const [remModal, setRemModal] = useState(false);
   const [remForm, setRemForm] = useState<Omit<Remittance, 'id'>>({ date: todayStr(), type: 'payg', amount: 0, payAccountId: '', memo: '' });
 
+  const [stpModal, setStpModal] = useState(false);
+  const [stpRun, setStpRun] = useState<PayRun | null>(null);
+  const [stpRef, setStpRef] = useState('');
+
+  const fy = useMemo(() => currentFinancialYear(), []);
   const activeEmployees = useMemo(() => (data.employees || []).filter((e) => !e.archivedAt), [data]);
   const payRuns = useMemo(() => [...(data.payRuns || [])].sort((a, b) => b.payDate.localeCompare(a.payDate)), [data]);
   const remittances = useMemo(() => [...(data.remittances || [])].sort((a, b) => b.date.localeCompare(a.date)), [data]);
   const leaveBalances = useMemo(() => computeLeaveBalances(data), [data]);
   const outstanding = useMemo(() => outstandingLiabilities(data), [data]);
+  const stpPending = useMemo(() => pendingSTPPayRuns(data).sort((a, b) => b.payDate.localeCompare(a.payDate)), [data]);
+  const stpSubmitted = useMemo(
+    () => (data.stpSubmissions || []).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
+    [data],
+  );
+  const paymentSummaries = useMemo(() => generatePaymentSummaries(data, fy.start, fy.end), [data, fy]);
 
   const totalPayroll = useMemo(
     () => payRuns.filter((r) => r.status === 'finalised').reduce((s, r) => s + r.paySlips.reduce((ss, p) => ss + p.gross, 0), 0),
@@ -134,13 +177,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   }
 
   function openRemittance(type: RemittanceType) {
-    setRemForm({
-      date: todayStr(),
-      type,
-      amount: type === 'payg' ? outstanding.payg : outstanding.super,
-      payAccountId: data.accounts[0]?.id || '',
-      memo: '',
-    });
+    setRemForm({ date: todayStr(), type, amount: type === 'payg' ? outstanding.payg : outstanding.super, payAccountId: data.accounts[0]?.id || '', memo: '' });
     setRemModal(true);
   }
 
@@ -149,6 +186,39 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     const rem: Remittance = { ...remForm, id: uid() };
     onDataChange({ ...data, remittances: [...(data.remittances || []), rem] });
     setRemModal(false);
+  }
+
+  function openMarkSubmitted(run: PayRun) {
+    setStpRun(run);
+    setStpRef('');
+    setStpModal(true);
+  }
+
+  function saveStpSubmission() {
+    if (!stpRun) return;
+    const sub: STPSubmission = {
+      id: uid(),
+      payRunId: stpRun.id,
+      submittedAt: new Date().toISOString(),
+      status: 'submitted',
+      referenceNumber: stpRef.trim() || undefined,
+    };
+    onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), sub] });
+    setStpModal(false);
+  }
+
+  function handleEOFY() {
+    const newSubs = markAllSubmitted(data, fy.start, fy.end);
+    if (newSubs.length === 0) return;
+    onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), ...newSubs] });
+  }
+
+  function handleExportCSV() {
+    const fyRuns = (data.payRuns || []).filter(
+      (r) => r.status === 'finalised' && !r.voidedAt && r.payDate >= fy.start && r.payDate <= fy.end,
+    );
+    const csv = generateSTPCSV(fyRuns, data);
+    downloadCSV(`stp-${fy.label.replace(/\s/g, '-')}.csv`, csv);
   }
 
   const preview = runModal ? previewSlips() : [];
@@ -174,6 +244,12 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
           <span className="inv-stat-label">Total Wages Paid</span>
           <span className="inv-stat-value">{fmtMoney(totalPayroll)}</span>
         </div>
+        {stpPending.length > 0 && (
+          <div className="inv-stat inv-stat-alert">
+            <span className="inv-stat-label">STP Pending</span>
+            <span className="inv-stat-value">{stpPending.length}</span>
+          </div>
+        )}
         {hasOutstanding && (
           <div className="inv-stat inv-stat-alert">
             <span className="inv-stat-label">Outstanding Liabilities</span>
@@ -183,9 +259,9 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
       </div>
 
       <div className="inv-tabs">
-        {(['employees', 'payruns', 'remittances'] as Tab[]).map((t) => (
+        {(['employees', 'payruns', 'remittances', 'stp'] as Tab[]).map((t) => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'employees' ? 'Employees' : t === 'payruns' ? 'Pay Runs' : 'Remittances'}
+            {t === 'employees' ? 'Employees' : t === 'payruns' ? 'Pay Runs' : t === 'remittances' ? 'Remittances' : 'STP'}
           </button>
         ))}
         {canWrite && tab === 'employees' && (
@@ -309,6 +385,101 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
         </>
       )}
 
+      {tab === 'stp' && (
+        <>
+          <div className="stp-header">
+            <div className="stp-fy-badge">{fy.label}</div>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              {canWrite && stpPending.filter((r) => r.payDate >= fy.start && r.payDate <= fy.end).length > 0 && (
+                <button className="top-add" onClick={handleEOFY}>Finalise All ({stpPending.filter((r) => r.payDate >= fy.start && r.payDate <= fy.end).length})</button>
+              )}
+              <button className="top-add" onClick={handleExportCSV}>Export CSV</button>
+            </div>
+          </div>
+
+          {stpPending.length > 0 && (
+            <>
+              <div className="low-stock-banner" style={{ marginBottom: 8 }}>
+                ⚠ {stpPending.length} pay run{stpPending.length > 1 ? 's' : ''} not yet reported to ATO
+              </div>
+              <table className="ledger-table">
+                <thead>
+                  <tr><th>Pay Date</th><th>Period</th><th className="num">Employees</th><th className="num">Gross</th><th className="num">PAYG</th><th className="num">Super</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {stpPending.map((run) => {
+                    const gross = run.paySlips.reduce((s, p) => s + p.gross, 0);
+                    const payg = run.paySlips.reduce((s, p) => s + p.paygWithheld, 0);
+                    const superAmt = run.paySlips.reduce((s, p) => s + p.superAmount, 0);
+                    return (
+                      <tr key={run.id}>
+                        <td>{run.payDate}</td>
+                        <td className="muted">{run.periodStart} → {run.periodEnd}</td>
+                        <td className="num">{run.paySlips.length}</td>
+                        <td className="num">{fmtMoney(gross)}</td>
+                        <td className="num">{fmtMoney(payg)}</td>
+                        <td className="num">{fmtMoney(superAmt)}</td>
+                        <td>
+                          {canWrite && (
+                            <button className="btn-link" onClick={() => openMarkSubmitted(run)}>Mark Submitted</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          <div className="stp-section-title">Payment Summaries — {fy.label}</div>
+          <table className="ledger-table">
+            <thead>
+              <tr><th>Employee</th><th>TFN</th><th className="num">YTD Gross</th><th className="num">YTD PAYG</th><th className="num">YTD Super</th><th className="num">Pay Runs</th></tr>
+            </thead>
+            <tbody>
+              {paymentSummaries.length === 0 && (
+                <tr><td colSpan={6} className="empty-row">No finalised pay runs in {fy.label} yet.</td></tr>
+              )}
+              {paymentSummaries.map((s) => (
+                <tr key={s.employee.id}>
+                  <td>{s.employee.name}</td>
+                  <td className="muted">{s.employee.tfn || '—'}</td>
+                  <td className="num">{fmtMoney(s.ytdGross)}</td>
+                  <td className="num">{fmtMoney(s.ytdPayg)}</td>
+                  <td className="num">{fmtMoney(s.ytdSuper)}</td>
+                  <td className="num muted">{s.payRunCount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {stpSubmitted.length > 0 && (
+            <>
+              <div className="stp-section-title">Submission History</div>
+              <table className="ledger-table">
+                <thead>
+                  <tr><th>Submitted</th><th>Pay Date</th><th>Reference</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {stpSubmitted.map((sub) => {
+                    const run = (data.payRuns || []).find((r) => r.id === sub.payRunId);
+                    return (
+                      <tr key={sub.id}>
+                        <td>{sub.submittedAt.slice(0, 10)}</td>
+                        <td className="muted">{run?.payDate || '—'}</td>
+                        <td className="muted">{sub.referenceNumber || '—'}</td>
+                        <td><span className="badge badge-purchase">{sub.status}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </>
+      )}
+
       {empModal && (
         <Modal title={editingEmp ? 'Edit Employee' : 'Add Employee'} open={empModal} onClose={() => setEmpModal(false)}>
           <div className="form-grid">
@@ -413,13 +584,28 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
             <label>Memo<input value={remForm.memo || ''} onChange={(e) => setRemForm({ ...remForm, memo: e.target.value })} placeholder="Optional" /></label>
           </div>
           <p className="form-hint">
-            {remForm.type === 'payg'
-              ? `Outstanding PAYG payable: ${fmtMoney(outstanding.payg)}`
-              : `Outstanding super payable: ${fmtMoney(outstanding.super)}`}
+            {remForm.type === 'payg' ? `Outstanding PAYG payable: ${fmtMoney(outstanding.payg)}` : `Outstanding super payable: ${fmtMoney(outstanding.super)}`}
           </p>
           <div className="modal-actions">
             <button onClick={() => setRemModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={saveRemittance} disabled={!remForm.amount || remForm.amount <= 0}>Save</button>
+          </div>
+        </Modal>
+      )}
+
+      {stpModal && stpRun && (
+        <Modal title="Mark Pay Run Submitted" open={stpModal} onClose={() => setStpModal(false)}>
+          <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 16 }}>
+            Confirm you have submitted this pay event to the ATO via your STP gateway or the ATO's online tool.
+          </p>
+          <div className="form-grid">
+            <label>Pay Date<input value={stpRun.payDate} disabled /></label>
+            <label>Period<input value={`${stpRun.periodStart} → ${stpRun.periodEnd}`} disabled /></label>
+            <label>Reference Number (optional)<input value={stpRef} onChange={(e) => setStpRef(e.target.value)} placeholder="ATO or gateway reference" /></label>
+          </div>
+          <div className="modal-actions">
+            <button onClick={() => setStpModal(false)}>Cancel</button>
+            <button className="btn-primary" onClick={saveStpSubmission}>Confirm Submitted</button>
           </div>
         </Modal>
       )}

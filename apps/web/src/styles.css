@@ -2112,3 +2112,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .remittance-card-amount.outstanding { color: #b45309; }
 .remittance-card-amount.clear { color: #16a34a; }
 .remittance-btn { align-self: flex-start; font-size: 13px; padding: 6px 14px; }
+
+/* Payroll Phase 3 — STP */
+.stp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.stp-fy-badge { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.stp-section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 20px 0 8px; }

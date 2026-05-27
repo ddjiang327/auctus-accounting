@@ -51,6 +51,7 @@ export function normalizeData(raw: Partial<LedgerData> | null | undefined): Ledg
     employees: raw.employees || [],
     payRuns: raw.payRuns || [],
     remittances: raw.remittances || [],
+    stpSubmissions: raw.stpSubmissions || [],
   };
   for (const defaultAccount of DEFAULT_CHART_OF_ACCOUNTS) {
     if (!data.chartOfAccounts.some((account) => account.code === defaultAccount.code)) {

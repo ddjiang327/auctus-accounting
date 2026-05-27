@@ -115,6 +115,7 @@ const parseLedgerImport = (body: unknown): LedgerData => {
     employees: [],
     payRuns: [],
     remittances: [],
+    stpSubmissions: [],
   };
 };
 
