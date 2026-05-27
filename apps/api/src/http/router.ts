@@ -16,6 +16,7 @@ import {
   unignoreBusinessBankFeedItem,
   voidBusinessBankReconciliation,
 } from "../bankReconciliation/routes.js";
+import { parseTransaction } from "../ai/routes.js";
 import { createBusiness, listBusinesses, patchBusinessProfile, patchBusinessSettings } from "../businesses/routes.js";
 import { archiveBusinessContact, createBusinessContact, updateBusinessContact } from "../contacts/routes.js";
 import {
@@ -67,6 +68,11 @@ const routes: Route[] = [
         service: "auctus-api",
       });
     },
+  },
+  {
+    method: "POST",
+    path: "/v1/ai/parse",
+    handler: parseTransaction,
   },
   {
     method: "GET",

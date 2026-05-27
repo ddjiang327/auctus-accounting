@@ -4,6 +4,7 @@ import { Shell, type ViewKey } from './components/Shell';
 import { accountBalance, auditEntry, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
 import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, LedgerData, ManualJournal, Period, Transaction } from './domain/models';
 import { AuctusApiError, auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
+import { AiEntryPanel } from './features/ai/AiEntryPanel';
 import { getCurrentUser } from './api/supabaseClient';
 import { Activity } from './features/activity/Activity';
 import { TransactionModal } from './features/activity/TransactionModal';
@@ -57,6 +58,7 @@ export default function App() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [txDefaults, setTxDefaults] = useState<Partial<Transaction> | null>(null);
   const [txModalOpen, setTxModalOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const [authPhase, setAuthPhase] = useState<AuthPhase>('checking');
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -1008,6 +1010,7 @@ export default function App() {
         view={view}
         onViewChange={setView}
         onAdd={permissions.canWriteAccounting ? openNewTransaction : undefined}
+        onAiEntry={permissions.canWriteAccounting ? () => setAiPanelOpen(true) : undefined}
         mode={mode}
         businessName={selectedBusiness?.name}
         userRole={selectedBusiness?.role}
@@ -1121,6 +1124,23 @@ export default function App() {
       <footer className="dev-watermark">
         Cash accounts: {data.accounts.map((account) => `${account.name} ${accountBalance(data, account.id).toFixed(2)}`).join(' · ')}
       </footer>
+      {aiPanelOpen && (
+        <AiEntryPanel
+          data={data}
+          mode={mode}
+          getToken={async () => {
+            try { return (await (await import('./api/supabaseClient')).supabase.auth.getSession()).data.session?.access_token ?? null; }
+            catch { return null; }
+          }}
+          onParsed={(draft) => {
+            setAiPanelOpen(false);
+            setEditingTx(null);
+            setTxDefaults(draft);
+            setTxModalOpen(true);
+          }}
+          onClose={() => setAiPanelOpen(false)}
+        />
+      )}
       </Shell>
     </AppAlertsProvider>
   );

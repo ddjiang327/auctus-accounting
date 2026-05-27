@@ -5,6 +5,7 @@ export type ApiEnv = {
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string;
   corsOrigin: string;
+  anthropicApiKey: string | undefined;
 };
 
 const requireEnv = (name: string): string => {
@@ -35,4 +36,5 @@ export const loadEnv = (): ApiEnv => ({
   supabaseAnonKey: requireEnv("SUPABASE_ANON_KEY"),
   supabaseServiceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
   corsOrigin: process.env.API_CORS_ORIGIN ?? "http://localhost:5173",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
 });

@@ -9,6 +9,7 @@ interface ShellProps {
   view: ViewKey;
   onViewChange: (view: ViewKey) => void;
   onAdd?: () => void;
+  onAiEntry?: () => void;
   mode?: 'local' | 'cloud';
   businessName?: string;
   userRole?: string;
@@ -34,7 +35,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: 'settings', label: 'Settings', icon: <Settings size={23} /> },
 ];
 
-export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole, syncState, syncError, busyLabel, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
+export function Shell({ view, onViewChange, onAdd, onAiEntry, mode, businessName, userRole, syncState, syncError, busyLabel, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
   const active = navItems.find((item) => item.key === view) || navItems[0];
   return (
     <div className="viewport">
@@ -86,6 +87,11 @@ export function Shell({ view, onViewChange, onAdd, mode, businessName, userRole,
                 Sync error ×
               </button>
             )}
+            {onAiEntry ? (
+              <button className="top-ai" onClick={onAiEntry} disabled={!!busyLabel} title="AI Quick Entry">
+                ✨
+              </button>
+            ) : null}
             {onAdd ? (
               <button className="top-add" onClick={onAdd} disabled={!!busyLabel}>
                 <Plus size={18} />
