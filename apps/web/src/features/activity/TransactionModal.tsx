@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../../components/Modal';
-import { dueDateForTerms, txBalance, txTotal, uid } from '../../domain/accounting';
-import type { Contact, EntryMode, GsmMode, LedgerData, PaymentTerms, Transaction, TransactionType } from '../../domain/models';
+import { computeInventoryItems, dueDateForTerms, txBalance, txTotal, uid } from '../../domain/accounting';
+import type { Contact, EntryMode, GsmMode, InventoryMovement, LedgerData, PaymentTerms, Product, Transaction, TransactionType } from '../../domain/models';
 
 interface TransactionModalProps {
   open: boolean;
@@ -29,6 +29,8 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>('due_on_receipt');
   const [dueDate, setDueDate] = useState('');
   const [paidNow, setPaidNow] = useState('');
+  const [productId, setProductId] = useState('');
+  const [productQty, setProductQty] = useState('1');
 
   const existing = transaction || null;
   const activeCategories = (type === 'income' ? data.categories.income : data.categories.expense).filter((c) => !c.archivedAt);
@@ -69,6 +71,8 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
     setPaymentTerms(nextPaymentTerms);
     setDueDate(tx?.dueDate || defaults?.dueDate || dueDateForTerms(nextDate, nextPaymentTerms));
     setPaidNow('');
+    setProductId(tx?.productId || defaults?.productId || '');
+    setProductQty(String(tx?.productQty || defaults?.productQty || 1));
   }, [data.accounts, data.categories.expense, data.categories.income, data.settings.gstEnabled, defaults, open, transaction]);
 
   useEffect(() => {
@@ -101,9 +105,13 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
     paymentTerms,
     dueDate,
     payments: existing?.payments || [],
-  }), [accountId, accountToId, amount, categoryId, contactId, date, dueDate, entryMode, existing?.id, existing?.payments, gstMode, invoiceNo, note, party, paymentTerms, type]);
+    productId: productId || undefined,
+    productQty: productQty ? (Number(productQty) || 1) : undefined,
+  }), [accountId, accountToId, amount, categoryId, contactId, date, dueDate, entryMode, existing?.id, existing?.payments, gstMode, invoiceNo, note, party, paymentTerms, productId, productQty, type]);
 
-    const total = txTotal(draft, data);
+    const activeProducts = (data.products || []).filter((p) => !p.archivedAt);
+  const selectedProduct = activeProducts.find((p) => p.id === productId);
+  const total = txTotal(draft, data);
   const existingBalance = existing ? txBalance(existing, data) : total;
   const projectedPaid = (existing?.payments || []).reduce((sum, payment) => sum + payment.amount, 0) + (Number(paidNow) || 0);
   const isDocument = entryMode === 'invoice' || entryMode === 'credit_note';
@@ -120,6 +128,7 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
       date,
       note: note.trim(),
     };
+    if (productId) { tx.productId = productId; tx.productQty = Number(productQty) || 1; }
     if (type === 'transfer') {
       tx.accountToId = accountToId;
     } else {
@@ -169,6 +178,25 @@ export function TransactionModal({ open, data, transaction, defaults, onClose, o
         </div>
       ) : null}
       <div className="form-card">
+        {type !== 'transfer' && activeProducts.length > 0 ? (
+          <label>Product <select value={productId} onChange={(e) => {
+            const pid = e.target.value;
+            setProductId(pid);
+            if (pid) {
+              const p = activeProducts.find((x) => x.id === pid);
+              if (p) setAmount(String((Number(productQty) || 1) * (type === 'income' ? p.sellPrice : p.costPrice)));
+            }
+          }}>
+            <option value="">No product</option>
+            {activeProducts.map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
+          </select></label>
+        ) : null}
+        {productId ? (
+          <label>Qty <input type="number" min={0.01} step={0.01} value={productQty} onChange={(e) => {
+            setProductQty(e.target.value);
+            if (selectedProduct) setAmount(String((Number(e.target.value) || 1) * (type === 'income' ? selectedProduct.sellPrice : selectedProduct.costPrice)));
+          }} /></label>
+        ) : null}
         <label>Amount <input type="number" value={amount} min={0} step={0.01} onChange={(event) => setAmount(event.target.value)} /></label>
         {type !== 'transfer' ? (
           <label>Category <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}{cat.archivedAt ? ' (archived)' : ''}</option>)}</select></label>

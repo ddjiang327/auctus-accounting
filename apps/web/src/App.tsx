@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppLock } from './components/AppLock';
 import { Shell, type ViewKey } from './components/Shell';
-import { accountBalance, auditEntry, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
-import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, LedgerData, ManualJournal, Period, Transaction } from './domain/models';
+import { accountBalance, auditEntry, computeInventoryItems, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
+import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, InventoryMovement, LedgerData, ManualJournal, Period, Transaction } from './domain/models';
 import { AuctusApiError, auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
 import { AiEntryPanel } from './features/ai/AiEntryPanel';
 import { getCurrentUser } from './api/supabaseClient';
@@ -395,16 +395,39 @@ export default function App() {
         if (tx.type === 'income') nextSettings.nextCreditNoteNumber = (nextSettings.nextCreditNoteNumber || 1) + 1;
         if (tx.type === 'expense') nextSettings.nextSupplierCreditNumber = (nextSettings.nextSupplierCreditNumber || 1) + 1;
       }
+      const nextTransactions = exists
+        ? current.transactions.map((item) => item.id === tx.id ? tx : item)
+        : [...current.transactions, tx];
+      const nextAuditLog = [
+        ...(current.auditLog || []),
+        auditEntry(exists ? 'update' : 'create', 'transaction', tx.id, `${transactionAuditLabel(tx)} ${documentNumber}`),
+      ];
+      let nextInventoryMovements = current.inventoryMovements || [];
+      if (!exists && tx.productId) {
+        const product = (current.products || []).find((p) => p.id === tx.productId);
+        if (product) {
+          const items = computeInventoryItems(current);
+          const stockItem = items.find((i) => i.productId === tx.productId);
+          const avgCost = stockItem?.avgCost ?? product.costPrice;
+          const movement: InventoryMovement = {
+            id: uid(),
+            productId: tx.productId,
+            date: tx.date,
+            type: tx.type === 'income' ? 'sale' : 'purchase',
+            quantity: tx.productQty || 1,
+            unitCost: tx.type === 'income' ? avgCost : product.costPrice,
+            memo: tx.note || product.name,
+            sourceId: tx.id,
+          };
+          nextInventoryMovements = [...nextInventoryMovements, movement];
+        }
+      }
       return {
         ...current,
         settings: nextSettings,
-        transactions: exists
-          ? current.transactions.map((item) => item.id === tx.id ? tx : item)
-          : [...current.transactions, tx],
-        auditLog: [
-          ...(current.auditLog || []),
-          auditEntry(exists ? 'update' : 'create', 'transaction', tx.id, `${transactionAuditLabel(tx)} ${documentNumber}`),
-        ],
+        transactions: nextTransactions,
+        auditLog: nextAuditLog,
+        inventoryMovements: nextInventoryMovements,
       };
     });
     setTxModalOpen(false);

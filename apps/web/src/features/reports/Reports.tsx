@@ -1,4 +1,4 @@
-import { aggregate, basReport, fmt, fmtMoney, getCategory, isInvoice, periodRange, totalAssets, txBalance } from '../../domain/accounting';
+import { aggregate, basReport, fmt, fmtMoney, getCategory, inventoryValuation, isInvoice, periodRange, totalAssets, txBalance } from '../../domain/accounting';
 import type { LedgerData, Period } from '../../domain/models';
 
 interface ReportsProps {
@@ -17,6 +17,7 @@ export function Reports({ data, period, onPeriodChange }: ReportsProps) {
   const receivable = data.transactions.filter((tx) => isInvoice(tx) && tx.type === 'income').reduce((sum, tx) => sum + txBalance(tx, data), 0);
   const payable = data.transactions.filter((tx) => isInvoice(tx) && tx.type === 'expense').reduce((sum, tx) => sum + txBalance(tx, data), 0);
   const expenseCats = Object.entries(pl.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const valuation = (data.products || []).length > 0 ? inventoryValuation(data) : [];
 
   return (
     <section className="view">
@@ -84,6 +85,21 @@ export function Reports({ data, period, onPeriodChange }: ReportsProps) {
             )) : <p className="muted">No BAS lines for this period</p>}
           </div>
         </div>
+        {valuation.length > 0 ? (
+          <div className="report-card wide-card">
+            <h3>Inventory Valuation</h3>
+            <div className="report-table">
+              {valuation.map((row) => (
+                <ReportRow
+                  key={row.product.id}
+                  label={`${row.product.name}${row.product.sku ? ` · ${row.product.sku}` : ''} — ${row.quantity.toFixed(2)} ${row.product.unitOfMeasure || 'unit'} @ ${fmtMoney(row.avgCost)}`}
+                  value={fmtMoney(row.totalValue)}
+                />
+              ))}
+              <ReportRow label="Total stock value" value={fmtMoney(valuation.reduce((s, r) => s + r.totalValue, 0))} tone="income" />
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

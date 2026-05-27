@@ -80,6 +80,8 @@ export interface Transaction {
   docStatus?: DocStatus;
   voidedAt?: string;
   recurringTemplateId?: string;
+  productId?: string;
+  productQty?: number;
 }
 
 export interface RecurringTemplate {
