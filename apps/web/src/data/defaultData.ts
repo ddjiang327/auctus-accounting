@@ -61,6 +61,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
   { id: 'coa_5010', code: '5010', name: 'Materials Cost', class: 'expense', group: 'Cost of Goods Sold', normalBalance: 'debit' },
   { id: 'coa_5020', code: '5020', name: 'Direct Labor', class: 'expense', group: 'Cost of Goods Sold', normalBalance: 'debit' },
   { id: 'coa_5030', code: '5030', name: 'Freight-in', class: 'expense', group: 'Cost of Goods Sold', normalBalance: 'debit' },
+  { id: 'coa_5040', code: '5040', name: 'Inventory Adjustments', class: 'expense', group: 'Cost of Goods Sold', normalBalance: 'debit' },
   { id: 'coa_6000', code: '6000', name: 'Advertising & Marketing', class: 'expense', group: 'Selling Expenses', normalBalance: 'debit' },
   { id: 'coa_6010', code: '6010', name: 'Sales Commissions', class: 'expense', group: 'Selling Expenses', normalBalance: 'debit' },
   { id: 'coa_6020', code: '6020', name: 'Delivery / Freight-out', class: 'expense', group: 'Selling Expenses', normalBalance: 'debit' },
@@ -145,4 +146,7 @@ export const DEFAULT_DATA: LedgerData = {
   bankFeedItems: [],
   recurringTemplates: [],
   auditLog: [],
+  products: [],
+  inventoryItems: [],
+  inventoryMovements: [],
 };

@@ -1,4 +1,5 @@
 import type { ChartAccount, InvoicePayment, JournalEntry, LedgerData, Transaction } from '@auctus/shared-types';
+import { allInventoryJournalEntries } from './inventory.js';
 import { getAccount, getCategory, gstCollectedAccountId, gstPaidAccountId, openingBalanceEquityId } from './accounts.js';
 import { inRange } from './dates.js';
 import { contactName, isCreditNote, isInvoice } from './documents.js';
@@ -160,6 +161,9 @@ export function allJournalEntries(data: LedgerData): JournalEntry[] {
         if (pe) entries.push(pe);
       }
     }
+  }
+  for (const entry of allInventoryJournalEntries(data)) {
+    entries.push(entry);
   }
   return entries.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }

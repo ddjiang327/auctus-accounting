@@ -2073,3 +2073,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .ai-entry-parse-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ai-entry-parse-btn:not(:disabled):hover { opacity: 0.9; }
+
+
+/* Inventory */
+.inv-root { display: flex; flex-direction: column; gap: 20px; padding: 0; }
+.inv-summary { display: flex; gap: 16px; flex-wrap: wrap; }
+.inv-stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+.inv-stat-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.inv-stat-value { font-size: 22px; font-weight: 700; color: var(--text); }
+.inv-tabs { display: flex; gap: 4px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 0; }
+.inv-tabs .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; margin-bottom: -1px; border-radius: 0; }
+.inv-tabs .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+.badge { display: inline-block; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+.badge-purchase { background: #e8f4fd; color: #2563eb; }
+.badge-sale { background: #fef3e2; color: #b45309; }
+.badge-adjustment { background: #f0fdf4; color: #16a34a; }
+.btn-link { background: none; border: none; color: var(--blue); font-size: 13px; cursor: pointer; padding: 2px 6px; }
+.btn-link:hover { text-decoration: underline; }
+.btn-link.text-danger { color: var(--red, #ef4444); }

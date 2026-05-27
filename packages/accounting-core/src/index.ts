@@ -98,3 +98,10 @@ export type {
 export {
   auditEntry,
 } from './audit.js';
+
+export {
+  allInventoryJournalEntries,
+  computeInventoryItems,
+  inventoryMovementJournalEntry,
+  inventoryValuation,
+} from './inventory.js';

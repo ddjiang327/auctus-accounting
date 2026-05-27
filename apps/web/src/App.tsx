@@ -14,6 +14,7 @@ import { Contacts } from './features/contacts/Contacts';
 import { Documents } from './features/documents/Documents';
 import { Journals } from './features/journals/Journals';
 import { Reports } from './features/reports/Reports';
+import { Inventory } from './features/inventory/Inventory';
 import { Settings } from './features/settings/Settings';
 import { ledgerDataAdapter } from './storage/ledgerDataAdapter';
 import { clearLockState, loadLockState, saveLockState } from './storage/lockStore';
@@ -1074,6 +1075,7 @@ export default function App() {
           canWrite={permissions.canWriteAccounting}
         />
       ) : null}
+      {view === 'inventory' ? <Inventory data={data} onDataChange={updateData} canWrite={permissions.canWriteAccounting} /> : null}
       {view === 'reports' ? <Reports data={data} period={period} onPeriodChange={setPeriod} /> : null}
       {view === 'journals' ? (
         <Journals

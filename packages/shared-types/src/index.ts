@@ -201,6 +201,39 @@ export interface BusinessProfile {
   invoiceFooter?: string;
 }
 
+
+export type InventoryMovementType = 'purchase' | 'sale' | 'adjustment';
+
+export interface Product {
+  id: string;
+  name: string;
+  sku?: string;
+  unitOfMeasure?: string;
+  costPrice: number;
+  sellPrice: number;
+  inventoryChartAccountId?: string;
+  cogsChartAccountId?: string;
+  revenueChartAccountId?: string;
+  archivedAt?: string;
+}
+
+export interface InventoryItem {
+  productId: string;
+  quantity: number;
+  avgCost: number;
+}
+
+export interface InventoryMovement {
+  id: string;
+  productId: string;
+  date: string;
+  type: InventoryMovementType;
+  quantity: number;
+  unitCost: number;
+  memo?: string;
+  sourceId?: string;
+}
+
 export interface LedgerData {
   meta: {
     version: number;
@@ -240,4 +273,7 @@ export interface LedgerData {
   bankFeedItems: BankFeedItem[];
   recurringTemplates: RecurringTemplate[];
   auditLog: AuditLogEntry[];
+  products: Product[];
+  inventoryItems: InventoryItem[];
+  inventoryMovements: InventoryMovement[];
 }
