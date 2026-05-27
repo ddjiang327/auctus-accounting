@@ -26,7 +26,12 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
 
   useEffect(() => {
     textareaRef.current?.focus();
-  }, []);
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   async function handleParse() {
     const trimmed = text.trim();
@@ -55,7 +60,6 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
       e.preventDefault();
       handleParse();
     }
-    if (e.key === 'Escape') onClose();
   }
 
   const typeLabel = draft?.type === 'income' ? 'Income' : draft?.type === 'transfer' ? 'Transfer' : 'Expense';
