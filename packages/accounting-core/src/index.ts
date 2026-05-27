@@ -105,3 +105,5 @@ export {
   inventoryMovementJournalEntry,
   inventoryValuation,
 } from './inventory.js';
+
+export { allPayrollJournalEntries, calculatePayg, calculatePaySlip, payRunJournalEntries } from './payroll.js';

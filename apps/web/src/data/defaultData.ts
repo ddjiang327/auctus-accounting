@@ -34,6 +34,8 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
   { id: 'coa_2200', code: '2200', name: 'Short-term Debt', class: 'liability', group: 'Current Liabilities', normalBalance: 'credit' },
   { id: 'coa_2210', code: '2210', name: 'Current Portion of Long-term Debt', class: 'liability', group: 'Current Liabilities', normalBalance: 'credit' },
   { id: 'coa_2300', code: '2300', name: 'Unearned Revenue', class: 'liability', group: 'Current Liabilities', normalBalance: 'credit' },
+  { id: 'coa_2400', code: '2400', name: 'PAYG Withholding Payable', class: 'liability', group: 'Current Liabilities - Payroll', normalBalance: 'credit' },
+  { id: 'coa_2410', code: '2410', name: 'Superannuation Payable', class: 'liability', group: 'Current Liabilities - Payroll', normalBalance: 'credit' },
   { id: 'coa_2500', code: '2500', name: 'Bank Loans Payable', class: 'liability', group: 'Long-term Liabilities', normalBalance: 'credit' },
   { id: 'coa_2510', code: '2510', name: 'Bonds Payable', class: 'liability', group: 'Long-term Liabilities', normalBalance: 'credit' },
   { id: 'coa_2520', code: '2520', name: 'Mortgage Payable', class: 'liability', group: 'Long-term Liabilities', normalBalance: 'credit' },
@@ -73,6 +75,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
   { id: 'coa_7050', code: '7050', name: 'Depreciation Expense', class: 'expense', group: 'General & Administrative', normalBalance: 'debit' },
   { id: 'coa_7060', code: '7060', name: 'Amortization Expense', class: 'expense', group: 'General & Administrative', normalBalance: 'debit' },
   { id: 'coa_7070', code: '7070', name: 'Bank & Merchant Fees', class: 'expense', group: 'General & Administrative', normalBalance: 'debit' },
+  { id: 'coa_7080', code: '7080', name: 'Superannuation Expense', class: 'expense', group: 'General & Administrative', normalBalance: 'debit' },
   { id: 'coa_8000', code: '8000', name: 'Interest Expense', class: 'expense', group: 'Other Expenses', normalBalance: 'debit' },
   { id: 'coa_8010', code: '8010', name: 'Income Tax Expense', class: 'expense', group: 'Other Expenses', normalBalance: 'debit' },
   { id: 'coa_8020', code: '8020', name: 'Loss on Sale of Assets', class: 'expense', group: 'Other Expenses', normalBalance: 'debit' },
@@ -149,4 +152,6 @@ export const DEFAULT_DATA: LedgerData = {
   products: [],
   inventoryItems: [],
   inventoryMovements: [],
+  employees: [],
+  payRuns: [],
 };

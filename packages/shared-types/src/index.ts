@@ -236,6 +236,46 @@ export interface InventoryMovement {
   sourceId?: string;
 }
 
+
+export type PayFrequency = 'weekly' | 'fortnightly' | 'monthly';
+export type PayType = 'salary' | 'hourly';
+export type PayRunStatus = 'draft' | 'finalised';
+
+export interface Employee {
+  id: string;
+  name: string;
+  payType: PayType;
+  payRate: number;
+  payFrequency: PayFrequency;
+  taxFreeThreshold: boolean;
+  superFundName?: string;
+  tfn?: string;
+  archivedAt?: string;
+}
+
+export interface PaySlip {
+  id: string;
+  employeeId: string;
+  gross: number;
+  paygWithheld: number;
+  superAmount: number;
+  netPay: number;
+  hours?: number;
+}
+
+export interface PayRun {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  payDate: string;
+  payAccountId?: string;
+  status: PayRunStatus;
+  paySlips: PaySlip[];
+  createdAt: string;
+  finalisedAt?: string;
+  voidedAt?: string;
+}
+
 export interface LedgerData {
   meta: {
     version: number;
@@ -278,4 +318,6 @@ export interface LedgerData {
   products: Product[];
   inventoryItems: InventoryItem[];
   inventoryMovements: InventoryMovement[];
+  employees: Employee[];
+  payRuns: PayRun[];
 }

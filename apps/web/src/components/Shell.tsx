@@ -1,9 +1,9 @@
-import { BarChart3, BookOpenText, Home, List, LogOut, Package, Plus, ReceiptText, Settings, ShoppingCart, SwitchCamera, Users, WalletCards } from 'lucide-react';
+import { BarChart3, BookOpenText, Home, List, LogOut, Package, Plus, ReceiptText, Settings, ShoppingCart, SwitchCamera, Users, WalletCards, Wallet2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 type SyncState = 'idle' | 'syncing' | 'error';
 
-export type ViewKey = 'dashboard' | 'activity' | 'sales' | 'purchases' | 'contacts' | 'accounts' | 'inventory' | 'reports' | 'journals' | 'settings';
+export type ViewKey = 'dashboard' | 'activity' | 'sales' | 'purchases' | 'contacts' | 'accounts' | 'inventory' | 'payroll' | 'reports' | 'journals' | 'settings';
 
 interface ShellProps {
   view: ViewKey;
@@ -31,6 +31,7 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: 'contacts', label: 'Contacts', icon: <Users size={23} /> },
   { key: 'accounts', label: 'Accounts', icon: <WalletCards size={23} /> },
   { key: 'inventory', label: 'Inventory', icon: <Package size={23} /> },
+  { key: 'payroll', label: 'Payroll', icon: <Wallet2 size={23} /> },
   { key: 'reports', label: 'Reports', icon: <BarChart3 size={23} /> },
   { key: 'journals', label: 'Journals', icon: <BookOpenText size={23} /> },
   { key: 'settings', label: 'Settings', icon: <Settings size={23} /> },
