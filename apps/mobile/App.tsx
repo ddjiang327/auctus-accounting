@@ -16,6 +16,7 @@ import { ManualJournalModal, ReportsScreen } from './src/screens/ReportsScreen';
 import { SalesScreen } from './src/screens/SalesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { WorkspaceSelectorScreen } from './src/screens/WorkspaceSelectorScreen';
+import { AiEntrySheet } from './src/features/ai/AiEntrySheet';
 import { disableLock, enableLock, loadLockEnabled, tryBiometricUnlock, verifyPin } from './src/storage/secureLock';
 import { clearModePreference, exportLedgerBackup, getModePreference, importLedgerBackup, loadLedgerData, resetLedgerData, saveLedgerData, setModePreference } from './src/storage/mobileStore';
 import type { BusinessSummary } from './src/api/cloudApi';
@@ -45,6 +46,7 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [manualJournalOpen, setManualJournalOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [newEntryType, setNewEntryType] = useState<TransactionType | undefined>(undefined);
   const [newEntryMode, setNewEntryMode] = useState<EntryMode | undefined>(undefined);
@@ -662,6 +664,9 @@ export default function App() {
           </Pressable>
         ))}
       </View>
+      <Pressable style={styles.aiFab} onPress={() => setAiOpen(true)}>
+        <Text style={styles.fabText}>✨</Text>
+      </Pressable>
       <Pressable style={styles.fab} onPress={() => setAddOpen(true)}>
         <Text style={styles.fabText}>+</Text>
       </Pressable>
@@ -674,6 +679,15 @@ export default function App() {
       <TransactionForm open={formOpen} data={data} tx={editingTx} initialType={newEntryType} initialEntryMode={newEntryMode} onClose={() => { setFormOpen(false); setNewEntryType(undefined); setNewEntryMode(undefined); }} onSave={saveTx} />
       <ManualJournalModal open={manualJournalOpen} data={data} onClose={() => setManualJournalOpen(false)} onSave={saveManualJournal} />
       <PaymentModal open={!!payingTx} data={data} tx={payingTx} onClose={() => setPayingTx(null)} onSave={savePayment} />
+      {aiOpen && data && (
+        <AiEntrySheet
+          data={data}
+          mode={appMode}
+          getToken={getAccessToken}
+          onParsed={(draft) => { setAiOpen(false); setEditingTx(null); if (draft.type) setNewEntryType(draft.type); setFormOpen(true); }}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -716,6 +730,7 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 10, color: colors.muted, fontWeight: '700' },
   activeTab: { color: colors.blue },
+  aiFab: { position: 'absolute', bottom: 80, right: 80, width: 48, height: 48, borderRadius: 24, backgroundColor: '#F8F6F2', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 5 },
   fab: { position: 'absolute', bottom: 58, alignSelf: 'center', width: 58, height: 58, borderRadius: 29, backgroundColor: '#1A1916', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
   fabText: { color: '#FFFFFF', fontSize: 34, lineHeight: 38 },
   addBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'flex-end' },
