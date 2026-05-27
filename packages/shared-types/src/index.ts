@@ -213,6 +213,7 @@ export interface Product {
   unitOfMeasure?: string;
   costPrice: number;
   sellPrice: number;
+  reorderPoint?: number;
   inventoryChartAccountId?: string;
   cogsChartAccountId?: string;
   revenueChartAccountId?: string;
