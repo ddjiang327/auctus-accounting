@@ -109,6 +109,11 @@ const parseLedgerImport = (body: unknown): LedgerData => {
     bankFeedItems: asArray<BankFeedItem>(payload.bankFeedItems),
     recurringTemplates: [],
     auditLog: [],
+    products: [],
+    inventoryItems: [],
+    inventoryMovements: [],
+    employees: [],
+    payRuns: [],
   };
 };
 

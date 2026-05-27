@@ -324,6 +324,11 @@ const emptyLedgerData = (
   bankFeedItems: rows.bankFeedItems.map(mapBankFeedItem),
   recurringTemplates: [],
   auditLog: rows.auditLog.map(mapAuditLogEntry),
+  products: [],
+  inventoryItems: [],
+  inventoryMovements: [],
+  employees: [],
+  payRuns: [],
 });
 
 const mapCategory = (category: CategoryRow): Category => ({
