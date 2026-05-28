@@ -260,6 +260,27 @@ export interface Remittance {
   memo?: string;
 }
 
+export type POStatus = 'draft' | 'sent' | 'received' | 'cancelled';
+
+export interface POLine {
+  productId: string;
+  orderedQty: number;
+  unitCost: number;
+  receivedQty: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  date: string;
+  expectedDate?: string;
+  supplierId?: string;
+  supplierName?: string;
+  status: POStatus;
+  lines: POLine[];
+  memo?: string;
+  receivedAt?: string;
+}
+
 export type PayFrequency = 'weekly' | 'fortnightly' | 'monthly';
 export type PayType = 'salary' | 'hourly';
 export type PayRunStatus = 'draft' | 'finalised';
@@ -345,4 +366,5 @@ export interface LedgerData {
   payRuns: PayRun[];
   remittances: Remittance[];
   stpSubmissions: STPSubmission[];
+  purchaseOrders: PurchaseOrder[];
 }

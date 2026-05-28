@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { computeInventoryItems, fmtMoney, inventoryValuation, todayStr, uid } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
 import type { InventoryMovement, InventoryMovementType, LedgerData, Product } from '../../domain/models';
+import { PurchaseOrders } from './PurchaseOrders';
 
 interface InventoryProps {
   data: LedgerData;
@@ -9,7 +10,7 @@ interface InventoryProps {
   canWrite?: boolean;
 }
 
-type Tab = 'products' | 'stock' | 'movements';
+type Tab = 'products' | 'stock' | 'movements' | 'orders';
 
 const MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
   purchase: 'Purchase',
@@ -166,9 +167,9 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
       </div>
 
       <div className="inv-tabs">
-        {(['stock', 'products', 'movements'] as Tab[]).map((t) => (
+        {(['stock', 'products', 'movements', 'orders'] as Tab[]).map((t) => (
           <button key={t} className={`tab-btn${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'stock' ? 'Stock Levels' : t === 'products' ? 'Products' : 'Movements'}
+            {t === 'stock' ? 'Stock Levels' : t === 'products' ? 'Products' : t === 'movements' ? 'Movements' : 'Purchase Orders'}
           </button>
         ))}
         {canWrite && tab === 'stock' && activeProducts.length > 0 && (
@@ -291,6 +292,10 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
             })}
           </tbody>
         </table>
+      )}
+
+      {tab === 'orders' && (
+        <PurchaseOrders data={data} onDataChange={onDataChange} canWrite={canWrite} />
       )}
 
       {productModal && (
