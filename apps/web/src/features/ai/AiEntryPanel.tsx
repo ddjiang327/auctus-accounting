@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import type { LedgerData, Transaction } from '../../domain/models';
 import { parseTransactionText, type ParseDraft } from './aiApi';
+import { buildSuggestions } from './aiSuggestions';
 
 interface AiEntryPanelProps {
   data: LedgerData;
@@ -23,6 +24,8 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<ParseDraft | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const suggestions = useMemo(() => buildSuggestions(data, text), [data, text]);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -62,6 +65,13 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
     }
   }
 
+  function applySuggestion(fillText: string) {
+    setText(fillText);
+    setDraft(null);
+    setError('');
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+
   const typeLabel = draft?.type === 'income' ? 'Income' : draft?.type === 'transfer' ? 'Transfer' : 'Expense';
 
   return (
@@ -76,12 +86,33 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
           ref={textareaRef}
           className="ai-entry-textarea"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); setDraft(null); }}
           onKeyDown={handleKeyDown}
           placeholder={`Describe a transaction…\ne.g. "${EXAMPLE_HINTS[Math.floor(Math.random() * EXAMPLE_HINTS.length)]}"`}
           rows={3}
           disabled={loading}
         />
+
+        {suggestions.length > 0 && !draft && (
+          <div className="ai-suggestions">
+            <span className="ai-suggestions-label">
+              {text.trim() ? 'Matches:' : 'Recent:'}
+            </span>
+            <div className="ai-suggestions-list">
+              {suggestions.map((s) => (
+                <button
+                  key={s.key}
+                  className="ai-suggestion-chip"
+                  onClick={() => applySuggestion(s.fillText)}
+                  title={s.label}
+                >
+                  {s.label.length > 48 ? s.label.slice(0, 46) + '…' : s.label}
+                  {s.count > 1 && <span className="ai-chip-count">×{s.count}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && <p className="ai-entry-error">{error}</p>}
 
