@@ -246,6 +246,40 @@ function CreditNoteRow({ data, tx, onEditTransaction, onApplyCredit, canWrite = 
   );
 }
 
+function buildEmailDraft(data: LedgerData, tx: Transaction): { subject: string; body: string; email: string } {
+  const business = data.settings.businessProfile;
+  const contact = data.contacts.find((c) => c.id === tx.contactId);
+  const docNo = tx.invoiceNo || 'Invoice';
+  const due = tx.dueDate || tx.date;
+  const total = txTotal(tx, data);
+  const balance = txBalance(tx, data);
+  const recipientName = contactName(data, tx.contactId, tx.party) || 'Customer';
+
+  const subject = `${docNo} from ${business.name || 'Us'} – Due ${due}`;
+
+  const lines = [
+    `Dear ${recipientName},`,
+    '',
+    `Please find attached ${docNo} for ${fmtMoney(total)}.`,
+    `Amount due: ${fmtMoney(balance)}`,
+    `Due date: ${due}`,
+    '',
+  ];
+  if (business.paymentInstructions) {
+    lines.push('Payment instructions:');
+    lines.push(business.paymentInstructions);
+    lines.push('');
+  }
+  lines.push("If you have any questions, please don't hesitate to contact us.");
+  lines.push('');
+  lines.push('Kind regards,');
+  lines.push(business.name || '');
+  if (business.email) lines.push(business.email);
+  if (business.phone) lines.push(business.phone);
+
+  return { subject, body: lines.join('\n'), email: contact?.email || '' };
+}
+
 function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment, canWrite = true }: {
   data: LedgerData;
   tx: Transaction;
@@ -255,6 +289,7 @@ function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment, 
   canWrite?: boolean;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
   const status = invoiceStatus(tx, data);
   const category = getCategory(data, tx.categoryId);
   const party = contactName(data, tx.contactId, tx.party) || (tx.type === 'income' ? 'Customer' : 'Supplier');
@@ -293,6 +328,18 @@ function DocumentDetail({ data, tx, onBack, onEditTransaction, onRecordPayment, 
         <div className="detail-actions">
           <span className={`status-pill ${status.tone}`}>{status.label}</span>
           <button className="primary secondary-action" onClick={() => setPreviewOpen(true)}>Preview / PDF</button>
+          {tx.type === 'income' ? (
+            <button className="primary secondary-action" onClick={() => {
+              const { subject, body, email } = buildEmailDraft(data, tx);
+              if (email) {
+                window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+              } else {
+                navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
+                setEmailCopied(true);
+                setTimeout(() => setEmailCopied(false), 2000);
+              }
+            }}>{emailCopied ? 'Copied!' : '✉ Email'}</button>
+          ) : null}
           {canWrite ? <button className="primary" onClick={() => onEditTransaction(tx)}>Edit</button> : null}
           {canWrite && balance > 0.005 ? <button className={tx.type === 'income' ? 'primary success' : 'primary'} onClick={() => onRecordPayment(tx)}>{actionLabel}</button> : null}
         </div>

@@ -157,4 +157,6 @@ export const DEFAULT_DATA: LedgerData = {
   remittances: [],
   stpSubmissions: [],
   purchaseOrders: [],
+  fixedAssets: [],
+  depreciationRuns: [],
 };

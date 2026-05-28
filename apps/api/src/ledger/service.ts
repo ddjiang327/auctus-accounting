@@ -332,6 +332,8 @@ const emptyLedgerData = (
   remittances: [],
   stpSubmissions: [],
     purchaseOrders: [],
+    fixedAssets: [],
+    depreciationRuns: [],
 });
 
 const mapCategory = (category: CategoryRow): Category => ({

@@ -320,6 +320,33 @@ export interface PayRun {
   voidedAt?: string;
 }
 
+export type DepreciationMethod = 'straight_line' | 'diminishing_value';
+
+export interface FixedAsset {
+  id: string;
+  name: string;
+  purchaseDate: string;
+  cost: number;
+  residualValue: number;
+  usefulLifeYears: number;
+  depreciationRate: number;
+  method: DepreciationMethod;
+  assetChartAccountId: string;
+  accumDepChartAccountId: string;
+  depExpChartAccountId: string;
+  disposedAt?: string;
+  createdAt: string;
+}
+
+export interface DepreciationRun {
+  id: string;
+  assetId: string;
+  date: string;
+  amount: number;
+  journalId: string;
+  createdAt: string;
+}
+
 export interface LedgerData {
   meta: {
     version: number;
@@ -367,4 +394,6 @@ export interface LedgerData {
   remittances: Remittance[];
   stpSubmissions: STPSubmission[];
   purchaseOrders: PurchaseOrder[];
+  fixedAssets: FixedAsset[];
+  depreciationRuns: DepreciationRun[];
 }

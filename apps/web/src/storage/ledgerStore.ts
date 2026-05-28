@@ -40,6 +40,8 @@ export function normalizeData(raw: Partial<LedgerData> | null | undefined): Ledg
     remittances: raw.remittances || [],
     stpSubmissions: raw.stpSubmissions || [],
     purchaseOrders: raw.purchaseOrders || [],
+    fixedAssets: raw.fixedAssets || [],
+    depreciationRuns: raw.depreciationRuns || [],
   };
   data.accounts = data.accounts.map((account) => {
     if (account.chartAccountId) return account;

@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
-import { aggregate, basReport, contactName, fmt, fmtMoney, getCategory, inventoryValuation, isInvoice, journalEntriesInRange, periodRange, todayStr, totalAssets, txBalance } from '../../domain/accounting';
-import type { ChartAccount, LedgerData, Period } from '../../domain/models';
+import { useMemo, useState } from 'react';
+import { aggregate, allJournalEntries, basReport, contactName, fmt, fmtMoney, getCategory, inventoryValuation, isInvoice, journalEntriesInRange, periodRange, todayStr, totalAssets, txBalance } from '../../domain/accounting';
+import type { Budget, Category, ChartAccount, LedgerData, Period } from '../../domain/models';
 
 interface ReportsProps {
   data: LedgerData;
   period: Period;
   onPeriodChange: (period: Period) => void;
+  onDataChange?: (data: LedgerData) => void;
 }
 
 const periods: Period[] = ['week', 'month', 'quarter', 'year'];
@@ -67,7 +68,9 @@ function buildPL(data: LedgerData, fromDate: string, toDate: string): PLData {
   return { revenue, cogs, expenses, expenseGroups, totalRevenue, totalCogs, grossProfit, totalExpenses, netProfit };
 }
 
-export function Reports({ data, period, onPeriodChange }: ReportsProps) {
+const PERIOD_MONTHS: Record<Period, number> = { week: 7 / 30, month: 1, quarter: 3, year: 12, today: 1 / 30, all: 12 };
+
+export function Reports({ data, period, onPeriodChange, onDataChange }: ReportsProps) {
   const [fromDate, toDate] = basDatesForPeriod(period);
   const bas = basReport(data, fromDate, toDate);
   const pl = aggregate(data, period);
@@ -143,6 +146,12 @@ export function Reports({ data, period, onPeriodChange }: ReportsProps) {
         )}
       </div>
 
+      <CashFlowCard data={data} fromDate={fromDate} toDate={toDate} />
+
+      {onDataChange ? (
+        <BudgetVsActualCard data={data} period={period} byCat={pl.byCat} onDataChange={onDataChange} />
+      ) : null}
+
       <div className="reports-grid">
         <div className="report-card">
           <h3>BAS Summary</h3>
@@ -206,6 +215,287 @@ export function Reports({ data, period, onPeriodChange }: ReportsProps) {
 
       <AgeingReport data={data} />
     </section>
+  );
+}
+
+// ─── Cash Flow Statement ──────────────────────────────────────────────────────
+
+interface CashFlowLine { label: string; amount: number; }
+interface CashFlowData {
+  operating: CashFlowLine[];
+  investing: CashFlowLine[];
+  financing: CashFlowLine[];
+  netOperating: number;
+  netInvesting: number;
+  netFinancing: number;
+  netChange: number;
+  openingCash: number;
+  closingCash: number;
+}
+
+function classifyCashLine(chartAcc: ChartAccount): 'operating' | 'investing' | 'financing' | 'skip' {
+  if (chartAcc.class === 'revenue' || chartAcc.class === 'expense') return 'operating';
+  if (chartAcc.class === 'asset') {
+    const name = chartAcc.name.toLowerCase();
+    const group = (chartAcc.group || '').toLowerCase();
+    if (group.includes('current') || name.includes('receivable') || name.includes('inventory') || name.includes('prepaid') || name.includes('gst')) return 'operating';
+    return 'investing';
+  }
+  if (chartAcc.class === 'liability') {
+    const name = chartAcc.name.toLowerCase();
+    const group = (chartAcc.group || '').toLowerCase();
+    if (group.includes('current') || name.includes('payable') || name.includes('gst') || name.includes('tax') || name.includes('accrued')) return 'operating';
+    return 'financing';
+  }
+  if (chartAcc.class === 'equity') return 'financing';
+  return 'skip';
+}
+
+function buildCashFlow(data: LedgerData, fromDate: string, toDate: string): CashFlowData {
+  const cashChartIds = new Set(
+    data.accounts
+      .filter((a) => ['cash', 'bank', 'ewallet'].includes(a.type) && a.chartAccountId)
+      .map((a) => a.chartAccountId)
+  );
+  const chartMap = Object.fromEntries(data.chartOfAccounts.map((a) => [a.id, a]));
+  const entries = allJournalEntries(data);
+
+  let openingCash = 0;
+  const operatingMap: Record<string, number> = {};
+  const investingMap: Record<string, number> = {};
+  const financingMap: Record<string, number> = {};
+
+  for (const entry of entries) {
+    const entryDate = entry.date.slice(0, 10);
+    const cashNet = entry.lines
+      .filter((l) => cashChartIds.has(l.chartAccountId))
+      .reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+
+    if (Math.abs(cashNet) < 0.005) continue;
+
+    if (entryDate < fromDate) { openingCash += cashNet; continue; }
+    if (entryDate > toDate) continue;
+
+    const nonCashLines = entry.lines.filter((l) => !cashChartIds.has(l.chartAccountId));
+    if (nonCashLines.length === 0) continue;
+
+    const totalMag = nonCashLines.reduce((s, l) => s + Math.abs((Number(l.debit) || 0) - (Number(l.credit) || 0)), 0);
+
+    for (const line of nonCashLines) {
+      const chartAcc = chartMap[line.chartAccountId];
+      if (!chartAcc) continue;
+      const mag = Math.abs((Number(line.debit) || 0) - (Number(line.credit) || 0));
+      const contrib = totalMag > 0 ? cashNet * (mag / totalMag) : 0;
+      const section = classifyCashLine(chartAcc);
+      if (section === 'skip') continue;
+      const label = chartAcc.name;
+      if (section === 'operating') operatingMap[label] = (operatingMap[label] || 0) + contrib;
+      else if (section === 'investing') investingMap[label] = (investingMap[label] || 0) + contrib;
+      else financingMap[label] = (financingMap[label] || 0) + contrib;
+    }
+  }
+
+  const toLines = (map: Record<string, number>): CashFlowLine[] =>
+    Object.entries(map)
+      .map(([label, amount]) => ({ label, amount }))
+      .filter((r) => Math.abs(r.amount) > 0.005)
+      .sort((a, b) => b.amount - a.amount);
+
+  const operating = toLines(operatingMap);
+  const investing = toLines(investingMap);
+  const financing = toLines(financingMap);
+  const netOperating = operating.reduce((s, r) => s + r.amount, 0);
+  const netInvesting = investing.reduce((s, r) => s + r.amount, 0);
+  const netFinancing = financing.reduce((s, r) => s + r.amount, 0);
+  const netChange = netOperating + netInvesting + netFinancing;
+
+  return { operating, investing, financing, netOperating, netInvesting, netFinancing, netChange, openingCash, closingCash: openingCash + netChange };
+}
+
+function CashFlowCard({ data, fromDate, toDate }: { data: LedgerData; fromDate: string; toDate: string }) {
+  const cf = useMemo(() => buildCashFlow(data, fromDate, toDate), [data, fromDate, toDate]);
+  const hasCash = data.accounts.some((a) => ['cash', 'bank', 'ewallet'].includes(a.type) && a.chartAccountId);
+  if (!hasCash) return null;
+
+  return (
+    <div className="report-card wide-card pl-card">
+      <div className="pl-header">
+        <h3>Cash Flow Statement</h3>
+        <span className="pl-period">{fromDate} – {toDate}</span>
+      </div>
+
+      <CashFlowSection title="Operating Activities" lines={cf.operating} netLabel="Net cash from operating" net={cf.netOperating} />
+      <CashFlowSection title="Investing Activities" lines={cf.investing} netLabel="Net cash from investing" net={cf.netInvesting} />
+      <CashFlowSection title="Financing Activities" lines={cf.financing} netLabel="Net cash from financing" net={cf.netFinancing} />
+
+      <div className="cf-summary">
+        <div className="cf-summary-row">
+          <span>Net increase / (decrease) in cash</span>
+          <strong className={cf.netChange >= 0 ? 'income' : 'expense'}>{cf.netChange >= 0 ? fmtMoney(cf.netChange) : `(${fmtMoney(-cf.netChange)})`}</strong>
+        </div>
+        <div className="cf-summary-row muted-row">
+          <span>Opening cash balance</span>
+          <span>{fmtMoney(cf.openingCash)}</span>
+        </div>
+        <div className="cf-summary-row">
+          <span><strong>Closing cash balance</strong></span>
+          <strong>{fmtMoney(cf.closingCash)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashFlowSection({ title, lines, netLabel, net }: { title: string; lines: CashFlowLine[]; netLabel: string; net: number }) {
+  if (lines.length === 0 && Math.abs(net) < 0.005) return null;
+  return (
+    <div className="pl-section">
+      <div className="pl-section-title">{title}</div>
+      {lines.map((line) => (
+        <div key={line.label} className="pl-account-row">
+          <span className="pl-name">{line.label}</span>
+          <span className={`pl-amount ${line.amount < 0 ? 'expense' : ''}`}>
+            {line.amount >= 0 ? fmtMoney(line.amount) : `(${fmtMoney(-line.amount)})`}
+          </span>
+        </div>
+      ))}
+      <div className="pl-total-row">
+        <span>{netLabel}</span>
+        <strong className={net >= 0 ? 'income' : 'expense'}>{net >= 0 ? fmtMoney(net) : `(${fmtMoney(-net)})`}</strong>
+      </div>
+    </div>
+  );
+}
+
+// ─── Budget vs Actual ─────────────────────────────────────────────────────────
+
+interface BudgetRow { cat: Category; budget: number; actual: number; }
+
+function BudgetVsActualCard({ data, period, byCat, onDataChange }: {
+  data: LedgerData;
+  period: Period;
+  byCat: Record<string, number>;
+  onDataChange: (data: LedgerData) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState('');
+
+  const multiplier = PERIOD_MONTHS[period] ?? 1;
+
+  const rows = useMemo((): BudgetRow[] => {
+    const allCats = [...data.categories.expense];
+    const seen = new Set<string>();
+    const result: BudgetRow[] = [];
+
+    for (const cat of allCats) {
+      if (cat.archivedAt) continue;
+      seen.add(cat.id);
+      const budgetEntry = data.budgets.find((b) => b.categoryId === cat.id);
+      const monthlyBudget = budgetEntry?.amount ?? 0;
+      const actual = byCat[cat.id] ?? 0;
+      if (monthlyBudget === 0 && actual === 0) continue;
+      result.push({ cat, budget: monthlyBudget * multiplier, actual });
+    }
+
+    for (const [catId, actual] of Object.entries(byCat)) {
+      if (seen.has(catId)) continue;
+      const cat = getCategory(data, catId);
+      if (!cat) continue;
+      result.push({ cat, budget: 0, actual });
+    }
+
+    return result.sort((a, b) => b.actual - a.actual);
+  }, [data, byCat, multiplier]);
+
+  if (rows.length === 0) return null;
+
+  function saveBudget(catId: string, val: string) {
+    const amount = parseFloat(val) || 0;
+    const existing = data.budgets.find((b) => b.categoryId === catId);
+    let budgets: Budget[];
+    if (existing) {
+      budgets = data.budgets.map((b) => b.categoryId === catId ? { ...b, amount } : b);
+    } else {
+      budgets = [...data.budgets, { id: `bgt-${catId}`, categoryId: catId, amount }];
+    }
+    onDataChange({ ...data, budgets });
+    setEditing(null);
+  }
+
+  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
+  const totalActual = rows.reduce((s, r) => s + r.actual, 0);
+
+  return (
+    <div className="report-card wide-card budget-card">
+      <div className="pl-header">
+        <h3>Budget vs Actual</h3>
+        <span className="pl-period">Click budget amount to edit · monthly amounts</span>
+      </div>
+      <div className="budget-table-wrap">
+        <table className="budget-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th className="num">Budget</th>
+              <th className="num">Actual</th>
+              <th className="num">Variance</th>
+              <th className="budget-bar-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ cat, budget, actual }) => {
+              const variance = budget - actual;
+              const pct = budget > 0 ? Math.min(actual / budget, 1) : 0;
+              const tone = budget === 0 ? 'neutral' : actual > budget ? 'over' : actual / budget > 0.8 ? 'warn' : 'ok';
+              return (
+                <tr key={cat.id}>
+                  <td className="budget-cat-name">{cat.icon} {cat.name}</td>
+                  <td className="num budget-editable">
+                    {editing === cat.id ? (
+                      <input
+                        className="budget-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editVal}
+                        autoFocus
+                        onChange={(e) => setEditVal(e.target.value)}
+                        onBlur={() => saveBudget(cat.id, editVal)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveBudget(cat.id, editVal); if (e.key === 'Escape') setEditing(null); }}
+                      />
+                    ) : (
+                      <button className="budget-amount-btn" onClick={() => { setEditing(cat.id); setEditVal(budget > 0 ? String((budget / multiplier).toFixed(2)) : ''); }}>
+                        {budget > 0 ? fmtMoney(budget) : <span className="muted">Set</span>}
+                      </button>
+                    )}
+                  </td>
+                  <td className="num">{fmtMoney(actual)}</td>
+                  <td className={`num budget-variance ${tone}`}>{budget > 0 ? (variance >= 0 ? fmtMoney(variance) : `(${fmtMoney(-variance)})`) : '—'}</td>
+                  <td className="budget-bar-col">
+                    {budget > 0 ? (
+                      <div className="budget-bar-track">
+                        <div className={`budget-bar-fill ${tone}`} style={{ width: `${pct * 100}%` }} />
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="budget-totals">
+              <td><strong>Total</strong></td>
+              <td className="num"><strong>{totalBudget > 0 ? fmtMoney(totalBudget) : '—'}</strong></td>
+              <td className="num"><strong>{fmtMoney(totalActual)}</strong></td>
+              <td className={`num budget-variance ${totalBudget > 0 && totalActual > totalBudget ? 'over' : 'ok'}`}>
+                <strong>{totalBudget > 0 ? (totalBudget - totalActual >= 0 ? fmtMoney(totalBudget - totalActual) : `(${fmtMoney(totalActual - totalBudget)})`) : '—'}</strong>
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
   );
 }
 

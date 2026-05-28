@@ -206,7 +206,10 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
 
   const totalDebit = lines.reduce((sum, line) => sum + (Number(line.debit) || 0), 0);
   const totalCredit = lines.reduce((sum, line) => sum + (Number(line.credit) || 0), 0);
-  const outOfBalance = Math.abs(totalDebit - totalCredit) > 0.005;
+  const diff = totalDebit - totalCredit;
+  const outOfBalance = Math.abs(diff) > 0.005;
+  const hasBothSides = lines.some((line) => Number(line.debit) > 0 && Number(line.credit) > 0);
+  const canPost = !outOfBalance && !hasBothSides && lines.filter((l) => l.chartAccountId && (Number(l.debit) > 0 || Number(l.credit) > 0)).length >= 2;
 
   function updateLine(index: number, patch: Partial<JournalLineDraft>) {
     setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
@@ -258,7 +261,7 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
       open={open}
       title={journal ? 'Edit Manual Journal' : 'Manual Journal'}
       onClose={onClose}
-      footer={<button className="primary wide" onClick={submit} disabled={saving}>{saving ? 'Saving…' : journal ? 'Save Journal' : 'Post Journal'}</button>}
+      footer={<button className="primary wide" onClick={submit} disabled={saving || !canPost}>{saving ? 'Saving…' : journal ? 'Save Journal' : 'Post Journal'}</button>}
     >
       <div className="form-card">
         <label>Date <input value={date} onChange={(event) => setDate(event.target.value)} /></label>
@@ -271,36 +274,47 @@ function ManualJournalModal({ open, data, journal, onClose, onSave }: {
           <span>Credit</span>
           <span />
         </div>
-        {lines.map((line, index) => (
-          <div key={index} className="journal-editor-row">
-            <select value={line.chartAccountId} onChange={(event) => updateLine(index, { chartAccountId: event.target.value })}>
-              {data.chartOfAccounts.map((account) => (
-                <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              step={0.01}
-              value={line.debit}
-              onChange={(event) => updateLine(index, { debit: event.target.value, credit: event.target.value ? '' : line.credit })}
-            />
-            <input
-              type="number"
-              step={0.01}
-              value={line.credit}
-              onChange={(event) => updateLine(index, { credit: event.target.value, debit: event.target.value ? '' : line.debit })}
-            />
-            <button className="icon-action" onClick={() => removeLine(index)} aria-label="Remove line">×</button>
-          </div>
-        ))}
+        {lines.map((line, index) => {
+          const bothSides = Number(line.debit) > 0 && Number(line.credit) > 0;
+          return (
+            <div key={index} className={`journal-editor-row${bothSides ? ' journal-row-error' : ''}`}>
+              <select value={line.chartAccountId} onChange={(event) => updateLine(index, { chartAccountId: event.target.value })}>
+                {data.chartOfAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                step={0.01}
+                value={line.debit}
+                onChange={(event) => updateLine(index, { debit: event.target.value, credit: event.target.value ? '' : line.credit })}
+              />
+              <input
+                type="number"
+                step={0.01}
+                value={line.credit}
+                onChange={(event) => updateLine(index, { credit: event.target.value, debit: event.target.value ? '' : line.debit })}
+              />
+              <button className="icon-action" onClick={() => removeLine(index)} aria-label="Remove line">×</button>
+            </div>
+          );
+        })}
       </div>
       <div className="toolbar-row modal-toolbar">
         <button className="primary secondary-action" onClick={() => setLines([...lines, { chartAccountId: data.chartOfAccounts[0]?.id || '', debit: '', credit: '' }])}>Add Line</button>
       </div>
-      <div className="stats-grid">
-        <div className="stat-card"><span>Debit Total</span><strong>{fmtMoney(totalDebit)}</strong></div>
-        <div className="stat-card"><span>Credit Total</span><strong>{fmtMoney(totalCredit)}</strong></div>
-        <div className="stat-card"><span>Difference</span><strong className={outOfBalance ? 'expense' : 'income'}>{fmtMoney(totalDebit - totalCredit)}</strong></div>
+      <div className={`journal-balance-bar ${canPost ? 'balanced' : 'unbalanced'}`}>
+        <div className="journal-balance-totals">
+          <span>Dr <strong>{fmtMoney(totalDebit)}</strong></span>
+          <span>Cr <strong>{fmtMoney(totalCredit)}</strong></span>
+        </div>
+        {hasBothSides ? (
+          <span className="journal-balance-msg error">A line cannot have both debit and credit</span>
+        ) : outOfBalance ? (
+          <span className="journal-balance-msg error">Out of balance by {fmtMoney(Math.abs(diff))}</span>
+        ) : (
+          <span className="journal-balance-msg ok">✓ Balanced</span>
+        )}
       </div>
     </Modal>
   );
