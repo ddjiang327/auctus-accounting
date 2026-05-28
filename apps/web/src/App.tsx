@@ -1055,6 +1055,8 @@ export default function App() {
             onCreateTransaction={permissions.canWriteAccounting ? openNewTransaction : undefined}
             onOpenContacts={() => setView('contacts')}
             onOpenSettings={() => setView('settings')}
+            onOpenDocuments={() => setView('sales')}
+            onOpenInventory={() => setView('inventory')}
           />
         ) : null}
       {view === 'activity' ? <Activity data={data} onEditTransaction={openEditTransaction} onRecordPayment={recordPayment} canWrite={permissions.canWriteAccounting} /> : null}
