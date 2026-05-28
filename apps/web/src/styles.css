@@ -1011,6 +1011,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .pl-net-row .income { color: #7fd99b; }
 .pl-net-row .expense { color: #ff9e8a; }
 
+/* Ageing report */
+.ageing-table-wrap { overflow-x: auto; }
+.ageing-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ageing-table th { padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--line); white-space: nowrap; }
+.ageing-table th.num, .ageing-table td.num { text-align: right; }
+.ageing-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); color: var(--text); }
+.ageing-table tbody tr:last-child td { border-bottom: none; }
+.ageing-table th.aged, .ageing-table td.aged { color: var(--red); }
+.ageing-totals td { background: var(--bg); border-top: 2px solid var(--line); border-bottom: none; padding: 10px 12px; }
+.age-warn { color: var(--orange); font-weight: 600; }
+.age-alert { color: #c07030; font-weight: 700; }
+.age-danger { color: var(--red); font-weight: 700; }
+
 .muted { color: var(--muted); }
 
 .modal-backdrop {

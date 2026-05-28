@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { aggregate, basReport, fmt, fmtMoney, getCategory, inventoryValuation, isInvoice, journalEntriesInRange, periodRange, totalAssets, txBalance } from '../../domain/accounting';
+import { aggregate, basReport, contactName, fmt, fmtMoney, getCategory, inventoryValuation, isInvoice, journalEntriesInRange, periodRange, todayStr, totalAssets, txBalance } from '../../domain/accounting';
 import type { ChartAccount, LedgerData, Period } from '../../domain/models';
 
 interface ReportsProps {
@@ -203,6 +203,8 @@ export function Reports({ data, period, onPeriodChange }: ReportsProps) {
           </div>
         ) : null}
       </div>
+
+      <AgeingReport data={data} />
     </section>
   );
 }
@@ -249,4 +251,113 @@ function basDatesForPeriod(period: Period) {
   const to = new Date(end);
   to.setDate(to.getDate() - 1);
   return [start.toISOString().slice(0, 10), to.toISOString().slice(0, 10)] as const;
+}
+
+// ─── Ageing Report ────────────────────────────────────────────────────────────
+
+interface AgeingBuckets { current: number; d1_30: number; d31_60: number; d61_90: number; d90plus: number; }
+interface AgeingRow { key: string; name: string; buckets: AgeingBuckets; total: number; }
+
+function daysBetween(dateStr: string, today: string): number {
+  return Math.floor((new Date(today).getTime() - new Date(dateStr).getTime()) / 86400000);
+}
+
+function bucket(days: number): keyof AgeingBuckets {
+  if (days <= 0) return 'current';
+  if (days <= 30) return 'd1_30';
+  if (days <= 60) return 'd31_60';
+  if (days <= 90) return 'd61_90';
+  return 'd90plus';
+}
+
+function buildAgeing(data: LedgerData, type: 'income' | 'expense'): AgeingRow[] {
+  const today = todayStr();
+  const map: Record<string, AgeingRow> = {};
+
+  for (const tx of data.transactions) {
+    if (!isInvoice(tx) || tx.type !== type || tx.voidedAt) continue;
+    const balance = txBalance(tx, data);
+    if (balance < 0.005) continue;
+
+    const due = tx.dueDate || tx.date;
+    const days = daysBetween(due, today);
+    const b = bucket(days);
+
+    const key = tx.contactId || tx.party || 'Unknown';
+    const name = contactName(data, tx.contactId, tx.party) || 'Unknown';
+    if (!map[key]) map[key] = { key, name, buckets: { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 }, total: 0 };
+    map[key].buckets[b] += balance;
+    map[key].total += balance;
+  }
+
+  return Object.values(map).sort((a, b) => b.total - a.total);
+}
+
+function AgeingReport({ data }: { data: LedgerData }) {
+  const ar = useMemo(() => buildAgeing(data, 'income'), [data]);
+  const ap = useMemo(() => buildAgeing(data, 'expense'), [data]);
+  if (ar.length === 0 && ap.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      {ar.length > 0 && <AgeingTable title="Receivables Ageing" rows={ar} />}
+      {ap.length > 0 && <AgeingTable title="Payables Ageing" rows={ap} />}
+    </div>
+  );
+}
+
+function AgeingTable({ title, rows }: { title: string; rows: AgeingRow[] }) {
+  const totals: AgeingBuckets = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 };
+  for (const r of rows) {
+    for (const k of Object.keys(totals) as (keyof AgeingBuckets)[]) totals[k] += r.buckets[k];
+  }
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+
+  return (
+    <div className="report-card wide-card" style={{ marginBottom: 16 }}>
+      <div className="pl-header">
+        <h3>{title}</h3>
+        <span className="pl-period">As of today</span>
+      </div>
+      <div className="ageing-table-wrap">
+        <table className="ageing-table">
+          <thead>
+            <tr>
+              <th>Customer / Supplier</th>
+              <th className="num">Current</th>
+              <th className="num">1–30 days</th>
+              <th className="num">31–60 days</th>
+              <th className="num">61–90 days</th>
+              <th className="num aged">90+ days</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td>{r.name}</td>
+                <td className="num">{r.buckets.current > 0 ? fmtMoney(r.buckets.current) : '—'}</td>
+                <td className="num">{r.buckets.d1_30 > 0 ? fmtMoney(r.buckets.d1_30) : '—'}</td>
+                <td className="num">{r.buckets.d31_60 > 0 ? <span className="age-warn">{fmtMoney(r.buckets.d31_60)}</span> : '—'}</td>
+                <td className="num">{r.buckets.d61_90 > 0 ? <span className="age-alert">{fmtMoney(r.buckets.d61_90)}</span> : '—'}</td>
+                <td className="num aged">{r.buckets.d90plus > 0 ? <span className="age-danger">{fmtMoney(r.buckets.d90plus)}</span> : '—'}</td>
+                <td className="num"><strong>{fmtMoney(r.total)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="ageing-totals">
+              <td><strong>Total</strong></td>
+              <td className="num"><strong>{fmtMoney(totals.current)}</strong></td>
+              <td className="num"><strong>{fmtMoney(totals.d1_30)}</strong></td>
+              <td className="num"><strong>{fmtMoney(totals.d31_60)}</strong></td>
+              <td className="num"><strong>{fmtMoney(totals.d61_90)}</strong></td>
+              <td className="num aged"><strong>{fmtMoney(totals.d90plus)}</strong></td>
+              <td className="num"><strong>{fmtMoney(grandTotal)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
 }
