@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { printPaySlips } from './payslipPrint';
 import {
   calculatePaySlip,
   computeLeaveBalances,
@@ -330,9 +331,12 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
                   <td className="num">{fmtMoney(superAmt)}</td>
                   <td className="num">{fmtMoney(net)}</td>
                   <td><span className={`badge badge-${run.status === 'finalised' ? 'purchase' : 'adjustment'}`}>{run.status === 'finalised' ? 'Finalised' : 'Draft'}</span></td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     {canWrite && run.status === 'draft' && (
                       <button className="btn-link" onClick={() => finalisePayRun(run)}>Finalise</button>
+                    )}
+                    {run.status === 'finalised' && run.paySlips.length > 0 && (
+                      <button className="btn-link" onClick={() => printPaySlips(run, data)}>🖨 Pay Slips</button>
                     )}
                   </td>
                 </tr>
