@@ -988,6 +988,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   white-space: nowrap;
 }
 .report-row b { font-variant-numeric: tabular-nums; }
+
+/* P&L expanded */
+.pl-card { margin-bottom: 16px; }
+.pl-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.pl-header h3 { margin: 0; }
+.pl-period { font-size: 12px; color: var(--muted); }
+.pl-section { margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.pl-section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); background: var(--bg); padding: 7px 14px; border-bottom: 1px solid var(--line); }
+.pl-account-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.pl-account-row:last-of-type { border-bottom: none; }
+.pl-indent { padding-left: 28px; }
+.pl-code { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 36px; }
+.pl-name { flex: 1; color: var(--text); }
+.pl-amount { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+.pl-group { }
+.pl-group-label { font-size: 11px; font-weight: 700; color: var(--muted); padding: 5px 14px 2px; background: rgba(0,0,0,.02); border-bottom: 1px solid var(--line); }
+.pl-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg); border-top: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.pl-total-row strong { font-variant-numeric: tabular-nums; font-size: 15px; }
+.pl-net-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin-top: 12px; background: var(--text); border-radius: 10px; color: #fff; font-size: 14px; font-weight: 700; }
+.pl-net-row strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pl-net-row .income { color: #7fd99b; }
+.pl-net-row .expense { color: #ff9e8a; }
+
 .muted { color: var(--muted); }
 
 .modal-backdrop {
