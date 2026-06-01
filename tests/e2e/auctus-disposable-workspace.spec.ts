@@ -46,6 +46,11 @@ function adminClient(): SupabaseClient {
 async function authenticate(page: Page) {
   await page.goto('/');
 
+  const cloudModeButton = page.getByRole('button', { name: /Sign in.*Cloud sync/i });
+  if (await cloudModeButton.isVisible().catch(() => false)) {
+    await cloudModeButton.click();
+  }
+
   await page.locator('#auth-email')
     .or(page.getByText('Select a workspace'))
     .or(page.getByText('NET WORTH'))

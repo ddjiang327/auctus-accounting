@@ -5,6 +5,9 @@ export interface PaymentSummary {
   ytdGross: number;
   ytdPayg: number;
   ytdSuper: number;
+  ytdAllowances: number;
+  ytdDeductions: number;
+  ytdReimbursements: number;
   payRunCount: number;
 }
 
@@ -47,13 +50,18 @@ export function generatePaymentSummaries(
     (r) => r.status === 'finalised' && !r.voidedAt && r.payDate >= fyStart && r.payDate <= fyEnd,
   );
 
-  const totals: Record<string, { gross: number; payg: number; super: number; count: number }> = {};
+  const totals: Record<string, { gross: number; payg: number; super: number; allowances: number; deductions: number; reimbursements: number; count: number }> = {};
   for (const run of runs) {
     for (const slip of run.paySlips) {
-      const t = totals[slip.employeeId] ?? { gross: 0, payg: 0, super: 0, count: 0 };
+      const t = totals[slip.employeeId] ?? { gross: 0, payg: 0, super: 0, allowances: 0, deductions: 0, reimbursements: 0, count: 0 };
       t.gross += slip.gross;
       t.payg += slip.paygWithheld;
       t.super += slip.superAmount;
+      for (const adjustment of slip.adjustments || []) {
+        if (adjustment.type === 'allowance') t.allowances += adjustment.amount;
+        if (adjustment.type === 'deduction') t.deductions += adjustment.amount;
+        if (adjustment.type === 'reimbursement') t.reimbursements += adjustment.amount;
+      }
       t.count += 1;
       totals[slip.employeeId] = t;
     }
@@ -66,15 +74,24 @@ export function generatePaymentSummaries(
       ytdGross: Math.round(totals[e.id].gross * 100) / 100,
       ytdPayg: Math.round(totals[e.id].payg * 100) / 100,
       ytdSuper: Math.round(totals[e.id].super * 100) / 100,
+      ytdAllowances: Math.round(totals[e.id].allowances * 100) / 100,
+      ytdDeductions: Math.round(totals[e.id].deductions * 100) / 100,
+      ytdReimbursements: Math.round(totals[e.id].reimbursements * 100) / 100,
       payRunCount: totals[e.id].count,
     }));
 }
 
 export function generateSTPCSV(payRuns: PayRun[], data: LedgerData): string {
-  const rows = ['Pay Date,Period Start,Period End,Employee Name,TFN,Gross,PAYG Withheld,Super,Net Pay'];
+  const rows = ['Pay Date,Period Start,Period End,Employee Name,TFN,Gross,PAYG Withheld,Super,Deductions,Reimbursements,Net Pay,Allowance Details,Deduction Details,Reimbursement Details'];
   for (const run of payRuns) {
     for (const slip of run.paySlips) {
       const emp = (data.employees || []).find((e) => e.id === slip.employeeId);
+      const allowances = (slip.adjustments || []).filter((item) => item.type === 'allowance');
+      const deductions = (slip.adjustments || []).filter((item) => item.type === 'deduction');
+      const reimbursements = (slip.adjustments || []).filter((item) => item.type === 'reimbursement');
+      const totalDeductions = deductions.reduce((sum, item) => sum + item.amount, 0);
+      const totalReimbursements = reimbursements.reduce((sum, item) => sum + item.amount, 0);
+      const details = (items: typeof allowances) => items.map((item) => `${item.label}: ${item.amount.toFixed(2)}`).join('; ');
       rows.push(
         [
           run.payDate,
@@ -85,12 +102,22 @@ export function generateSTPCSV(payRuns: PayRun[], data: LedgerData): string {
           slip.gross.toFixed(2),
           slip.paygWithheld.toFixed(2),
           slip.superAmount.toFixed(2),
+          totalDeductions.toFixed(2),
+          totalReimbursements.toFixed(2),
           slip.netPay.toFixed(2),
-        ].join(','),
+          details(allowances),
+          details(deductions),
+          details(reimbursements),
+        ].map(csvCell).join(','),
       );
     }
   }
   return rows.join('\n');
+}
+
+function csvCell(value: string): string {
+  if (!/[",\n]/.test(value)) return value;
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 export function markAllSubmitted(

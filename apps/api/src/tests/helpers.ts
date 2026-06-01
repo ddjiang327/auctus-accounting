@@ -161,6 +161,15 @@ export async function addBusinessMember(
 export async function cleanupTestBusiness(supabase: SupabaseServiceClient, businessId: string): Promise<void> {
   // Delete in dependency order; some tables cascade, but we try to be thorough
   const tables = [
+    "stp_submissions",
+    "remittances",
+    "pay_slips",
+    "pay_runs",
+    "employees",
+    "purchase_order_lines",
+    "purchase_orders",
+    "inventory_movements",
+    "products",
     "bank_reconciliations",
     "bank_feed_items",
     "manual_journal_lines",

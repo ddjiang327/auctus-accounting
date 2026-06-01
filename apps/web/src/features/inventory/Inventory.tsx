@@ -1,13 +1,21 @@
 import { useMemo, useState } from 'react';
-import { computeInventoryItems, fmtMoney, inventoryValuation, todayStr, uid } from '../../domain/accounting';
+import { computeInventoryItems, fmtMoney, inventoryValuation, todayStr, uid, validateInventoryMovementInput } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
-import type { InventoryMovement, InventoryMovementType, LedgerData, Product } from '../../domain/models';
+import type { InventoryMovement, InventoryMovementType, LedgerData, Product, PurchaseOrder } from '../../domain/models';
 import { PurchaseOrders } from './PurchaseOrders';
 
 interface InventoryProps {
   data: LedgerData;
   onDataChange: (data: LedgerData) => void;
   canWrite?: boolean;
+  onSaveProduct?: (product: Product, mode: 'create' | 'update') => void | Promise<void>;
+  onArchiveProduct?: (productId: string) => void | Promise<void>;
+  onCreateMovement?: (movement: InventoryMovement) => void | Promise<void>;
+  onCreatePurchaseOrder?: (po: PurchaseOrder) => void | Promise<void>;
+  onMarkPurchaseOrderSent?: (po: PurchaseOrder) => void | Promise<void>;
+  onCancelPurchaseOrder?: (po: PurchaseOrder) => void | Promise<void>;
+  onReceivePurchaseOrder?: (po: PurchaseOrder, receiptQtys: Record<number, number>, date: string) => void | Promise<void>;
+  onCreateBillFromPO?: (po: PurchaseOrder) => void | Promise<void>;
 }
 
 type Tab = 'products' | 'stock' | 'movements' | 'orders';
@@ -26,7 +34,19 @@ function blankMovement(productId: string): Omit<InventoryMovement, 'id'> {
   return { productId, date: todayStr(), type: 'purchase', quantity: 1, unitCost: 0, memo: '' };
 }
 
-export function Inventory({ data, onDataChange, canWrite = true }: InventoryProps) {
+export function Inventory({
+  data,
+  onDataChange,
+  canWrite = true,
+  onSaveProduct,
+  onArchiveProduct,
+  onCreateMovement,
+  onCreatePurchaseOrder,
+  onMarkPurchaseOrderSent,
+  onCancelPurchaseOrder,
+  onReceivePurchaseOrder,
+  onCreateBillFromPO,
+}: InventoryProps) {
   const [tab, setTab] = useState<Tab>('stock');
   const [productModal, setProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -35,6 +55,8 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
   const [stockTakeModal, setStockTakeModal] = useState(false);
   const [stockTakeDate, setStockTakeDate] = useState(todayStr());
   const [stockTakeCounts, setStockTakeCounts] = useState<Record<string, string>>({});
+  const [movementError, setMovementError] = useState<string | null>(null);
+  const [stockTakeError, setStockTakeError] = useState<string | null>(null);
 
   const [productForm, setProductForm] = useState(blankProduct());
   const [movForm, setMovForm] = useState<Omit<InventoryMovement, 'id'>>(blankMovement(''));
@@ -64,32 +86,56 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
     setProductModal(true);
   }
 
-  function saveProduct() {
+  async function saveProduct() {
     if (!productForm.name.trim()) return;
     const products = data.products || [];
     if (editingProduct) {
-      onDataChange({ ...data, products: products.map((p) => p.id === editingProduct.id ? { ...editingProduct, ...productForm } : p) });
+      const product = { ...editingProduct, ...productForm };
+      if (onSaveProduct) {
+        await onSaveProduct(product, 'update');
+      } else {
+        onDataChange({ ...data, products: products.map((p) => p.id === editingProduct.id ? product : p) });
+      }
     } else {
-      onDataChange({ ...data, products: [...products, { ...productForm, id: uid() }] });
+      const product = { ...productForm, id: uid() };
+      if (onSaveProduct) {
+        await onSaveProduct(product, 'create');
+      } else {
+        onDataChange({ ...data, products: [...products, product] });
+      }
     }
     setProductModal(false);
   }
 
-  function archiveProduct(productId: string) {
-    onDataChange({ ...data, products: (data.products || []).map((p) => p.id === productId ? { ...p, archivedAt: new Date().toISOString() } : p) });
+  async function archiveProduct(productId: string) {
+    if (onArchiveProduct) {
+      await onArchiveProduct(productId);
+    } else {
+      onDataChange({ ...data, products: (data.products || []).map((p) => p.id === productId ? { ...p, archivedAt: new Date().toISOString() } : p) });
+    }
   }
 
   function openAddMovement(productId: string) {
     setMovementProductId(productId);
+    setMovementError(null);
     const product = (data.products || []).find((p) => p.id === productId);
     setMovForm({ ...blankMovement(productId), unitCost: product?.costPrice || 0 });
     setMovementModal(true);
   }
 
-  function saveMovement() {
+  async function saveMovement() {
     if (!movForm.productId || movForm.quantity === 0) return;
     const movement: InventoryMovement = { ...movForm, id: uid() };
-    onDataChange({ ...data, inventoryMovements: [...(data.inventoryMovements || []), movement] });
+    const validation = validateInventoryMovementInput(data, movement);
+    if (!validation.ok) {
+      setMovementError(validation.errors.join('\n'));
+      return;
+    }
+    if (onCreateMovement) {
+      await onCreateMovement(movement);
+    } else {
+      onDataChange({ ...data, inventoryMovements: [...(data.inventoryMovements || []), movement] });
+    }
     setMovementModal(false);
   }
 
@@ -103,10 +149,11 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
     }
     setStockTakeCounts(counts);
     setStockTakeDate(todayStr());
+    setStockTakeError(null);
     setStockTakeModal(true);
   }
 
-  function postStockTake() {
+  async function postStockTake() {
     const allRows = [
       ...valuation.map((r) => ({ product: r.product, systemQty: r.quantity, avgCost: r.avgCost })),
       ...activeProducts
@@ -119,7 +166,7 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
       const counted = parseFloat(stockTakeCounts[product.id] ?? '') || 0;
       const diff = Math.round((counted - systemQty) * 10000) / 10000;
       if (Math.abs(diff) < 0.0001) continue;
-      newMovements.push({
+      const movement: InventoryMovement = {
         id: uid(),
         productId: product.id,
         date: stockTakeDate,
@@ -127,11 +174,23 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
         quantity: diff,
         unitCost: avgCost,
         memo: 'Stock take adjustment',
-      });
+      };
+      const validation = validateInventoryMovementInput(data, movement);
+      if (!validation.ok) {
+        setStockTakeError(validation.errors.join('\n'));
+        return;
+      }
+      newMovements.push(movement);
     }
 
     if (newMovements.length > 0) {
-      onDataChange({ ...data, inventoryMovements: [...(data.inventoryMovements || []), ...newMovements] });
+      if (onCreateMovement) {
+        for (const movement of newMovements) {
+          await onCreateMovement(movement);
+        }
+      } else {
+        onDataChange({ ...data, inventoryMovements: [...(data.inventoryMovements || []), ...newMovements] });
+      }
     }
     setStockTakeModal(false);
   }
@@ -295,7 +354,16 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
       )}
 
       {tab === 'orders' && (
-        <PurchaseOrders data={data} onDataChange={onDataChange} canWrite={canWrite} />
+        <PurchaseOrders
+          data={data}
+          onDataChange={onDataChange}
+          canWrite={canWrite}
+          onCreatePurchaseOrder={onCreatePurchaseOrder}
+          onMarkPurchaseOrderSent={onMarkPurchaseOrderSent}
+          onCancelPurchaseOrder={onCancelPurchaseOrder}
+          onReceivePurchaseOrder={onReceivePurchaseOrder}
+          onCreateBillFromPO={onCreateBillFromPO}
+        />
       )}
 
       {productModal && (
@@ -317,6 +385,7 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
 
       {movementModal && (
         <Modal title="Add Movement" open={movementModal} onClose={() => setMovementModal(false)}>
+          {movementError ? <p className="lock-error">{movementError}</p> : null}
           <div className="form-grid">
             <label>Product
               <select value={movForm.productId} onChange={(e) => setMovForm({ ...movForm, productId: e.target.value })}>
@@ -344,6 +413,7 @@ export function Inventory({ data, onDataChange, canWrite = true }: InventoryProp
 
       {stockTakeModal && (
         <Modal title="Stock Take" open={stockTakeModal} onClose={() => setStockTakeModal(false)}>
+          {stockTakeError ? <p className="lock-error">{stockTakeError}</p> : null}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ whiteSpace: 'nowrap' }}>Count Date</span>

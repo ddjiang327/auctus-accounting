@@ -15,11 +15,13 @@ interface ShellProps {
   userRole?: string;
   syncState?: SyncState;
   syncError?: string | null;
+  syncErrorActionLabel?: string;
   busyLabel?: string | null;
   onDismissSyncError?: () => void;
   onRetrySync?: () => void;
   onLogout?: () => void;
   onSwitchWorkspace?: () => void;
+  canViewPayroll?: boolean;
   children: ReactNode;
 }
 
@@ -38,8 +40,9 @@ const navItems: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
   { key: 'settings', label: 'Settings', icon: <Settings size={23} /> },
 ];
 
-export function Shell({ view, onViewChange, onAdd, onAiEntry, mode, businessName, userRole, syncState, syncError, busyLabel, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, children }: ShellProps) {
-  const active = navItems.find((item) => item.key === view) || navItems[0];
+export function Shell({ view, onViewChange, onAdd, onAiEntry, mode, businessName, userRole, syncState, syncError, syncErrorActionLabel = 'Retry', busyLabel, onDismissSyncError, onRetrySync, onLogout, onSwitchWorkspace, canViewPayroll = true, children }: ShellProps) {
+  const visibleNavItems = canViewPayroll ? navItems : navItems.filter((item) => item.key !== 'payroll');
+  const active = visibleNavItems.find((item) => item.key === view) || visibleNavItems[0] || navItems[0];
   return (
     <div className="viewport">
       <aside className="sidebar">
@@ -52,7 +55,7 @@ export function Shell({ view, onViewChange, onAdd, onAiEntry, mode, businessName
           {mode === 'local' && <span className="mode-badge">Local</span>}
         </div>
         <nav className="side-nav">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button key={item.key} className={`side-nav-item ${view === item.key ? 'active' : ''}`} onClick={() => onViewChange(item.key)}>
               {item.icon}
               <span>{item.label}</span>
@@ -107,7 +110,7 @@ export function Shell({ view, onViewChange, onAdd, onAiEntry, mode, businessName
           <div className="app-alert">
             <span>{syncError}</span>
             <div>
-              {onRetrySync ? <button onClick={onRetrySync}>Retry</button> : null}
+              {onRetrySync ? <button onClick={onRetrySync}>{syncErrorActionLabel}</button> : null}
               {onDismissSyncError ? <button onClick={onDismissSyncError}>Dismiss</button> : null}
             </div>
           </div>

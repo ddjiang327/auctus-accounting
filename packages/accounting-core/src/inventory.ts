@@ -39,6 +39,9 @@ export function inventoryMovementJournalEntry(
   const memo = movement.memo || `${movement.type[0].toUpperCase() + movement.type.slice(1)}: ${product.name}`;
 
   if (movement.type === 'purchase') {
+    if (movement.sourceId && data.transactions.some((tx) => tx.id === movement.sourceId && !tx.voidedAt)) {
+      return null;
+    }
     const apId = apChartId(data);
     if (!apId) return null;
     return {

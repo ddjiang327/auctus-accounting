@@ -4,12 +4,21 @@ import {
   allJournalEntries,
   arApAging,
   basReport,
+  calculateHourlyGross,
+  calculatePayg,
+  calculatePaySlip,
+  computeLeaveBalances,
   creditNoteBalance,
   financialPosition,
+  generatePaymentSummaries,
+  generateSTPCSV,
   gstSplit,
+  inventoryValuation,
   isDateLocked,
   openingBalanceEntries,
   paymentJournalEntry,
+  payRunJournalEntries,
+  periodicLeaveAccrual,
   reconciliationRows,
   trialBalance,
   txBalance,
@@ -17,7 +26,10 @@ import {
   txJournalEntry,
   txTotal,
   validateCreditAllocations,
+  validateInventoryMovementInput,
   validatePaymentInput,
+  validatePurchaseOrderInput,
+  validatePurchaseOrderReceiptInput,
   validateTransactionInput,
 } from "../dist/index.js";
 
@@ -863,5 +875,332 @@ describe("controls and operational reports", () => {
 
     assert.deepEqual(rows.map((row) => row.sourceId), ["sale_2"]);
     assert.equal(rows[0]?.movement, 55);
+  });
+});
+
+describe("inventory accounting", () => {
+  const inventoryChart = [
+    ...chartOfAccounts,
+    { id: "coa_inventory", code: "1220", name: "Inventory", class: "asset", group: "Current Assets", normalBalance: "debit" },
+    { id: "coa_cogs", code: "5000", name: "Cost of Goods Sold", class: "expense", group: "COGS", normalBalance: "debit" },
+    { id: "coa_adjustment", code: "5040", name: "Inventory Adjustments", class: "expense", group: "COGS", normalBalance: "debit" },
+  ];
+  const product = { id: "prod_1", name: "Widget", costPrice: 10, sellPrice: 25 };
+
+  it("does not double-post AP for inventory purchases linked to a transaction", () => {
+    const data = ledger({
+      chartOfAccounts: inventoryChart,
+      products: [product],
+      transactions: [{
+        id: "tx_stock_buy",
+        type: "expense",
+        amount: 100,
+        accountId: "bank",
+        chartAccountId: "coa_inventory",
+        date: "2026-02-01",
+        gstMode: "free",
+        entryMode: "cash",
+        productId: "prod_1",
+        productQty: 10,
+      }],
+      inventoryMovements: [{
+        id: "mov_stock_buy",
+        productId: "prod_1",
+        date: "2026-02-01",
+        type: "purchase",
+        quantity: 10,
+        unitCost: 10,
+        sourceId: "tx_stock_buy",
+      }],
+    });
+
+    const lines = allJournalEntries(data).flatMap((entry) => entry.lines);
+    const apCredit = lines
+      .filter((line) => line.chartAccountId === "coa_ap")
+      .reduce((sum, line) => sum + line.credit, 0);
+    const inventoryDebit = lines
+      .filter((line) => line.chartAccountId === "coa_inventory")
+      .reduce((sum, line) => sum + line.debit, 0);
+
+    assert.equal(apCredit, 0);
+    assert.equal(inventoryDebit, 100);
+  });
+
+  it("posts COGS for sale movements and reduces inventory valuation", () => {
+    const data = ledger({
+      chartOfAccounts: inventoryChart,
+      products: [product],
+      inventoryMovements: [
+        { id: "mov_buy", productId: "prod_1", date: "2026-02-01", type: "purchase", quantity: 10, unitCost: 10 },
+        { id: "mov_sell", productId: "prod_1", date: "2026-02-02", type: "sale", quantity: 3, unitCost: 10, sourceId: "tx_sale" },
+      ],
+    });
+
+    const valuation = inventoryValuation(data)[0];
+    assert.equal(valuation.quantity, 7);
+    assert.equal(valuation.totalValue, 70);
+
+    const lines = allJournalEntries(data).flatMap((entry) => entry.lines);
+    const cogsDebit = lines
+      .filter((line) => line.chartAccountId === "coa_cogs")
+      .reduce((sum, line) => sum + line.debit, 0);
+    const inventoryCredit = lines
+      .filter((line) => line.chartAccountId === "coa_inventory")
+      .reduce((sum, line) => sum + line.credit, 0);
+
+    assert.equal(cogsDebit, 30);
+    assert.equal(inventoryCredit, 30);
+  });
+
+  it("rejects inventory movements and product sales that would make stock negative", () => {
+    const data = ledger({
+      chartOfAccounts: inventoryChart,
+      products: [product],
+      inventoryMovements: [
+        { id: "mov_buy", productId: "prod_1", date: "2026-02-01", type: "purchase", quantity: 2, unitCost: 10 },
+      ],
+    });
+
+    assert.equal(validateInventoryMovementInput(data, {
+      id: "mov_sell",
+      productId: "prod_1",
+      date: "2026-02-02",
+      type: "sale",
+      quantity: 3,
+      unitCost: 10,
+    }).ok, false);
+
+    assert.equal(validateTransactionInput(data, {
+      id: "tx_sale",
+      type: "income",
+      amount: 75,
+      accountId: "bank",
+      chartAccountId: "coa_sales",
+      date: "2026-02-02",
+      gstMode: "free",
+      entryMode: "cash",
+      productId: "prod_1",
+      productQty: 3,
+    }).ok, false);
+  });
+
+  it("validates purchase orders and prevents over-receiving", () => {
+    const data = ledger({
+      chartOfAccounts: inventoryChart,
+      products: [product],
+    });
+    const po = {
+      id: "po_1",
+      date: "2026-02-01",
+      status: "sent",
+      lines: [{ productId: "prod_1", orderedQty: 10, unitCost: 10, receivedQty: 4 }],
+    };
+
+    assert.equal(validatePurchaseOrderInput(data, po).ok, true);
+    assert.equal(validatePurchaseOrderReceiptInput(data, po, { 0: 6 }).ok, true);
+    assert.equal(validatePurchaseOrderReceiptInput(data, po, { 0: 6.01 }).ok, false);
+    assert.equal(validatePurchaseOrderReceiptInput(data, { ...po, status: "draft" }, { 0: 1 }).ok, false);
+    assert.equal(validatePurchaseOrderInput(data, {
+      lines: [{ productId: "prod_1", orderedQty: 0, unitCost: 10, receivedQty: 0 }],
+    }).ok, false);
+  });
+});
+
+describe("payroll estimates", () => {
+  it("uses current resident tax brackets for PAYG estimates", () => {
+    assert.equal(calculatePayg(45000, true), 4288 + 900);
+    assert.equal(calculatePayg(135000, true), 31288 + 2700);
+    assert.equal(calculatePayg(190000, true), 51638 + 3800);
+  });
+
+  it("calculates payslip PAYG estimate, super and net pay", () => {
+    const employee = {
+      id: "emp_1",
+      name: "Alex Worker",
+      payType: "salary",
+      payRate: 78000,
+      payFrequency: "fortnightly",
+      taxFreeThreshold: true,
+    };
+
+    const slip = calculatePaySlip(employee, 3000);
+    assert.equal(slip.employeeId, "emp_1");
+    assert.equal(slip.gross, 3000);
+    assert.equal(slip.superAmount, 360);
+    assert.equal(slip.paygWithheld, 605.69);
+    assert.equal(slip.netPay, 2394.31);
+  });
+
+  it("applies taxable allowances, post-tax deductions and reimbursements to payslips", () => {
+    const employee = {
+      id: "emp_1",
+      name: "Alex Worker",
+      payType: "salary",
+      payRate: 78000,
+      payFrequency: "fortnightly",
+      taxFreeThreshold: true,
+    };
+
+    const slip = calculatePaySlip(employee, 3000, [
+      { type: "allowance", label: "Taxable allowance", amount: 100, taxable: true, superable: true },
+      { type: "deduction", label: "Post-tax deduction", amount: 25 },
+      { type: "reimbursement", label: "Reimbursement", amount: 40, taxable: false, superable: false },
+    ]);
+
+    assert.equal(slip.gross, 3100);
+    assert.equal(slip.superAmount, 372);
+    assert.equal(slip.paygWithheld, 637.69);
+    assert.equal(slip.netPay, 2477.31);
+    assert.equal(slip.adjustments.length, 3);
+  });
+
+  it("includes adjustments in payment summaries and STP CSV exports", () => {
+    const employee = {
+      id: "emp_1",
+      name: "Alex Worker",
+      payType: "salary",
+      payRate: 78000,
+      payFrequency: "fortnightly",
+      taxFreeThreshold: true,
+      tfn: "123456789",
+    };
+    const slip = {
+      id: "slip_1",
+      ...calculatePaySlip(employee, 3000, [
+        { type: "allowance", label: "Tool allowance", amount: 100, taxable: true, superable: true },
+        { type: "deduction", label: "Union fee", amount: 25 },
+        { type: "reimbursement", label: "Travel reimbursement", amount: 40, taxable: false, superable: false },
+      ]),
+    };
+    const run = {
+      id: "run_1",
+      periodStart: "2026-05-01",
+      periodEnd: "2026-05-14",
+      payDate: "2026-05-15",
+      status: "finalised",
+      createdAt: "2026-05-15T00:00:00.000Z",
+      paySlips: [slip],
+    };
+    const data = ledger({ employees: [employee], payRuns: [run] });
+
+    const summary = generatePaymentSummaries(data, "2025-07-01", "2026-06-30")[0];
+    assert.equal(summary.ytdGross, 3100);
+    assert.equal(summary.ytdAllowances, 100);
+    assert.equal(summary.ytdDeductions, 25);
+    assert.equal(summary.ytdReimbursements, 40);
+
+    const csv = generateSTPCSV([run], data);
+    assert.match(csv, /Deductions,Reimbursements,Net Pay,Allowance Details,Deduction Details,Reimbursement Details/);
+    assert.match(csv, /3100\.00,637\.69,372\.00,25\.00,40\.00,2477\.31,Tool allowance: 100\.00,Union fee: 25\.00,Travel reimbursement: 40\.00/);
+  });
+
+  it("posts balanced payroll journals for deductions and reimbursements", () => {
+    const payrollChart = [
+      ...chartOfAccounts,
+      { id: "coa_wages", code: "7000", name: "Salaries & Wages", class: "expense", group: "General & Administrative", normalBalance: "debit" },
+      { id: "coa_super_exp", code: "7080", name: "Superannuation Expense", class: "expense", group: "General & Administrative", normalBalance: "debit" },
+      { id: "coa_reimbursements", code: "7090", name: "Employee Reimbursements", class: "expense", group: "General & Administrative", normalBalance: "debit" },
+      { id: "coa_payg", code: "2400", name: "PAYG Withholding Payable", class: "liability", group: "Current Liabilities - Payroll", normalBalance: "credit" },
+      { id: "coa_super_liab", code: "2410", name: "Superannuation Payable", class: "liability", group: "Current Liabilities - Payroll", normalBalance: "credit" },
+      { id: "coa_deductions", code: "2420", name: "Payroll Deductions Payable", class: "liability", group: "Current Liabilities - Payroll", normalBalance: "credit" },
+    ];
+    const employee = {
+      id: "emp_1",
+      name: "Alex Worker",
+      payType: "salary",
+      payRate: 78000,
+      payFrequency: "fortnightly",
+      taxFreeThreshold: true,
+    };
+    const slip = {
+      id: "slip_1",
+      ...calculatePaySlip(employee, 3000, [
+        { type: "allowance", label: "Taxable allowance", amount: 100, taxable: true, superable: true },
+        { type: "deduction", label: "Union fee", amount: 25 },
+        { type: "reimbursement", label: "Travel reimbursement", amount: 40, taxable: false, superable: false },
+      ]),
+    };
+    const run = {
+      id: "run_1",
+      periodStart: "2026-05-01",
+      periodEnd: "2026-05-14",
+      payDate: "2026-05-15",
+      payAccountId: "bank",
+      status: "finalised",
+      createdAt: "2026-05-15T00:00:00.000Z",
+      paySlips: [slip],
+    };
+    const entries = payRunJournalEntries(run, ledger({ chartOfAccounts: payrollChart }));
+    const wagesEntry = entries.find((entry) => entry.id === "je_payrun_wages_run_1");
+    assert.ok(wagesEntry);
+
+    const debit = wagesEntry.lines.reduce((sum, line) => sum + line.debit, 0);
+    const credit = wagesEntry.lines.reduce((sum, line) => sum + line.credit, 0);
+    assert.equal(Math.round(debit * 100) / 100, Math.round(credit * 100) / 100);
+    assert.equal(wagesEntry.lines.find((line) => line.chartAccountId === "coa_reimbursements")?.debit, 40);
+    assert.equal(wagesEntry.lines.find((line) => line.chartAccountId === "coa_deductions")?.credit, 25);
+  });
+
+  it("applies casual loading for hourly gross calculations", () => {
+    const employee = {
+      id: "emp_casual",
+      name: "Casey Casual",
+      payType: "hourly",
+      payRate: 30,
+      payFrequency: "weekly",
+      taxFreeThreshold: true,
+      employmentBasis: "casual",
+      ordinaryHoursPerWeek: 20,
+      casualLoadingRate: 0.25,
+    };
+
+    assert.equal(calculateHourlyGross(employee, 10), 375);
+  });
+
+  it("pro-rates leave accrual and excludes casual employees from paid leave", () => {
+    const partTime = {
+      id: "emp_part_time",
+      name: "Pat Parttime",
+      payType: "hourly",
+      payRate: 40,
+      payFrequency: "fortnightly",
+      taxFreeThreshold: true,
+      employmentBasis: "part_time",
+      ordinaryHoursPerWeek: 19,
+    };
+    const casual = {
+      ...partTime,
+      id: "emp_casual",
+      name: "Casey Casual",
+      employmentBasis: "casual",
+    };
+
+    assert.deepEqual(periodicLeaveAccrual(partTime), {
+      annualLeaveHours: 2.92,
+      sickLeaveHours: 1.46,
+    });
+    assert.deepEqual(periodicLeaveAccrual(casual), {
+      annualLeaveHours: 0,
+      sickLeaveHours: 0,
+    });
+
+    const balances = computeLeaveBalances(ledger({
+      employees: [partTime, casual],
+      payRuns: [{
+        id: "run_1",
+        periodStart: "2026-05-01",
+        periodEnd: "2026-05-14",
+        payDate: "2026-05-15",
+        status: "finalised",
+        createdAt: "2026-05-15T00:00:00.000Z",
+        paySlips: [
+          { id: "slip_1", employeeId: "emp_part_time", gross: 1520, paygWithheld: 100, superAmount: 182.4, netPay: 1420 },
+          { id: "slip_2", employeeId: "emp_casual", gross: 950, paygWithheld: 50, superAmount: 114, netPay: 900 },
+        ],
+      }],
+    }));
+
+    assert.deepEqual(balances.emp_part_time, { annualLeaveHours: 2.92, sickLeaveHours: 1.46 });
+    assert.deepEqual(balances.emp_casual, { annualLeaveHours: 0, sickLeaveHours: 0 });
   });
 });

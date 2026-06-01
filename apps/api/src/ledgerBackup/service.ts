@@ -1,4 +1,23 @@
-import type { Account, BankFeedItem, BankReconciliation, Category, ChartAccount, Contact, InvoicePayment, LedgerData, ManualJournal, PeriodLock, Transaction } from "@auctus/shared-types";
+import type {
+  Account,
+  BankFeedItem,
+  BankReconciliation,
+  Category,
+  ChartAccount,
+  Contact,
+  Employee,
+  InventoryMovement,
+  InvoicePayment,
+  LedgerData,
+  ManualJournal,
+  PayRun,
+  PeriodLock,
+  Product,
+  PurchaseOrder,
+  Remittance,
+  STPSubmission,
+  Transaction,
+} from "@auctus/shared-types";
 import { randomUUID } from "node:crypto";
 
 import { recordAuditEvent } from "../audit/service.js";
@@ -76,6 +95,8 @@ const parseLedgerImport = (body: unknown): LedgerData => {
       nextCreditNoteNumber: positiveInteger(settings.nextCreditNoteNumber, 1),
       nextSupplierCreditNumber: positiveInteger(settings.nextSupplierCreditNumber, 1),
       nextReceiptNumber: positiveInteger(settings.nextReceiptNumber, 1),
+      inventoryStateVersion: positiveInteger(settings.inventoryStateVersion, 1),
+      payrollStateVersion: positiveInteger(settings.payrollStateVersion, 1),
       invoicePrefix: stringValue(settings.invoicePrefix, "INV-") || "INV-",
       billPrefix: stringValue(settings.billPrefix, "BILL-") || "BILL-",
       creditNotePrefix: stringValue(settings.creditNotePrefix, "CN-") || "CN-",
@@ -109,14 +130,14 @@ const parseLedgerImport = (body: unknown): LedgerData => {
     bankFeedItems: asArray<BankFeedItem>(payload.bankFeedItems),
     recurringTemplates: [],
     auditLog: [],
-    products: [],
+    products: asArray<Product>(payload.products),
     inventoryItems: [],
-    inventoryMovements: [],
-    employees: [],
-    payRuns: [],
-    remittances: [],
-    stpSubmissions: [],
-    purchaseOrders: [],
+    inventoryMovements: asArray<InventoryMovement>(payload.inventoryMovements),
+    employees: asArray<Employee>(payload.employees),
+    payRuns: asArray<PayRun>(payload.payRuns),
+    remittances: asArray<Remittance>(payload.remittances),
+    stpSubmissions: asArray<STPSubmission>(payload.stpSubmissions),
+    purchaseOrders: asArray<PurchaseOrder>(payload.purchaseOrders),
     fixedAssets: [],
     depreciationRuns: [],
   };
@@ -136,6 +157,14 @@ const requireAdminSnapshot = async (
 
 const deleteRows = async (supabase: SupabaseServiceClient, businessId: string): Promise<void> => {
   const tables = [
+    "stp_submissions",
+    "remittances",
+    "pay_slips",
+    "pay_runs",
+    "employees",
+    "purchase_order_lines",
+    "purchase_orders",
+    "inventory_movements",
     "bank_reconciliations",
     "bank_feed_items",
     "manual_journal_lines",
@@ -143,6 +172,7 @@ const deleteRows = async (supabase: SupabaseServiceClient, businessId: string): 
     "credit_allocations",
     "invoice_payments",
     "transactions",
+    "products",
     "period_locks",
     "contacts",
     "categories",
@@ -205,6 +235,14 @@ const replaceLedgerData = async (
     ...ledger.manualJournals,
     ...ledger.bankFeedItems,
     ...ledger.bankReconciliations,
+    ...ledger.products,
+    ...ledger.inventoryMovements,
+    ...ledger.purchaseOrders,
+    ...ledger.employees,
+    ...ledger.payRuns,
+    ...ledger.payRuns.flatMap((run) => run.paySlips || []),
+    ...ledger.remittances,
+    ...ledger.stpSubmissions,
   ]) {
     idFor((item as { id?: string }).id);
   }
@@ -246,6 +284,8 @@ const replaceLedgerData = async (
       next_credit_note_number: ledger.settings.nextCreditNoteNumber,
       next_supplier_credit_number: ledger.settings.nextSupplierCreditNumber,
       next_receipt_number: ledger.settings.nextReceiptNumber,
+      inventory_state_version: ledger.settings.inventoryStateVersion,
+      payroll_state_version: ledger.settings.payrollStateVersion,
     })
     .eq("business_id", businessId);
   if (settingsError) throw new ApiError(500, "ledger_replace_failed", settingsError.message);
@@ -300,6 +340,21 @@ const replaceLedgerData = async (
     created_at: contact.createdAt || new Date().toISOString(),
   })));
 
+  await insertRows(supabase, "products", ledger.products.map((product) => ({
+    id: idFor(product.id),
+    business_id: businessId,
+    name: product.name,
+    sku: product.sku ?? null,
+    unit_of_measure: product.unitOfMeasure ?? null,
+    cost_price: numberValue(product.costPrice, "product.costPrice"),
+    sell_price: numberValue(product.sellPrice, "product.sellPrice"),
+    reorder_point: product.reorderPoint ?? null,
+    inventory_chart_account_id: product.inventoryChartAccountId ? idMap.get(product.inventoryChartAccountId) : null,
+    cogs_chart_account_id: product.cogsChartAccountId ? idMap.get(product.cogsChartAccountId) : null,
+    revenue_chart_account_id: product.revenueChartAccountId ? idMap.get(product.revenueChartAccountId) : null,
+    archived_at: product.archivedAt ?? null,
+  })));
+
   await insertRows(supabase, "transactions", ledger.transactions.map((transaction) => ({
     id: idFor(transaction.id),
     business_id: businessId,
@@ -322,6 +377,8 @@ const replaceLedgerData = async (
     payment_terms: transaction.paymentTerms ?? null,
     doc_status: transaction.docStatus ?? null,
     recurring_template_id: null,
+    product_id: transaction.productId ? idMap.get(transaction.productId) : null,
+    product_qty: transaction.productQty ?? null,
     voided_at: transaction.voidedAt ?? null,
   })));
 
@@ -408,6 +465,110 @@ const replaceLedgerData = async (
     created_at: reconciliation.createdAt || new Date().toISOString(),
     finalized_at: reconciliation.finalizedAt || reconciliation.createdAt || new Date().toISOString(),
     voided_at: reconciliation.voidedAt ?? null,
+  })));
+
+  await insertRows(supabase, "inventory_movements", ledger.inventoryMovements.map((movement) => ({
+    id: idFor(movement.id),
+    business_id: businessId,
+    product_id: idFor(movement.productId),
+    date: dateString(movement.date, "inventoryMovement.date"),
+    type: movement.type,
+    quantity: numberValue(movement.quantity, "inventoryMovement.quantity"),
+    unit_cost: numberValue(movement.unitCost, "inventoryMovement.unitCost"),
+    memo: movement.memo ?? null,
+    source_id: mapSourceId(movement.sourceId, idMap) ?? null,
+  })));
+
+  await insertRows(supabase, "purchase_orders", ledger.purchaseOrders.map((order) => ({
+    id: idFor(order.id),
+    business_id: businessId,
+    date: dateString(order.date, "purchaseOrder.date"),
+    expected_date: order.expectedDate ?? null,
+    supplier_id: order.supplierId ? idMap.get(order.supplierId) : null,
+    supplier_name: order.supplierName ?? null,
+    status: order.status,
+    memo: order.memo ?? null,
+    received_at: order.receivedAt ?? null,
+    bill_transaction_id: order.billTransactionId ? idMap.get(order.billTransactionId) : null,
+    billed_at: order.billedAt ?? null,
+  })));
+
+  await insertRows(supabase, "purchase_order_lines", ledger.purchaseOrders.flatMap((order) =>
+    order.lines.map((line, lineIndex) => ({
+      id: `${idFor(order.id)}_${lineIndex}`,
+      business_id: businessId,
+      purchase_order_id: idFor(order.id),
+      product_id: idFor(line.productId),
+      ordered_qty: numberValue(line.orderedQty, "purchaseOrderLine.orderedQty"),
+      unit_cost: numberValue(line.unitCost, "purchaseOrderLine.unitCost"),
+      received_qty: numberValue(line.receivedQty, "purchaseOrderLine.receivedQty"),
+      line_order: lineIndex,
+    })),
+  ));
+
+  await insertRows(supabase, "employees", ledger.employees.map((employee) => ({
+    id: idFor(employee.id),
+    business_id: businessId,
+    name: employee.name,
+    pay_type: employee.payType,
+    pay_rate: numberValue(employee.payRate, "employee.payRate"),
+    pay_frequency: employee.payFrequency,
+    tax_free_threshold: employee.taxFreeThreshold,
+    employment_basis: employee.employmentBasis ?? "full_time",
+    ordinary_hours_per_week: employee.ordinaryHoursPerWeek ?? 38,
+    casual_loading_rate: employee.casualLoadingRate ?? 0.25,
+    super_fund_name: employee.superFundName ?? null,
+    tfn: employee.tfn ?? null,
+    archived_at: employee.archivedAt ?? null,
+  })));
+
+  await insertRows(supabase, "pay_runs", ledger.payRuns.map((run) => ({
+    id: idFor(run.id),
+    business_id: businessId,
+    period_start: dateString(run.periodStart, "payRun.periodStart"),
+    period_end: dateString(run.periodEnd, "payRun.periodEnd"),
+    pay_date: dateString(run.payDate, "payRun.payDate"),
+    pay_account_id: run.payAccountId ? idMap.get(run.payAccountId) : null,
+    status: run.status,
+    created_at: run.createdAt || new Date().toISOString(),
+    finalised_at: run.finalisedAt ?? null,
+    voided_at: run.voidedAt ?? null,
+  })));
+
+  await insertRows(supabase, "pay_slips", ledger.payRuns.flatMap((run) =>
+    run.paySlips.map((slip, slipIndex) => ({
+      id: idFor(slip.id),
+      business_id: businessId,
+      pay_run_id: idFor(run.id),
+      employee_id: idFor(slip.employeeId),
+      gross: numberValue(slip.gross, "paySlip.gross"),
+      payg_withheld: numberValue(slip.paygWithheld, "paySlip.paygWithheld"),
+      super_amount: numberValue(slip.superAmount, "paySlip.superAmount"),
+      net_pay: numberValue(slip.netPay, "paySlip.netPay"),
+      hours: slip.hours ?? null,
+      adjustments: slip.adjustments ?? [],
+      line_order: slipIndex,
+    })),
+  ));
+
+  await insertRows(supabase, "remittances", ledger.remittances.map((remittance) => ({
+    id: idFor(remittance.id),
+    business_id: businessId,
+    date: dateString(remittance.date, "remittance.date"),
+    type: remittance.type,
+    amount: numberValue(remittance.amount, "remittance.amount"),
+    pay_account_id: remittance.payAccountId ? idMap.get(remittance.payAccountId) : null,
+    memo: remittance.memo ?? null,
+  })));
+
+  await insertRows(supabase, "stp_submissions", ledger.stpSubmissions.map((submission) => ({
+    id: idFor(submission.id),
+    business_id: businessId,
+    pay_run_id: idFor(submission.payRunId),
+    submitted_at: submission.submittedAt,
+    status: submission.status,
+    reference_number: submission.referenceNumber ?? null,
+    memo: submission.memo ?? null,
   })));
 
   return {
@@ -501,6 +662,8 @@ export const resetLedgerData = async (
       next_credit_note_number: 1,
       next_supplier_credit_number: 1,
       next_receipt_number: 1,
+      inventory_state_version: 1,
+      payroll_state_version: 1,
     })
     .eq("business_id", businessId);
   if (settingsError) throw new ApiError(500, "ledger_reset_failed", settingsError.message);

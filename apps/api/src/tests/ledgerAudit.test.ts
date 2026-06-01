@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { invokeApi, ledgerData } from "./setup.js";
+import { createContext, createSupabaseMock, invokeApi, ledgerData, testUser } from "./setup.js";
 import { getLedgerSnapshot } from "../ledger/service.js";
 import { recordAuditEvent } from "../audit/service.js";
 
@@ -133,5 +133,112 @@ describe("ledger export audit trail", () => {
         }),
       }),
     );
+  });
+
+  it("restore keeps inventory and payroll module data", async () => {
+    const mutations: Array<{ table: string; operation: string; payload: unknown }> = [];
+    const context = createContext(createSupabaseMock({
+      users: { token: testUser },
+      onMutation: (table, operation, payload) => mutations.push({ table, operation, payload }),
+    }));
+    const ledger = ledgerData({
+      chartOfAccounts: [
+        { id: "ca_bank", code: "1000", name: "Bank", class: "asset", group: "Current Assets", normalBalance: "debit" },
+        { id: "ca_inventory", code: "1220", name: "Inventory", class: "asset", group: "Current Assets - Inventory", normalBalance: "debit" },
+        { id: "ca_cogs", code: "5000", name: "COGS", class: "expense", group: "Cost of Goods Sold", normalBalance: "debit" },
+        { id: "ca_sales", code: "4000", name: "Sales", class: "revenue", group: "Revenue", normalBalance: "credit" },
+      ],
+      products: [{
+        id: "prod_1",
+        name: "Widget",
+        unitOfMeasure: "each",
+        costPrice: 12,
+        sellPrice: 24,
+        inventoryChartAccountId: "ca_inventory",
+        cogsChartAccountId: "ca_cogs",
+        revenueChartAccountId: "ca_sales",
+      }],
+      inventoryMovements: [{
+        id: "move_1",
+        productId: "prod_1",
+        date: "2026-02-01",
+        type: "purchase",
+        quantity: 5,
+        unitCost: 12,
+        sourceId: "tx_1",
+      }],
+      purchaseOrders: [{
+        id: "po_1",
+        date: "2026-02-01",
+        supplierName: "Supplier",
+        status: "received",
+        receivedAt: "2026-02-02T00:00:00.000Z",
+        billTransactionId: "tx_1",
+        billedAt: "2026-02-03T00:00:00.000Z",
+        lines: [{ productId: "prod_1", orderedQty: 5, receivedQty: 5, unitCost: 12 }],
+      }],
+      employees: [{
+        id: "emp_1",
+        name: "Alex",
+        payType: "salary",
+        payRate: 78000,
+        payFrequency: "weekly",
+        taxFreeThreshold: true,
+        employmentBasis: "full_time",
+        ordinaryHoursPerWeek: 38,
+        casualLoadingRate: 0.25,
+      }],
+      payRuns: [{
+        id: "payrun_1",
+        periodStart: "2026-02-01",
+        periodEnd: "2026-02-07",
+        payDate: "2026-02-08",
+        status: "finalised",
+        createdAt: "2026-02-08T00:00:00.000Z",
+        paySlips: [{
+          id: "slip_1",
+          employeeId: "emp_1",
+          gross: 1500,
+          paygWithheld: 300,
+          superAmount: 172.5,
+          netPay: 1200,
+          adjustments: [],
+        }],
+      }],
+      remittances: [{
+        id: "remit_1",
+        date: "2026-02-15",
+        type: "payg",
+        amount: 300,
+        payAccountId: "bank_1",
+      }],
+      stpSubmissions: [{
+        id: "stp_1",
+        payRunId: "payrun_1",
+        submittedAt: "2026-02-08T00:00:00.000Z",
+        status: "accepted",
+        referenceNumber: "STP-1",
+      }],
+    });
+
+    mockedGetLedgerSnapshot.mockResolvedValue({
+      business: { id: "biz_1", role: "owner" },
+      ledger,
+    });
+
+    const result = await invokeApi("POST", "/v1/businesses/biz_1/restore", { ledger }, context);
+
+    expect(result.statusCode).toBe(200);
+    expect(mutations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ table: "products", operation: "insert" }),
+      expect.objectContaining({ table: "inventory_movements", operation: "insert" }),
+      expect.objectContaining({ table: "purchase_orders", operation: "insert" }),
+      expect.objectContaining({ table: "purchase_order_lines", operation: "insert" }),
+      expect.objectContaining({ table: "employees", operation: "insert" }),
+      expect.objectContaining({ table: "pay_runs", operation: "insert" }),
+      expect.objectContaining({ table: "pay_slips", operation: "insert" }),
+      expect.objectContaining({ table: "remittances", operation: "insert" }),
+      expect.objectContaining({ table: "stp_submissions", operation: "insert" }),
+    ]));
   });
 });

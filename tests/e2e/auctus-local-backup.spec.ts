@@ -102,4 +102,47 @@ test.describe('Auctus web local backup recovery', () => {
     await expect(page.getByText(/Period lock is active through/)).toBeVisible();
     await expect(page.getByText(/New transactions dated today cannot be created/)).toBeVisible();
   });
+
+  test('creates a supplier bill from a received purchase order without reopening PO billing', async ({ page }) => {
+    await page.goto('/');
+    await waitForHome(page);
+
+    const runId = Date.now();
+    const productName = `PO Widget ${runId}`;
+    const supplierName = `PO Supplier ${runId}`;
+
+    await page.getByRole('button', { name: 'Inventory' }).click();
+    await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Products' }).click();
+    await page.getByRole('button', { name: '+ Add Product' }).click();
+    await page.getByLabel('Name *').fill(productName);
+    await page.getByLabel('Cost Price').fill('12');
+    await page.getByLabel('Sell Price').fill('20');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText(productName)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Purchase Orders' }).click();
+    await page.getByRole('button', { name: '+ New Purchase Order' }).click();
+    await page.getByLabel('Supplier Name').fill(supplierName);
+    const poModal = page.locator('.sheet').filter({ hasText: 'New Purchase Order' });
+    await poModal.getByPlaceholder('Qty').fill('5');
+    await poModal.getByPlaceholder('Unit cost').fill('12');
+    await page.getByRole('button', { name: 'Create PO' }).click();
+    await expect(page.getByText(supplierName)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Mark Sent' }).click();
+    await page.getByRole('button', { name: 'Receive' }).click();
+    await page.getByRole('button', { name: 'Confirm Receipt' }).click();
+    await expect(page.getByText('Received')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Create Bill' }).click();
+    await expect(page.getByText('Bill created')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create Bill' })).not.toBeVisible();
+
+    await page.getByRole('button', { name: 'Purchases' }).click();
+    const billRow = page.locator('.document-row').filter({ hasText: supplierName });
+    await expect(billRow).toBeVisible();
+    await expect(billRow.getByText('Total $60.00')).toBeVisible();
+  });
 });

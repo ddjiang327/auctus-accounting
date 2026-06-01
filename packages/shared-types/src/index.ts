@@ -279,11 +279,15 @@ export interface PurchaseOrder {
   lines: POLine[];
   memo?: string;
   receivedAt?: string;
+  billTransactionId?: string;
+  billedAt?: string;
 }
 
 export type PayFrequency = 'weekly' | 'fortnightly' | 'monthly';
 export type PayType = 'salary' | 'hourly';
+export type EmploymentBasis = 'full_time' | 'part_time' | 'casual';
 export type PayRunStatus = 'draft' | 'finalised';
+export type PayAdjustmentType = 'allowance' | 'deduction' | 'reimbursement';
 
 export interface Employee {
   id: string;
@@ -292,6 +296,9 @@ export interface Employee {
   payRate: number;
   payFrequency: PayFrequency;
   taxFreeThreshold: boolean;
+  employmentBasis?: EmploymentBasis;
+  ordinaryHoursPerWeek?: number;
+  casualLoadingRate?: number;
   superFundName?: string;
   tfn?: string;
   archivedAt?: string;
@@ -305,6 +312,16 @@ export interface PaySlip {
   superAmount: number;
   netPay: number;
   hours?: number;
+  adjustments?: PayAdjustment[];
+}
+
+export interface PayAdjustment {
+  id?: string;
+  type: PayAdjustmentType;
+  label: string;
+  amount: number;
+  taxable?: boolean;
+  superable?: boolean;
 }
 
 export interface PayRun {
@@ -363,6 +380,8 @@ export interface LedgerData {
     nextCreditNoteNumber: number;
     nextSupplierCreditNumber: number;
     nextReceiptNumber: number;
+    inventoryStateVersion: number;
+    payrollStateVersion: number;
     invoicePrefix: string;
     billPrefix: string;
     creditNotePrefix: string;

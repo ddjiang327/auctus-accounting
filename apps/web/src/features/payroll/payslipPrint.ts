@@ -13,6 +13,12 @@ function slipHtml(slip: PaySlip, employee: Employee, run: PayRun, bizName: strin
     ? `<tr><td class="label">Hours</td><td class="val">${slip.hours.toFixed(2)} hrs</td></tr>`
     : '';
   const superFund = employee.superFundName ? `<p class="sub">Super fund: ${employee.superFundName}</p>` : '';
+  const allowances = (slip.adjustments || []).filter((item) => item.type === 'allowance');
+  const deductions = (slip.adjustments || []).filter((item) => item.type === 'deduction');
+  const reimbursements = (slip.adjustments || []).filter((item) => item.type === 'reimbursement');
+  const allowanceRows = allowances.map((item) => `<tr><td class="label">${item.label}</td><td class="val">${fmt(item.amount)}</td></tr>`).join('');
+  const deductionRows = deductions.map((item) => `<tr><td class="label">${item.label}</td><td class="val">${fmt(item.amount)}</td></tr>`).join('');
+  const reimbursementRows = reimbursements.map((item) => `<tr><td class="label">${item.label}</td><td class="val">${fmt(item.amount)}</td></tr>`).join('');
 
   return `
 <div class="slip">
@@ -37,15 +43,23 @@ function slipHtml(slip: PaySlip, employee: Employee, run: PayRun, bizName: strin
     <div class="section-title">Earnings</div>
     <table>
       <tr><td class="label">Gross pay</td><td class="val">${fmt(slip.gross)}</td></tr>
+      ${allowanceRows}
     </table>
   </div>
 
   <div class="section">
     <div class="section-title">Deductions</div>
     <table>
-      <tr><td class="label">PAYG withholding</td><td class="val">${fmt(slip.paygWithheld)}</td></tr>
+      <tr><td class="label">PAYG withholding estimate</td><td class="val">${fmt(slip.paygWithheld)}</td></tr>
+      ${deductionRows}
     </table>
   </div>
+
+  ${reimbursementRows ? `
+  <div class="section">
+    <div class="section-title">Reimbursements</div>
+    <table>${reimbursementRows}</table>
+  </div>` : ''}
 
   <div class="net-row">
     <span class="net-label">Net pay</span>
@@ -56,6 +70,7 @@ function slipHtml(slip: PaySlip, employee: Employee, run: PayRun, bizName: strin
     <span>Superannuation (paid separately to fund)</span>
     <span>${fmt(slip.superAmount)}</span>
   </div>
+  <p class="sub">PAYG withholding is an estimate. Confirm against ATO PAYG withholding tax tables before lodging or paying wages.</p>
   ${superFund}
 </div>`;
 }

@@ -10,6 +10,9 @@ type SupabaseMockOptions = {
   users?: UserMap;
   membershipRole?: "owner" | "admin" | "bookkeeper" | "viewer" | null;
   rpcHandlers?: Record<string, (args: unknown) => unknown>;
+  rpcErrors?: Record<string, { message: string }>;
+  onRpc?: (fnName: string, args: unknown) => void;
+  onMutation?: (table: string, operation: "insert" | "update" | "delete", payload: unknown) => void;
 };
 
 type MockResponse = ServerResponse & {
@@ -50,18 +53,32 @@ class QueryBuilder {
 
   delete() {
     this.operation = "delete";
+    this.options.onMutation?.(this.table, "delete", undefined);
     return this;
   }
 
   insert(payload: unknown) {
     this.operation = "insert";
     this.payload = payload;
+    this.options.onMutation?.(this.table, "insert", payload);
+    return this;
+  }
+
+  upsert(payload: unknown) {
+    this.operation = "insert";
+    this.payload = payload;
+    this.options.onMutation?.(this.table, "insert", payload);
     return this;
   }
 
   update(payload: unknown) {
     this.operation = "update";
     this.payload = payload;
+    this.options.onMutation?.(this.table, "update", payload);
+    return this;
+  }
+
+  not() {
     return this;
   }
 
@@ -93,6 +110,8 @@ class QueryBuilder {
           next_credit_note_number: 1,
           next_supplier_credit_number: 1,
           next_receipt_number: 1,
+          inventory_state_version: 1,
+          payroll_state_version: 1,
         },
         error: null,
       };
@@ -207,6 +226,10 @@ export function createSupabaseMock(options: SupabaseMockOptions = {}) {
       return new QueryBuilder(table, options);
     },
     async rpc(fnName: string, args?: unknown) {
+      options.onRpc?.(fnName, args);
+      if (options.rpcErrors?.[fnName]) {
+        return { data: null, error: options.rpcErrors[fnName] };
+      }
       if (options.rpcHandlers?.[fnName]) {
         return { data: options.rpcHandlers[fnName](args), error: null };
       }
@@ -303,6 +326,8 @@ export function ledgerData(overrides: Partial<LedgerData> = {}): LedgerData {
       nextCreditNoteNumber: 1,
       nextSupplierCreditNumber: 1,
       nextReceiptNumber: 1,
+      inventoryStateVersion: 1,
+      payrollStateVersion: 1,
       invoicePrefix: "INV",
       billPrefix: "BILL",
       creditNotePrefix: "CN",
@@ -329,6 +354,16 @@ export function ledgerData(overrides: Partial<LedgerData> = {}): LedgerData {
     bankFeedItems: [],
     recurringTemplates: [],
     auditLog: [],
+    products: [],
+    inventoryItems: [],
+    inventoryMovements: [],
+    employees: [],
+    payRuns: [],
+    remittances: [],
+    stpSubmissions: [],
+    purchaseOrders: [],
+    fixedAssets: [],
+    depreciationRuns: [],
     ...overrides,
   };
 }

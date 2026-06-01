@@ -15,7 +15,13 @@ export function normalizeData(raw: Partial<LedgerData> | null | undefined): Ledg
     ...base,
     ...raw,
     meta: { ...base.meta, ...(raw.meta || {}), version: 2 },
-    settings: { ...base.settings, ...(raw.settings || {}), gstRate: 0.1 },
+    settings: {
+      ...base.settings,
+      ...(raw.settings || {}),
+      gstRate: 0.1,
+      inventoryStateVersion: raw.settings?.inventoryStateVersion || 1,
+      payrollStateVersion: raw.settings?.payrollStateVersion || 1,
+    },
     accounts: raw.accounts?.length ? raw.accounts : base.accounts,
     chartOfAccounts: raw.chartOfAccounts?.length ? raw.chartOfAccounts : base.chartOfAccounts,
     categories: {

@@ -1,5 +1,6 @@
-import type { CreditAllocation, InvoicePayment, LedgerData, Transaction } from '@auctus/shared-types';
+import type { CreditAllocation, InventoryMovement, InvoicePayment, LedgerData, PurchaseOrder, Transaction } from '@auctus/shared-types';
 import { creditNoteBalance, isCreditNote, isInvoice, txBalance } from './documents.js';
+import { computeInventoryItems } from './inventory.js';
 import { isDateLocked } from './periodLocks.js';
 
 export interface ValidationResult {
@@ -20,6 +21,105 @@ export function validateTransactionInput(data: LedgerData, tx: Transaction, opti
     const paymentAmount = Number(payment.amount);
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) errors.push('Payment amount must be greater than zero.');
     if (!options.allowLockedPeriod && isDateLocked(data, payment.date)) errors.push(`Payment date ${payment.date} is in a locked period.`);
+  }
+  if (tx.type === 'income' && tx.productId && !tx.voidedAt) {
+    const quantity = Number(tx.productQty || 1);
+    const onHand = computeInventoryItems(data).find((item) => item.productId === tx.productId)?.quantity || 0;
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      errors.push('Product quantity must be greater than zero.');
+    } else if (quantity - onHand > 0.005) {
+      const product = data.products?.find((item) => item.id === tx.productId);
+      errors.push(`Insufficient stock for ${product?.name || tx.productId}. Available ${onHand}.`);
+    }
+  }
+  return validation(errors);
+}
+
+export function validateInventoryMovementInput(data: LedgerData, movement: InventoryMovement): ValidationResult {
+  const errors: string[] = [];
+  const quantity = Number(movement.quantity);
+  const unitCost = Number(movement.unitCost);
+  if (!movement.productId || !data.products?.some((product) => product.id === movement.productId && !product.archivedAt)) {
+    errors.push('Product is required.');
+  }
+  if (!Number.isFinite(quantity) || quantity === 0) {
+    errors.push('Inventory quantity must not be zero.');
+  }
+  if (!Number.isFinite(unitCost) || unitCost < 0) {
+    errors.push('Inventory unit cost must be zero or greater.');
+  }
+  if (movement.type === 'sale') {
+    const onHand = computeInventoryItems(data).find((item) => item.productId === movement.productId)?.quantity || 0;
+    const saleQty = Math.abs(quantity);
+    if (saleQty - onHand > 0.005) {
+      const product = data.products?.find((item) => item.id === movement.productId);
+      errors.push(`Insufficient stock for ${product?.name || movement.productId}. Available ${onHand}.`);
+    }
+  }
+  if (movement.type === 'adjustment' && quantity < 0) {
+    const onHand = computeInventoryItems(data).find((item) => item.productId === movement.productId)?.quantity || 0;
+    const reduction = Math.abs(quantity);
+    if (reduction - onHand > 0.005) {
+      const product = data.products?.find((item) => item.id === movement.productId);
+      errors.push(`Adjustment would make ${product?.name || movement.productId} stock negative. Available ${onHand}.`);
+    }
+  }
+  return validation(errors);
+}
+
+export function validatePurchaseOrderInput(data: LedgerData, po: Pick<PurchaseOrder, 'lines'>): ValidationResult {
+  const errors: string[] = [];
+  if (!po.lines.length) {
+    errors.push('Purchase order must have at least one line.');
+  }
+  po.lines.forEach((line, index) => {
+    const lineName = `Line ${index + 1}`;
+    if (!line.productId || !data.products?.some((product) => product.id === line.productId && !product.archivedAt)) {
+      errors.push(`${lineName}: product is required.`);
+    }
+    if (!Number.isFinite(Number(line.orderedQty)) || Number(line.orderedQty) <= 0) {
+      errors.push(`${lineName}: ordered quantity must be greater than zero.`);
+    }
+    if (!Number.isFinite(Number(line.unitCost)) || Number(line.unitCost) < 0) {
+      errors.push(`${lineName}: unit cost must be zero or greater.`);
+    }
+    if (!Number.isFinite(Number(line.receivedQty)) || Number(line.receivedQty) < 0) {
+      errors.push(`${lineName}: received quantity must be zero or greater.`);
+    }
+    if (Number(line.receivedQty) - Number(line.orderedQty) > 0.005) {
+      errors.push(`${lineName}: received quantity cannot exceed ordered quantity.`);
+    }
+  });
+  return validation(errors);
+}
+
+export function validatePurchaseOrderReceiptInput(
+  data: LedgerData,
+  po: PurchaseOrder,
+  receiptQtys: Record<number, number>,
+): ValidationResult {
+  const errors = validatePurchaseOrderInput(data, po).errors;
+  if (po.status !== 'sent') {
+    errors.push('Only sent purchase orders can be received.');
+  }
+
+  let totalReceivedNow = 0;
+  po.lines.forEach((line, index) => {
+    const qty = Number(receiptQtys[index] || 0);
+    const remaining = Number(line.orderedQty) - Number(line.receivedQty || 0);
+    const lineName = `Line ${index + 1}`;
+    if (!Number.isFinite(qty) || qty < 0) {
+      errors.push(`${lineName}: receive quantity must be zero or greater.`);
+      return;
+    }
+    if (qty - remaining > 0.005) {
+      errors.push(`${lineName}: receive quantity cannot exceed remaining quantity ${remaining}.`);
+    }
+    totalReceivedNow += qty;
+  });
+
+  if (totalReceivedNow <= 0) {
+    errors.push('Receive at least one item.');
   }
   return validation(errors);
 }

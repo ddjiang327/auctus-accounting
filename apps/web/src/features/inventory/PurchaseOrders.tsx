@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { fmtMoney, todayStr, uid } from '../../domain/accounting';
+import { fmtMoney, todayStr, uid, validatePurchaseOrderInput, validatePurchaseOrderReceiptInput } from '../../domain/accounting';
 import { Modal } from '../../components/Modal';
 import type { InventoryMovement, LedgerData, POLine, POStatus, Product, PurchaseOrder } from '../../domain/models';
 
@@ -7,6 +7,11 @@ interface Props {
   data: LedgerData;
   onDataChange: (data: LedgerData) => void;
   canWrite?: boolean;
+  onCreatePurchaseOrder?: (po: PurchaseOrder) => void | Promise<void>;
+  onMarkPurchaseOrderSent?: (po: PurchaseOrder) => void | Promise<void>;
+  onCancelPurchaseOrder?: (po: PurchaseOrder) => void | Promise<void>;
+  onReceivePurchaseOrder?: (po: PurchaseOrder, receiptQtys: Record<number, number>, date: string) => void | Promise<void>;
+  onCreateBillFromPO?: (po: PurchaseOrder) => void | Promise<void>;
 }
 
 const STATUS_LABEL: Record<POStatus, string> = {
@@ -24,10 +29,25 @@ function poTotal(po: PurchaseOrder) {
   return po.lines.reduce((s, l) => s + l.orderedQty * l.unitCost, 0);
 }
 
-export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
+function poReceivedTotal(po: PurchaseOrder) {
+  return po.lines.reduce((s, l) => s + (l.receivedQty || 0) * l.unitCost, 0);
+}
+
+export function PurchaseOrders({
+  data,
+  onDataChange,
+  canWrite = true,
+  onCreatePurchaseOrder,
+  onMarkPurchaseOrderSent,
+  onCancelPurchaseOrder,
+  onReceivePurchaseOrder,
+  onCreateBillFromPO,
+}: Props) {
   const [createModal, setCreateModal] = useState(false);
   const [receiveModal, setReceiveModal] = useState<PurchaseOrder | null>(null);
   const [receiveQtys, setReceiveQtys] = useState<Record<number, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [receiveError, setReceiveError] = useState<string | null>(null);
 
   const [form, setForm] = useState<Omit<PurchaseOrder, 'id' | 'status' | 'receivedAt'>>({
     date: todayStr(), expectedDate: '', supplierId: '', supplierName: '', memo: '', lines: [],
@@ -49,6 +69,7 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
   function openCreate() {
     const firstLine = activeProducts.length ? [blankLine(activeProducts)] : [];
     setForm({ date: todayStr(), expectedDate: '', supplierId: '', supplierName: '', memo: '', lines: firstLine });
+    setFormError(null);
     setCreateModal(true);
   }
 
@@ -73,8 +94,12 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
     setForm({ ...form, lines });
   }
 
-  function saveCreate() {
-    if (!form.lines.length) return;
+  async function saveCreate() {
+    const result = validatePurchaseOrderInput(data, { lines: form.lines });
+    if (!result.ok) {
+      setFormError(result.errors[0]);
+      return;
+    }
     const supplierContact = suppliers.find((c) => c.id === form.supplierId);
     const po: PurchaseOrder = {
       ...form,
@@ -82,26 +107,38 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
       status: 'draft',
       supplierName: form.supplierId ? supplierContact?.name : form.supplierName,
     };
-    onDataChange({ ...data, purchaseOrders: [...(data.purchaseOrders || []), po] });
+    if (onCreatePurchaseOrder) {
+      await onCreatePurchaseOrder(po);
+    } else {
+      onDataChange({ ...data, purchaseOrders: [...(data.purchaseOrders || []), po] });
+    }
     setCreateModal(false);
   }
 
-  function markSent(po: PurchaseOrder) {
-    onDataChange({
-      ...data,
-      purchaseOrders: (data.purchaseOrders || []).map((p) =>
-        p.id === po.id ? { ...p, status: 'sent' } : p,
-      ),
-    });
+  async function markSent(po: PurchaseOrder) {
+    if (onMarkPurchaseOrderSent) {
+      await onMarkPurchaseOrderSent(po);
+    } else {
+      onDataChange({
+        ...data,
+        purchaseOrders: (data.purchaseOrders || []).map((p) =>
+          p.id === po.id ? { ...p, status: 'sent' } : p,
+        ),
+      });
+    }
   }
 
-  function cancelPO(po: PurchaseOrder) {
-    onDataChange({
-      ...data,
-      purchaseOrders: (data.purchaseOrders || []).map((p) =>
-        p.id === po.id ? { ...p, status: 'cancelled' } : p,
-      ),
-    });
+  async function cancelPO(po: PurchaseOrder) {
+    if (onCancelPurchaseOrder) {
+      await onCancelPurchaseOrder(po);
+    } else {
+      onDataChange({
+        ...data,
+        purchaseOrders: (data.purchaseOrders || []).map((p) =>
+          p.id === po.id ? { ...p, status: 'cancelled' } : p,
+        ),
+      });
+    }
   }
 
   function openReceive(po: PurchaseOrder) {
@@ -111,15 +148,24 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
       qtys[i] = remaining > 0 ? String(remaining) : '0';
     });
     setReceiveQtys(qtys);
+    setReceiveError(null);
     setReceiveModal(po);
   }
 
-  function confirmReceive() {
+  async function confirmReceive() {
     if (!receiveModal) return;
+    const receiptQtys = Object.fromEntries(
+      Object.entries(receiveQtys).map(([key, value]) => [Number(key), parseFloat(value) || 0]),
+    );
+    const result = validatePurchaseOrderReceiptInput(data, receiveModal, receiptQtys);
+    if (!result.ok) {
+      setReceiveError(result.errors[0]);
+      return;
+    }
     const today = todayStr();
     const newMovements: InventoryMovement[] = [];
     const updatedLines = receiveModal.lines.map((l, i) => {
-      const qty = parseFloat(receiveQtys[i] ?? '0') || 0;
+      const qty = receiptQtys[i] || 0;
       if (qty > 0) {
         newMovements.push({
           id: uid(),
@@ -128,22 +174,27 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
           type: 'purchase',
           quantity: qty,
           unitCost: l.unitCost,
+          sourceId: `${receiveModal.id}:${i}:${today}`,
           memo: `PO received${receiveModal.supplierName ? ' from ' + receiveModal.supplierName : ''}`,
         });
       }
-      return { ...l, receivedQty: (l.receivedQty || 0) + qty };
+      return { ...l, receivedQty: Math.round(((l.receivedQty || 0) + qty) * 100) / 100 };
     });
 
     const allReceived = updatedLines.every((l) => l.receivedQty >= l.orderedQty);
-    onDataChange({
-      ...data,
-      inventoryMovements: [...(data.inventoryMovements || []), ...newMovements],
-      purchaseOrders: (data.purchaseOrders || []).map((p) =>
-        p.id === receiveModal.id
-          ? { ...p, lines: updatedLines, status: allReceived ? 'received' : 'sent', receivedAt: allReceived ? new Date().toISOString() : undefined }
-          : p,
-      ),
-    });
+    if (onReceivePurchaseOrder) {
+      await onReceivePurchaseOrder(receiveModal, receiptQtys, today);
+    } else {
+      onDataChange({
+        ...data,
+        inventoryMovements: [...(data.inventoryMovements || []), ...newMovements],
+        purchaseOrders: (data.purchaseOrders || []).map((p) =>
+          p.id === receiveModal.id
+            ? { ...p, lines: updatedLines, status: allReceived ? 'received' : 'sent', receivedAt: allReceived ? new Date().toISOString() : undefined }
+            : p,
+        ),
+      });
+    }
     setReceiveModal(null);
   }
 
@@ -181,6 +232,10 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
                 {canWrite && po.status === 'sent' && (
                   <button className="btn-link" onClick={() => openReceive(po)}>Receive</button>
                 )}
+                {canWrite && onCreateBillFromPO && po.status === 'received' && !po.billTransactionId && poReceivedTotal(po) > 0 && (
+                  <button className="btn-link" onClick={() => onCreateBillFromPO(po)}>Create Bill</button>
+                )}
+                {po.billTransactionId ? <span className="muted">Bill created</span> : null}
                 {canWrite && (po.status === 'draft' || po.status === 'sent') && (
                   <button className="btn-link text-danger" onClick={() => cancelPO(po)}>Cancel</button>
                 )}
@@ -234,6 +289,7 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
             <button onClick={() => setCreateModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={saveCreate} disabled={!form.lines.length}>Create PO</button>
           </div>
+          {formError ? <p className="lock-error">{formError}</p> : null}
         </Modal>
       )}
 
@@ -242,6 +298,7 @@ export function PurchaseOrders({ data, onDataChange, canWrite = true }: Props) {
           <p style={{ marginBottom: 12, color: 'var(--muted)', fontSize: 13 }}>
             Enter quantities received. Each line creates an inventory movement.
           </p>
+          {receiveError ? <p className="lock-error">{receiveError}</p> : null}
           <table className="ledger-table" style={{ marginBottom: 16 }}>
             <thead>
               <tr><th>Product</th><th className="num">Ordered</th><th className="num">Prev. Received</th><th className="num">Receive Now</th><th className="num">Unit Cost</th></tr>

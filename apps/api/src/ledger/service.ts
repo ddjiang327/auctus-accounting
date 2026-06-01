@@ -11,6 +11,15 @@ import type {
   LedgerData,
   ManualJournal,
   PeriodLock,
+  Product,
+  InventoryMovement,
+  Employee,
+  PayRun,
+  PaySlip,
+  Remittance,
+  STPSubmission,
+  PurchaseOrder,
+  POLine,
   Transaction,
 } from "@auctus/shared-types";
 
@@ -48,6 +57,8 @@ type BusinessSettingsRow = {
   next_credit_note_number: number;
   next_supplier_credit_number: number;
   next_receipt_number: number;
+  inventory_state_version: number;
+  payroll_state_version: number;
 };
 
 type MembershipRow = {
@@ -120,6 +131,8 @@ type TransactionRow = {
   doc_status: Transaction["docStatus"] | null;
   voided_at: string | null;
   recurring_template_id: string | null;
+  product_id: string | null;
+  product_qty: number | null;
 };
 
 type InvoicePaymentRow = {
@@ -204,6 +217,112 @@ type BankReconciliationRow = {
   voided_at: string | null;
 };
 
+type ProductRow = {
+  id: string;
+  name: string;
+  sku: string | null;
+  unit_of_measure: string | null;
+  cost_price: number;
+  sell_price: number;
+  reorder_point: number | null;
+  inventory_chart_account_id: string | null;
+  cogs_chart_account_id: string | null;
+  revenue_chart_account_id: string | null;
+  archived_at: string | null;
+};
+
+type InventoryMovementRow = {
+  id: string;
+  product_id: string;
+  date: string;
+  type: InventoryMovement["type"];
+  quantity: number;
+  unit_cost: number;
+  memo: string | null;
+  source_id: string | null;
+};
+
+type PurchaseOrderRow = {
+  id: string;
+  date: string;
+  expected_date: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  status: PurchaseOrder["status"];
+  memo: string | null;
+  received_at: string | null;
+  bill_transaction_id: string | null;
+  billed_at: string | null;
+};
+
+type PurchaseOrderLineRow = {
+  id: string;
+  purchase_order_id: string;
+  product_id: string;
+  ordered_qty: number;
+  unit_cost: number;
+  received_qty: number;
+  line_order: number;
+};
+
+type EmployeeRow = {
+  id: string;
+  name: string;
+  pay_type: Employee["payType"];
+  pay_rate: number;
+  pay_frequency: Employee["payFrequency"];
+  tax_free_threshold: boolean;
+  employment_basis: Employee["employmentBasis"] | null;
+  ordinary_hours_per_week: number | null;
+  casual_loading_rate: number | null;
+  super_fund_name: string | null;
+  tfn: string | null;
+  archived_at: string | null;
+};
+
+type PayRunRow = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  pay_date: string;
+  pay_account_id: string | null;
+  status: PayRun["status"];
+  created_at: string;
+  finalised_at: string | null;
+  voided_at: string | null;
+};
+
+type PaySlipRow = {
+  id: string;
+  pay_run_id: string;
+  employee_id: string;
+  gross: number;
+  payg_withheld: number;
+  super_amount: number;
+  net_pay: number;
+  hours: number | null;
+  adjustments: PaySlip["adjustments"] | null;
+  line_order: number;
+};
+
+type RemittanceRow = {
+  id: string;
+  date: string;
+  type: Remittance["type"];
+  amount: number;
+  pay_account_id: string | null;
+  memo: string | null;
+};
+
+type STPSubmissionRow = {
+  id: string;
+  pay_run_id: string;
+  submitted_at: string;
+  status: STPSubmission["status"];
+  reference_number: string | null;
+  memo: string | null;
+};
+
 export type LedgerSnapshot = {
   business: {
     id: string;
@@ -211,6 +330,10 @@ export type LedgerSnapshot = {
   };
   ledger: LedgerData;
 };
+
+export const canRoleViewPayroll = (role: BusinessSummary["role"]): boolean => (
+  role === "owner" || role === "admin" || role === "bookkeeper"
+);
 
 const emptyLedgerData = (
   business: BusinessRow,
@@ -229,7 +352,17 @@ const emptyLedgerData = (
     manualJournalLines: ManualJournalLineRow[];
     bankFeedItems: BankFeedItemRow[];
     bankReconciliations: BankReconciliationRow[];
+    products: ProductRow[];
+    inventoryMovements: InventoryMovementRow[];
+    purchaseOrders: PurchaseOrderRow[];
+    purchaseOrderLines: PurchaseOrderLineRow[];
+    employees: EmployeeRow[];
+    payRuns: PayRunRow[];
+    paySlips: PaySlipRow[];
+    remittances: RemittanceRow[];
+    stpSubmissions: STPSubmissionRow[];
   },
+  options: { canViewPayroll?: boolean } = {},
 ): LedgerData => ({
   meta: {
     version: 2,
@@ -246,6 +379,8 @@ const emptyLedgerData = (
     nextCreditNoteNumber: settings.next_credit_note_number,
     nextSupplierCreditNumber: settings.next_supplier_credit_number,
     nextReceiptNumber: settings.next_receipt_number,
+    inventoryStateVersion: settings.inventory_state_version,
+    payrollStateVersion: settings.payroll_state_version,
     invoicePrefix: settings.invoice_prefix,
     billPrefix: settings.bill_prefix,
     creditNotePrefix: settings.credit_note_prefix,
@@ -313,6 +448,8 @@ const emptyLedgerData = (
       docStatus: transaction.doc_status ?? undefined,
       voidedAt: transaction.voided_at ?? undefined,
       recurringTemplateId: transaction.recurring_template_id ?? undefined,
+      productId: transaction.product_id ?? undefined,
+      productQty: transaction.product_qty === null ? undefined : Number(transaction.product_qty),
     };
   }),
   budgets: [],
@@ -324,14 +461,14 @@ const emptyLedgerData = (
   bankFeedItems: rows.bankFeedItems.map(mapBankFeedItem),
   recurringTemplates: [],
   auditLog: rows.auditLog.map(mapAuditLogEntry),
-  products: [],
+  products: rows.products.map(mapProduct),
   inventoryItems: [],
-  inventoryMovements: [],
-  employees: [],
-  payRuns: [],
-  remittances: [],
-  stpSubmissions: [],
-    purchaseOrders: [],
+  inventoryMovements: rows.inventoryMovements.map(mapInventoryMovement),
+  employees: options.canViewPayroll === false ? [] : rows.employees.map(mapEmployee),
+  payRuns: options.canViewPayroll === false ? [] : rows.payRuns.map((run) => mapPayRun(run, rows.paySlips)),
+  remittances: options.canViewPayroll === false ? [] : rows.remittances.map(mapRemittance),
+  stpSubmissions: options.canViewPayroll === false ? [] : rows.stpSubmissions.map(mapSTPSubmission),
+    purchaseOrders: rows.purchaseOrders.map((order) => mapPurchaseOrder(order, rows.purchaseOrderLines)),
     fixedAssets: [],
     depreciationRuns: [],
 });
@@ -440,6 +577,111 @@ const mapBankReconciliation = (reconciliation: BankReconciliationRow): BankRecon
   voidedAt: reconciliation.voided_at ?? undefined,
 });
 
+const mapProduct = (product: ProductRow): Product => ({
+  id: product.id,
+  name: product.name,
+  sku: product.sku ?? undefined,
+  unitOfMeasure: product.unit_of_measure ?? undefined,
+  costPrice: Number(product.cost_price),
+  sellPrice: Number(product.sell_price),
+  reorderPoint: product.reorder_point === null ? undefined : Number(product.reorder_point),
+  inventoryChartAccountId: product.inventory_chart_account_id ?? undefined,
+  cogsChartAccountId: product.cogs_chart_account_id ?? undefined,
+  revenueChartAccountId: product.revenue_chart_account_id ?? undefined,
+  archivedAt: product.archived_at ?? undefined,
+});
+
+const mapInventoryMovement = (movement: InventoryMovementRow): InventoryMovement => ({
+  id: movement.id,
+  productId: movement.product_id,
+  date: movement.date,
+  type: movement.type,
+  quantity: Number(movement.quantity),
+  unitCost: Number(movement.unit_cost),
+  memo: movement.memo ?? undefined,
+  sourceId: movement.source_id ?? undefined,
+});
+
+const mapPurchaseOrder = (order: PurchaseOrderRow, lines: PurchaseOrderLineRow[]): PurchaseOrder => ({
+  id: order.id,
+  date: order.date,
+  expectedDate: order.expected_date ?? undefined,
+  supplierId: order.supplier_id ?? undefined,
+  supplierName: order.supplier_name ?? undefined,
+  status: order.status,
+  memo: order.memo ?? undefined,
+  receivedAt: order.received_at ?? undefined,
+  billTransactionId: order.bill_transaction_id ?? undefined,
+  billedAt: order.billed_at ?? undefined,
+  lines: lines
+    .filter((line) => line.purchase_order_id === order.id)
+    .sort((a, b) => a.line_order - b.line_order)
+    .map((line): POLine => ({
+      productId: line.product_id,
+      orderedQty: Number(line.ordered_qty),
+      unitCost: Number(line.unit_cost),
+      receivedQty: Number(line.received_qty),
+    })),
+});
+
+const mapEmployee = (employee: EmployeeRow): Employee => ({
+  id: employee.id,
+  name: employee.name,
+  payType: employee.pay_type,
+  payRate: Number(employee.pay_rate),
+  payFrequency: employee.pay_frequency,
+  taxFreeThreshold: employee.tax_free_threshold,
+  employmentBasis: employee.employment_basis ?? undefined,
+  ordinaryHoursPerWeek: employee.ordinary_hours_per_week === null ? undefined : Number(employee.ordinary_hours_per_week),
+  casualLoadingRate: employee.casual_loading_rate === null ? undefined : Number(employee.casual_loading_rate),
+  superFundName: employee.super_fund_name ?? undefined,
+  tfn: employee.tfn ?? undefined,
+  archivedAt: employee.archived_at ?? undefined,
+});
+
+const mapPayRun = (run: PayRunRow, slips: PaySlipRow[]): PayRun => ({
+  id: run.id,
+  periodStart: run.period_start,
+  periodEnd: run.period_end,
+  payDate: run.pay_date,
+  payAccountId: run.pay_account_id ?? undefined,
+  status: run.status,
+  createdAt: run.created_at,
+  finalisedAt: run.finalised_at ?? undefined,
+  voidedAt: run.voided_at ?? undefined,
+  paySlips: slips
+    .filter((slip) => slip.pay_run_id === run.id)
+    .sort((a, b) => a.line_order - b.line_order)
+    .map((slip): PaySlip => ({
+      id: slip.id,
+      employeeId: slip.employee_id,
+      gross: Number(slip.gross),
+      paygWithheld: Number(slip.payg_withheld),
+      superAmount: Number(slip.super_amount),
+      netPay: Number(slip.net_pay),
+      hours: slip.hours === null ? undefined : Number(slip.hours),
+      adjustments: Array.isArray(slip.adjustments) ? slip.adjustments : undefined,
+    })),
+});
+
+const mapRemittance = (remittance: RemittanceRow): Remittance => ({
+  id: remittance.id,
+  date: remittance.date,
+  type: remittance.type,
+  amount: Number(remittance.amount),
+  payAccountId: remittance.pay_account_id ?? undefined,
+  memo: remittance.memo ?? undefined,
+});
+
+const mapSTPSubmission = (submission: STPSubmissionRow): STPSubmission => ({
+  id: submission.id,
+  payRunId: submission.pay_run_id,
+  submittedAt: submission.submitted_at,
+  status: submission.status,
+  referenceNumber: submission.reference_number ?? undefined,
+  memo: submission.memo ?? undefined,
+});
+
 export const getLedgerSnapshot = async (
   supabase: SupabaseServiceClient,
   userId: string,
@@ -496,7 +738,9 @@ export const getLedgerSnapshot = async (
         next_bill_number,
         next_credit_note_number,
         next_supplier_credit_number,
-        next_receipt_number
+        next_receipt_number,
+        inventory_state_version,
+        payroll_state_version
       `,
     )
     .eq("business_id", businessId)
@@ -529,6 +773,15 @@ export const getLedgerSnapshot = async (
     { data: manualJournalLines, error: manualJournalLinesError },
     { data: bankFeedItems, error: bankFeedItemsError },
     { data: bankReconciliations, error: bankReconciliationsError },
+    { data: products, error: productsError },
+    { data: inventoryMovements, error: inventoryMovementsError },
+    { data: purchaseOrders, error: purchaseOrdersError },
+    { data: purchaseOrderLines, error: purchaseOrderLinesError },
+    { data: employees, error: employeesError },
+    { data: payRuns, error: payRunsError },
+    { data: paySlips, error: paySlipsError },
+    { data: remittances, error: remittancesError },
+    { data: stpSubmissions, error: stpSubmissionsError },
   ] = await Promise.all([
     supabase
       .from("chart_accounts")
@@ -555,7 +808,7 @@ export const getLedgerSnapshot = async (
     supabase
       .from("transactions")
       .select(
-        "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id",
+        "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id,product_id,product_qty",
       )
       .eq("business_id", businessId)
       .order("date", { ascending: false })
@@ -603,6 +856,51 @@ export const getLedgerSnapshot = async (
       .eq("business_id", businessId)
       .order("statement_date", { ascending: false })
       .order("created_at", { ascending: false }),
+    supabase
+      .from("products")
+      .select("id,name,sku,unit_of_measure,cost_price,sell_price,reorder_point,inventory_chart_account_id,cogs_chart_account_id,revenue_chart_account_id,archived_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("inventory_movements")
+      .select("id,product_id,date,type,quantity,unit_cost,memo,source_id")
+      .eq("business_id", businessId)
+      .order("date", { ascending: true }),
+    supabase
+      .from("purchase_orders")
+      .select("id,date,expected_date,supplier_id,supplier_name,status,memo,received_at,bill_transaction_id,billed_at")
+      .eq("business_id", businessId)
+      .order("date", { ascending: false }),
+    supabase
+      .from("purchase_order_lines")
+      .select("id,purchase_order_id,product_id,ordered_qty,unit_cost,received_qty,line_order")
+      .eq("business_id", businessId)
+      .order("line_order", { ascending: true }),
+    supabase
+      .from("employees")
+      .select("id,name,pay_type,pay_rate,pay_frequency,tax_free_threshold,employment_basis,ordinary_hours_per_week,casual_loading_rate,super_fund_name,tfn,archived_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("pay_runs")
+      .select("id,period_start,period_end,pay_date,pay_account_id,status,created_at,finalised_at,voided_at")
+      .eq("business_id", businessId)
+      .order("pay_date", { ascending: false }),
+    supabase
+      .from("pay_slips")
+      .select("id,pay_run_id,employee_id,gross,payg_withheld,super_amount,net_pay,hours,adjustments,line_order")
+      .eq("business_id", businessId)
+      .order("line_order", { ascending: true }),
+    supabase
+      .from("remittances")
+      .select("id,date,type,amount,pay_account_id,memo")
+      .eq("business_id", businessId)
+      .order("date", { ascending: false }),
+    supabase
+      .from("stp_submissions")
+      .select("id,pay_run_id,submitted_at,status,reference_number,memo")
+      .eq("business_id", businessId)
+      .order("submitted_at", { ascending: false }),
   ]);
 
   if (chartAccountsError) {
@@ -656,6 +954,22 @@ export const getLedgerSnapshot = async (
   if (bankReconciliationsError) {
     throw new ApiError(500, "ledger_snapshot_failed", bankReconciliationsError.message);
   }
+  const moduleErrors = [
+    productsError,
+    inventoryMovementsError,
+    purchaseOrdersError,
+    purchaseOrderLinesError,
+    employeesError,
+    payRunsError,
+    paySlipsError,
+    remittancesError,
+    stpSubmissionsError,
+  ].filter(Boolean);
+  if (moduleErrors[0]) {
+    throw new ApiError(500, "ledger_snapshot_failed", moduleErrors[0].message);
+  }
+
+  const canViewPayroll = canRoleViewPayroll(membershipRow.role);
 
   return {
     business: {
@@ -676,6 +990,15 @@ export const getLedgerSnapshot = async (
       manualJournalLines: (manualJournalLines ?? []) as unknown as ManualJournalLineRow[],
       bankFeedItems: (bankFeedItems ?? []) as unknown as BankFeedItemRow[],
       bankReconciliations: (bankReconciliations ?? []) as unknown as BankReconciliationRow[],
-    }),
+      products: (products ?? []) as unknown as ProductRow[],
+      inventoryMovements: (inventoryMovements ?? []) as unknown as InventoryMovementRow[],
+      purchaseOrders: (purchaseOrders ?? []) as unknown as PurchaseOrderRow[],
+      purchaseOrderLines: (purchaseOrderLines ?? []) as unknown as PurchaseOrderLineRow[],
+      employees: (employees ?? []) as unknown as EmployeeRow[],
+      payRuns: (payRuns ?? []) as unknown as PayRunRow[],
+      paySlips: (paySlips ?? []) as unknown as PaySlipRow[],
+      remittances: (remittances ?? []) as unknown as RemittanceRow[],
+      stpSubmissions: (stpSubmissions ?? []) as unknown as STPSubmissionRow[],
+    }, { canViewPayroll }),
   };
 };

@@ -88,7 +88,10 @@ export {
 
 export {
   validateCreditAllocations,
+  validateInventoryMovementInput,
   validatePaymentInput,
+  validatePurchaseOrderInput,
+  validatePurchaseOrderReceiptInput,
   validateTransactionInput,
 } from './validation.js';
 export type {
@@ -106,7 +109,7 @@ export {
   inventoryValuation,
 } from './inventory.js';
 
-export { allPayrollJournalEntries, allRemittanceJournalEntries, calculatePayg, calculatePaySlip, computeLeaveBalances, outstandingLiabilities, payRunJournalEntries, periodicLeaveAccrual, remittanceJournalEntry } from './payroll.js';
+export { allPayrollJournalEntries, allRemittanceJournalEntries, calculateHourlyGross, calculatePayg, calculatePaySlip, computeLeaveBalances, outstandingLiabilities, payRunJournalEntries, periodicLeaveAccrual, remittanceJournalEntry } from './payroll.js';
 
 export {
   currentFinancialYear,

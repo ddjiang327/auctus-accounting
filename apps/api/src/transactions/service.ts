@@ -12,6 +12,7 @@ import type {
   EntryMode,
   GsmMode,
   InvoicePayment,
+  LedgerData,
   PaymentTerms,
   Transaction,
   TransactionType,
@@ -43,6 +44,8 @@ type TransactionInsertRow = {
   payment_terms?: PaymentTerms;
   doc_status?: DocStatus;
   recurring_template_id?: string;
+  product_id?: string;
+  product_qty?: number;
 };
 
 type InvoicePaymentInsertRow = {
@@ -166,6 +169,8 @@ const parseTransactionInput = (body: unknown): Omit<Transaction, "id"> => {
     dueDate: readDate(input, "dueDate"),
     docStatus: readEnum(input, "docStatus", docStatuses),
     recurringTemplateId: readString(input, "recurringTemplateId", 64),
+    productId: readString(input, "productId", 80),
+    productQty: Number.isFinite(Number(input.productQty)) ? Number(input.productQty) : undefined,
   };
 };
 
@@ -294,6 +299,8 @@ type TransactionPatch = {
   dueDate?: string | null;
   docStatus?: DocStatus | null;
   recurringTemplateId?: string | null;
+  productId?: string | null;
+  productQty?: number | null;
 };
 
 const parseTransactionPatch = (body: unknown): TransactionPatch => {
@@ -328,6 +335,8 @@ const parseTransactionPatch = (body: unknown): TransactionPatch => {
   if ("dueDate" in input) patch.dueDate = readPatchDate(input, "dueDate");
   if ("docStatus" in input) patch.docStatus = readPatchEnum(input, "docStatus", docStatuses);
   if ("recurringTemplateId" in input) patch.recurringTemplateId = readPatchString(input, "recurringTemplateId", 64);
+  if ("productId" in input) patch.productId = readPatchString(input, "productId", 80);
+  if ("productQty" in input) patch.productQty = input.productQty === null || input.productQty === "" ? null : Number(input.productQty);
 
   return patch;
 };
@@ -356,6 +365,8 @@ const mapTransactionRow = (row: unknown): Transaction => {
     docStatus: (r.doc_status as DocStatus) ?? undefined,
     voidedAt: r.voided_at ? String(r.voided_at) : undefined,
     recurringTemplateId: r.recurring_template_id ? String(r.recurring_template_id) : undefined,
+    productId: r.product_id ? String(r.product_id) : undefined,
+    productQty: r.product_qty === null || r.product_qty === undefined ? undefined : Number(r.product_qty),
   };
 };
 
@@ -365,17 +376,40 @@ const requireKnownId = (ids: Set<string>, id: string | null | undefined, field: 
   }
 };
 
+const productChartAccountId = (
+  data: LedgerData,
+  tx: Pick<Transaction, "type" | "chartAccountId" | "categoryId" | "productId">,
+): string | undefined => {
+  if (!tx.productId || tx.type === "transfer") {
+    return tx.chartAccountId ?? defaultChartAccountId(data, tx.type, tx.categoryId);
+  }
+  const product = (data.products || []).find((item) => item.id === tx.productId);
+  if (!product) return tx.chartAccountId ?? defaultChartAccountId(data, tx.type, tx.categoryId);
+  if (tx.type === "expense") {
+    return product.inventoryChartAccountId
+      ?? data.chartOfAccounts.find((account) => account.code === "1220")?.id
+      ?? tx.chartAccountId
+      ?? defaultChartAccountId(data, tx.type, tx.categoryId);
+  }
+  return product.revenueChartAccountId
+    ?? tx.chartAccountId
+    ?? data.chartOfAccounts.find((account) => account.code === "4000")?.id
+    ?? defaultChartAccountId(data, tx.type, tx.categoryId);
+};
+
 const normalizeTransaction = (ledger: WriteContext, input: Omit<Transaction, "id">): Transaction => {
   const data = ledger.snapshot.ledger;
   const accountIds = new Set(data.accounts.map((account) => account.id));
   const chartAccountIds = new Set(data.chartOfAccounts.map((account) => account.id));
   const contactIds = new Set(data.contacts.map((contact) => contact.id));
+  const productIds = new Set((data.products || []).map((product) => product.id));
 
   requireKnownId(accountIds, input.accountId, "accountId");
   requireKnownId(accountIds, input.accountToId, "accountToId");
   requireKnownId(chartAccountIds, input.chartAccountId, "chartAccountId");
   requireKnownId(chartAccountIds, input.clearingChartAccountId, "clearingChartAccountId");
   requireKnownId(contactIds, input.contactId, "contactId");
+  requireKnownId(productIds, input.productId, "productId");
 
   const categoryPool = input.type === "income" ? data.categories.income : data.categories.expense;
   if (input.type !== "transfer" && input.categoryId && !categoryPool.some((category) => category.id === input.categoryId)) {
@@ -393,9 +427,7 @@ const normalizeTransaction = (ledger: WriteContext, input: Omit<Transaction, "id
 
   const entryMode = input.entryMode ?? "cash";
   const chartAccountId =
-    input.type === "transfer"
-      ? undefined
-      : input.chartAccountId ?? defaultChartAccountId(data, input.type, input.categoryId);
+    input.type === "transfer" ? undefined : productChartAccountId(data, input);
   const clearingChartAccountId =
     input.type === "transfer"
       ? undefined
@@ -438,6 +470,8 @@ const compactPatchedTransaction = (existing: Transaction, patch: TransactionPatc
   ...("dueDate" in patch ? { dueDate: patch.dueDate ?? undefined } : {}),
   ...("docStatus" in patch ? { docStatus: patch.docStatus ?? undefined } : {}),
   ...("recurringTemplateId" in patch ? { recurringTemplateId: patch.recurringTemplateId ?? undefined } : {}),
+  ...("productId" in patch ? { productId: patch.productId ?? undefined } : {}),
+  ...("productQty" in patch ? { productQty: patch.productQty ?? undefined } : {}),
 });
 
 const normalizePatchedTransaction = (
@@ -449,6 +483,7 @@ const normalizePatchedTransaction = (
   const accountIds = new Set(data.accounts.map((account) => account.id));
   const chartAccountIds = new Set(data.chartOfAccounts.map((account) => account.id));
   const contactIds = new Set(data.contacts.map((contact) => contact.id));
+  const productIds = new Set((data.products || []).map((product) => product.id));
   const merged = compactPatchedTransaction(existing, patch);
 
   requireKnownId(accountIds, merged.accountId, "accountId");
@@ -456,6 +491,7 @@ const normalizePatchedTransaction = (
   requireKnownId(chartAccountIds, merged.chartAccountId, "chartAccountId");
   requireKnownId(chartAccountIds, merged.clearingChartAccountId, "clearingChartAccountId");
   requireKnownId(contactIds, merged.contactId, "contactId");
+  requireKnownId(productIds, merged.productId, "productId");
 
   const categoryPool = merged.type === "income" ? data.categories.income : data.categories.expense;
   if (merged.type !== "transfer" && merged.categoryId && !categoryPool.some((category) => category.id === merged.categoryId)) {
@@ -493,7 +529,7 @@ const normalizePatchedTransaction = (
     ...merged,
     accountToId: undefined,
     entryMode,
-    chartAccountId: merged.chartAccountId ?? defaultChartAccountId(data, merged.type, merged.categoryId),
+    chartAccountId: productChartAccountId(data, merged),
     clearingChartAccountId: needsClearingAccount
       ? merged.clearingChartAccountId ?? clearingAccountId(data, merged.type)
       : undefined,
@@ -560,6 +596,8 @@ const toInsertRow = (businessId: string, transaction: Transaction): TransactionI
   payment_terms: transaction.paymentTerms,
   doc_status: transaction.docStatus,
   recurring_template_id: transaction.recurringTemplateId,
+  product_id: transaction.productId,
+  product_qty: transaction.productQty,
 });
 
 const toUpdateRow = (transaction: Transaction): Record<string, unknown> => ({
@@ -582,6 +620,8 @@ const toUpdateRow = (transaction: Transaction): Record<string, unknown> => ({
   payment_terms: transaction.paymentTerms ?? null,
   doc_status: transaction.docStatus ?? null,
   recurring_template_id: transaction.recurringTemplateId ?? null,
+  product_id: transaction.productId ?? null,
+  product_qty: transaction.productQty ?? null,
 });
 
 const toPaymentInsertRow = (
@@ -687,7 +727,7 @@ export const createTransaction = async (
     .from("transactions")
     .insert(toInsertRow(businessId, transaction))
     .select(
-      "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id",
+      "id,type,amount,payment_account_id,payment_account_to_id,category_id,chart_account_id,clearing_chart_account_id,date,note,gst_mode,entry_mode,contact_id,party,invoice_no,credit_note_no,payment_terms,due_date,doc_status,voided_at,recurring_template_id,product_id,product_qty",
     )
     .single();
 

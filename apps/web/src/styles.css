@@ -38,6 +38,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -1340,6 +1341,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     top: auto;
     z-index: 5;
     height: 74px;
+    overflow: hidden;
     padding: 0 8px;
     border-top: 1px solid var(--line);
     border-right: 0;
@@ -2168,6 +2170,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .inv-stat-alert .inv-stat-label { color: #92400e; }
 .inv-stat-alert .inv-stat-value { color: #b45309; }
 .low-stock-banner { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #92400e; }
+.payroll-estimate-banner { margin: 0 0 12px; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #92400e; }
 .low-stock-row td { background: #fffbeb; }
 .low-stock-badge { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; border-radius: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.04em; }
 .stock-take-input { width: 90px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; text-align: right; background: var(--bg); color: var(--text); }

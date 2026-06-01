@@ -1,4 +1,4 @@
-import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, LedgerData, ManualJournal, PeriodLock, Transaction, InvoicePayment } from '../domain/models';
+import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, Employee, InventoryMovement, LedgerData, ManualJournal, PayRun, PeriodLock, Product, PurchaseOrder, Remittance, STPSubmission, Transaction, InvoicePayment } from '../domain/models';
 import { ledgerDataAdapter } from '../storage/ledgerDataAdapter';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
@@ -10,11 +10,13 @@ const BUSINESS_ID_KEY = 'auctus_api_business_id';
 
 export class AuctusApiError extends Error {
   statusCode: number;
+  code?: string;
 
-  constructor(statusCode: number, message: string) {
+  constructor(statusCode: number, message: string, code?: string) {
     super(message);
     this.name = 'AuctusApiError';
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -83,7 +85,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     const message = body && typeof body === 'object' && 'message' in body ? String(body.message) : text;
-    throw new AuctusApiError(response.status, message || `Auctus API request failed: ${response.status}`);
+    const code = body && typeof body === 'object' && 'error' in body ? String(body.error) : undefined;
+    throw new AuctusApiError(response.status, message || `Auctus API request failed: ${response.status}`, code);
   }
 
   return body as T;
@@ -186,6 +189,174 @@ export const auctusApi = {
     return ledgerDataAdapter.normalize(response.ledger);
   },
 
+  async replaceInventoryModuleState(data: LedgerData): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/inventory-state`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        expectedVersion: data.settings.inventoryStateVersion,
+        products: data.products || [],
+        inventoryMovements: data.inventoryMovements || [],
+        purchaseOrders: data.purchaseOrders || [],
+      }),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async replacePayrollModuleState(data: LedgerData): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/payroll-state`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        expectedVersion: data.settings.payrollStateVersion,
+        employees: data.employees || [],
+        payRuns: data.payRuns || [],
+        remittances: data.remittances || [],
+        stpSubmissions: data.stpSubmissions || [],
+      }),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createEmployee(employee: Employee): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/employees`, {
+      method: 'POST',
+      body: JSON.stringify(employee),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async updateEmployee(employee: Employee): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/employees/${employee.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(employee),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async archiveEmployee(employeeId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/employees/${employeeId}/archive`, {
+      method: 'POST',
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createPayRun(payRun: PayRun): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/pay-runs`, {
+      method: 'POST',
+      body: JSON.stringify(payRun),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async finalisePayRun(payRunId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/pay-runs/${payRunId}/finalise`, {
+      method: 'POST',
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createRemittance(remittance: Remittance): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/remittances`, {
+      method: 'POST',
+      body: JSON.stringify(remittance),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createSTPSubmission(submission: STPSubmission): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/stp-submissions`, {
+      method: 'POST',
+      body: JSON.stringify(submission),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createProduct(product: Product): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/products`, {
+      method: 'POST',
+      body: JSON.stringify(product),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async updateProduct(product: Product): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/products/${product.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(product),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async archiveProduct(productId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/products/${productId}/archive`, {
+      method: 'POST',
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createInventoryMovement(movement: InventoryMovement): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/inventory-movements`, {
+      method: 'POST',
+      body: JSON.stringify(movement),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async createPurchaseOrder(purchaseOrder: PurchaseOrder): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/purchase-orders`, {
+      method: 'POST',
+      body: JSON.stringify(purchaseOrder),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async markPurchaseOrderSent(purchaseOrderId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/purchase-orders/${purchaseOrderId}/mark-sent`, {
+      method: 'POST',
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async cancelPurchaseOrder(purchaseOrderId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/purchase-orders/${purchaseOrderId}/cancel`, {
+      method: 'POST',
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async receivePurchaseOrder(purchaseOrderId: string, receiptQtys: Record<number, number>, date: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/purchase-orders/${purchaseOrderId}/receive`, {
+      method: 'POST',
+      body: JSON.stringify({ receiptQtys, date }),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
+  async linkPurchaseOrderBill(purchaseOrderId: string, billTransactionId: string): Promise<LedgerData> {
+    const businessId = await resolveBusinessId();
+    const response = await request<{ ledger: LedgerData }>(`/v1/businesses/${businessId}/purchase-orders/${purchaseOrderId}/link-bill`, {
+      method: 'POST',
+      body: JSON.stringify({ billTransactionId }),
+    });
+    return ledgerDataAdapter.normalize(response.ledger);
+  },
+
   async createTransaction(tx: Transaction): Promise<Transaction> {
     const businessId = await resolveBusinessId();
     const response = await request<{ transaction: Transaction }>(`/v1/businesses/${businessId}/transactions`, {
@@ -210,6 +381,8 @@ export const auctusApi = {
         dueDate: tx.dueDate,
         docStatus: tx.docStatus,
         recurringTemplateId: tx.recurringTemplateId,
+        productId: tx.productId,
+        productQty: tx.productQty,
       }),
     });
     return response.transaction;
@@ -241,6 +414,8 @@ export const auctusApi = {
       dueDate: isInvoice || isCreditNote ? tx.dueDate ?? null : null,
       docStatus: isInvoice || isCreditNote ? tx.docStatus ?? null : null,
       recurringTemplateId: tx.recurringTemplateId ?? null,
+      productId: isTransfer ? null : tx.productId ?? null,
+      productQty: isTransfer ? null : tx.productQty ?? null,
       newPayments,
     };
     const response = await request<{ transaction: Transaction }>(

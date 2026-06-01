@@ -1,10 +1,13 @@
-import type { Employee, JournalEntry, LedgerData, PayRun, PaySlip, Remittance } from '@auctus/shared-types';
+import type { Employee, JournalEntry, LedgerData, PayAdjustment, PayRun, PaySlip, Remittance } from '@auctus/shared-types';
 
 const SUPER_RATE = 0.12; // 12% from 1 July 2025
 const WAGES_CODE = '7000';
 const SUPER_EXPENSE_CODE = '7080';
+const REIMBURSEMENT_EXPENSE_CODE = '7090';
 const PAYG_LIABILITY_CODE = '2400';
 const SUPER_LIABILITY_CODE = '2410';
+const DEDUCTIONS_LIABILITY_CODE = '2420';
+const MEDICARE_LEVY_RATE = 0.02;
 
 function chartIdByCode(data: LedgerData, code: string): string | undefined {
   return data.chartOfAccounts.find((a) => a.code === code)?.id;
@@ -16,25 +19,27 @@ function periodsPerYear(freq: Employee['payFrequency']): number {
 
 function annualTaxWithThreshold(income: number): number {
   if (income <= 18200) return 0;
-  if (income <= 45000) return (income - 18200) * 0.19;
-  if (income <= 120000) return 5092 + (income - 45000) * 0.325;
-  if (income <= 180000) return 29467 + (income - 120000) * 0.37;
-  return 51667 + (income - 180000) * 0.45;
+  if (income <= 45000) return (income - 18200) * 0.16;
+  if (income <= 135000) return 4288 + (income - 45000) * 0.3;
+  if (income <= 190000) return 31288 + (income - 135000) * 0.37;
+  return 51638 + (income - 190000) * 0.45;
 }
 
 function annualTaxNoThreshold(income: number): number {
-  // No tax-free threshold: tax from first dollar at 19% up to $45k
-  if (income <= 45000) return income * 0.19;
-  if (income <= 120000) return 8550 + (income - 45000) * 0.325;
-  if (income <= 180000) return 32875 + (income - 120000) * 0.37;
-  return 55075 + (income - 180000) * 0.45;
+  // Estimate for employees not claiming the tax-free threshold using current resident rates from the first dollar.
+  if (income <= 45000) return income * 0.16;
+  if (income <= 135000) return 7200 + (income - 45000) * 0.3;
+  if (income <= 190000) return 34200 + (income - 135000) * 0.37;
+  return 54550 + (income - 190000) * 0.45;
 }
 
 function medicareLevy(income: number): number {
   if (income <= 26000) return 0;
-  return income * 0.02;
+  return income * MEDICARE_LEVY_RATE;
 }
 
+// PAYG withholding is an estimate based on annualised resident rates plus a simplified Medicare levy.
+// It is not a substitute for the ATO PAYG withholding tax tables or payroll specialist review.
 export function calculatePayg(annualGross: number, taxFreeThreshold: boolean): number {
   const baseTax = taxFreeThreshold
     ? annualTaxWithThreshold(annualGross)
@@ -42,28 +47,68 @@ export function calculatePayg(annualGross: number, taxFreeThreshold: boolean): n
   return Math.round(baseTax + medicareLevy(annualGross));
 }
 
-export function calculatePaySlip(employee: Employee, gross: number): Omit<PaySlip, 'id'> {
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function calculatePaySlip(employee: Employee, gross: number, adjustments: PayAdjustment[] = []): Omit<PaySlip, 'id'> {
+  const cleanedAdjustments = adjustments
+    .filter((item) => Number.isFinite(item.amount) && item.amount > 0)
+    .map((item) => ({ ...item, amount: roundMoney(item.amount) }));
+  const taxableAllowances = cleanedAdjustments
+    .filter((item) => item.type === 'allowance' && item.taxable !== false)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const superableAllowances = cleanedAdjustments
+    .filter((item) => item.type === 'allowance' && item.superable !== false)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const deductions = cleanedAdjustments
+    .filter((item) => item.type === 'deduction')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const reimbursements = cleanedAdjustments
+    .filter((item) => item.type === 'reimbursement')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const taxableGross = roundMoney(gross + taxableAllowances);
+  const superableGross = roundMoney(gross + superableAllowances);
   const periods = periodsPerYear(employee.payFrequency);
-  const annualGross = gross * periods;
+  const annualGross = taxableGross * periods;
   const annualPayg = calculatePayg(annualGross, employee.taxFreeThreshold);
-  const paygWithheld = Math.round((annualPayg / periods) * 100) / 100;
-  const superAmount = Math.round(gross * SUPER_RATE * 100) / 100;
-  const netPay = Math.round((gross - paygWithheld) * 100) / 100;
-  return { employeeId: employee.id, gross, paygWithheld, superAmount, netPay };
+  const paygWithheld = roundMoney(annualPayg / periods);
+  const superAmount = roundMoney(superableGross * SUPER_RATE);
+  const netPay = roundMoney(taxableGross - paygWithheld - deductions + reimbursements);
+  return {
+    employeeId: employee.id,
+    gross: taxableGross,
+    paygWithheld,
+    superAmount,
+    netPay,
+    adjustments: cleanedAdjustments.length ? cleanedAdjustments : undefined,
+  };
 }
 
 export function payRunJournalEntries(payRun: PayRun, data: LedgerData): JournalEntry[] {
   if (payRun.status !== 'finalised' || payRun.voidedAt) return [];
   const wagesId = chartIdByCode(data, WAGES_CODE);
   const superExpId = chartIdByCode(data, SUPER_EXPENSE_CODE);
+  const reimbursementExpId = chartIdByCode(data, REIMBURSEMENT_EXPENSE_CODE);
   const paygLiabId = chartIdByCode(data, PAYG_LIABILITY_CODE);
   const superLiabId = chartIdByCode(data, SUPER_LIABILITY_CODE);
+  const deductionsLiabId = chartIdByCode(data, DEDUCTIONS_LIABILITY_CODE);
   if (!wagesId || !paygLiabId) return [];
 
-  const totalGross = payRun.paySlips.reduce((s, p) => s + p.gross, 0);
-  const totalPayg = payRun.paySlips.reduce((s, p) => s + p.paygWithheld, 0);
-  const totalSuper = payRun.paySlips.reduce((s, p) => s + p.superAmount, 0);
-  const totalNet = payRun.paySlips.reduce((s, p) => s + p.netPay, 0);
+  const totalGross = roundMoney(payRun.paySlips.reduce((s, p) => s + p.gross, 0));
+  const totalPayg = roundMoney(payRun.paySlips.reduce((s, p) => s + p.paygWithheld, 0));
+  const totalSuper = roundMoney(payRun.paySlips.reduce((s, p) => s + p.superAmount, 0));
+  const totalNet = roundMoney(payRun.paySlips.reduce((s, p) => s + p.netPay, 0));
+  const totalDeductions = roundMoney(payRun.paySlips.reduce((sum, slip) => (
+    sum + (slip.adjustments || [])
+      .filter((adjustment) => adjustment.type === 'deduction')
+      .reduce((inner, adjustment) => inner + adjustment.amount, 0)
+  ), 0));
+  const totalReimbursements = roundMoney(payRun.paySlips.reduce((sum, slip) => (
+    sum + (slip.adjustments || [])
+      .filter((adjustment) => adjustment.type === 'reimbursement')
+      .reduce((inner, adjustment) => inner + adjustment.amount, 0)
+  ), 0));
 
   const payAccount = payRun.payAccountId
     ? data.accounts.find((a) => a.id === payRun.payAccountId)
@@ -72,12 +117,20 @@ export function payRunJournalEntries(payRun: PayRun, data: LedgerData): JournalE
 
   const entries: JournalEntry[] = [];
 
-  // Wages journal: Dr Wages / Cr PAYG Payable / Cr Bank (net)
-  if (totalGross > 0) {
+  // Payroll cash journal: Dr Wages/Reimbursements / Cr PAYG, deductions payable, and bank net pay.
+  if (totalGross > 0 || totalReimbursements > 0) {
     const lines: JournalEntry['lines'] = [
-      { chartAccountId: wagesId, debit: totalGross, credit: 0 },
       { chartAccountId: paygLiabId, debit: 0, credit: totalPayg },
     ];
+    if (totalGross > 0) {
+      lines.unshift({ chartAccountId: wagesId, debit: totalGross, credit: 0 });
+    }
+    if (totalReimbursements > 0) {
+      lines.push({ chartAccountId: reimbursementExpId || wagesId, debit: totalReimbursements, credit: 0 });
+    }
+    if (totalDeductions > 0) {
+      lines.push({ chartAccountId: deductionsLiabId || paygLiabId, debit: 0, credit: totalDeductions });
+    }
     if (bankId && totalNet > 0) {
       lines.push({ chartAccountId: bankId, debit: 0, credit: totalNet });
     }
@@ -109,14 +162,34 @@ export function payRunJournalEntries(payRun: PayRun, data: LedgerData): JournalE
 
 
 const STANDARD_HOURS_PER_WEEK = 38;
-const ANNUAL_LEAVE_HOURS_PER_YEAR = STANDARD_HOURS_PER_WEEK * 4;   // 4 weeks
-const SICK_LEAVE_HOURS_PER_YEAR = (STANDARD_HOURS_PER_WEEK / 5) * 10; // 10 days
+
+function ordinaryHoursPerWeek(employee: Employee): number {
+  return Number.isFinite(employee.ordinaryHoursPerWeek) && (employee.ordinaryHoursPerWeek ?? 0) > 0
+    ? Number(employee.ordinaryHoursPerWeek)
+    : STANDARD_HOURS_PER_WEEK;
+}
+
+function isCasual(employee: Employee): boolean {
+  return employee.employmentBasis === 'casual';
+}
+
+export function calculateHourlyGross(employee: Employee, hours: number): number {
+  const base = Math.max(0, hours) * employee.payRate;
+  const loading = isCasual(employee) ? (employee.casualLoadingRate ?? 0.25) : 0;
+  return Math.round(base * (1 + loading) * 100) / 100;
+}
 
 export function periodicLeaveAccrual(employee: Employee): { annualLeaveHours: number; sickLeaveHours: number } {
+  if (isCasual(employee)) {
+    return { annualLeaveHours: 0, sickLeaveHours: 0 };
+  }
   const periods = periodsPerYear(employee.payFrequency);
+  const weeklyHours = ordinaryHoursPerWeek(employee);
+  const annualLeaveHoursPerYear = weeklyHours * 4;
+  const sickLeaveHoursPerYear = weeklyHours * 2;
   return {
-    annualLeaveHours: Math.round((ANNUAL_LEAVE_HOURS_PER_YEAR / periods) * 100) / 100,
-    sickLeaveHours: Math.round((SICK_LEAVE_HOURS_PER_YEAR / periods) * 100) / 100,
+    annualLeaveHours: Math.round((annualLeaveHoursPerYear / periods) * 100) / 100,
+    sickLeaveHours: Math.round((sickLeaveHoursPerYear / periods) * 100) / 100,
   };
 }
 

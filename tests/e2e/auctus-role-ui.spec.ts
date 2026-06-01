@@ -69,15 +69,22 @@ async function signInAs(page: Page, user: TestUser) {
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem('auctus_disable_dev_auto_login', 'true');
+    localStorage.setItem('auctus_mode_preference', 'cloud');
   });
   const authResult = await page.evaluate(async ({ email, password }) => {
     const { supabase } = await import('/src/api/supabaseClient.ts');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInData.session) {
+      await supabase.auth.setSession({
+        access_token: signInData.session.access_token,
+        refresh_token: signInData.session.refresh_token,
+      });
+    }
     const { data } = await supabase.auth.getSession();
     return {
       error: error?.message ?? null,
-      hasSession: Boolean(data.session),
-      email: data.session?.user.email ?? null,
+      hasSession: Boolean(signInData.session ?? data.session),
+      email: signInData.session?.user.email ?? data.session?.user.email ?? null,
       storageKeys: Object.keys(localStorage),
     };
   }, { email: user.email, password: user.password });
@@ -189,6 +196,8 @@ async function expectAdminUi(page: Page, businessName: string) {
 }
 
 async function expectBookkeeperUi(page: Page) {
+  await expect(page.getByRole('button', { name: 'Payroll' })).toBeVisible();
+
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible();
   await expect(page.getByText('Track GST')).not.toBeVisible();
@@ -209,6 +218,8 @@ async function expectBookkeeperUi(page: Page) {
 }
 
 async function expectViewerUi(page: Page) {
+  await expect(page.getByRole('button', { name: 'Payroll' })).not.toBeVisible();
+
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible();
   await expect(page.getByText('Track GST')).not.toBeVisible();

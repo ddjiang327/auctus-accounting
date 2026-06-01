@@ -1,5 +1,32 @@
 # Inventory & Payroll — Roadmap
 
+## Next Session Priorities
+
+1. Add dedicated cloud E2E coverage for inventory and payroll:
+   - Product create/update/archive
+   - Inventory movement and negative stock validation
+   - Purchase order create/send/receive/link supplier bill
+   - Employee create/update/archive
+   - Pay run create/finalise
+   - Remittance and STP submission paths
+2. Keep `/inventory-state` and `/payroll-state` as compatibility/bulk-replace endpoints only:
+   - Audit their remaining call sites
+   - Make audit log wording explicit when they are used
+   - Consider narrowing their use to restore/import or admin recovery flows
+3. Run a real Supabase smoke after project restoration:
+   - Sign in
+   - Create workspace
+   - Write inventory/payroll records
+   - Export and restore backup
+
+## Current Implementation Status
+
+- Inventory and payroll data are now persisted in normalized Supabase tables in cloud mode.
+- Normal inventory/payroll UI flows use granular API routes instead of replacing the whole module state.
+- Bulk module state replacement remains for compatibility and conflict-protected fallback paths.
+- Backup/restore includes inventory and payroll entities.
+- API, accounting-core, build, and E2E validation passed after the storage/API changes.
+
 ## Architecture Decision: Extend, Not Rewrite
 
 The existing `accounting-core` architecture is sound and does not need to be rewritten.

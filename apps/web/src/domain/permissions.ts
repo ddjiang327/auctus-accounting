@@ -2,6 +2,7 @@ export type WorkspaceRole = 'owner' | 'admin' | 'bookkeeper' | 'viewer';
 
 export type UiPermissions = {
   canWriteAccounting: boolean;
+  canViewPayroll: boolean;
   canManageSettings: boolean;
   canManagePeriodLocks: boolean;
   canManageLedgerData: boolean;
@@ -15,6 +16,7 @@ export function permissionsForRole(role: WorkspaceRole | null | undefined, mode:
 
   return {
     canWriteAccounting: !!effectiveRole && accountingWriteRoles.has(effectiveRole),
+    canViewPayroll: !!effectiveRole && accountingWriteRoles.has(effectiveRole),
     canManageSettings: !!effectiveRole && adminRoles.has(effectiveRole),
     canManagePeriodLocks: !!effectiveRole && adminRoles.has(effectiveRole),
     canManageLedgerData: !!effectiveRole && adminRoles.has(effectiveRole),

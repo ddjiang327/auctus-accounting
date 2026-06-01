@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppLock } from './components/AppLock';
 import { Shell, type ViewKey } from './components/Shell';
 import { accountBalance, auditEntry, computeInventoryItems, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
-import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, InventoryMovement, LedgerData, ManualJournal, Period, Transaction } from './domain/models';
+import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, Employee, InventoryMovement, LedgerData, ManualJournal, PayRun, Period, Product, PurchaseOrder, Remittance, STPSubmission, Transaction } from './domain/models';
 import { AuctusApiError, auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
 import { AiEntryPanel } from './features/ai/AiEntryPanel';
 import { getCurrentUser } from './api/supabaseClient';
@@ -29,7 +29,7 @@ import { AppAlertsProvider } from './components/AppAlerts';
 type AuthPhase = 'checking' | 'login' | 'workspace' | 'mode-select' | 'app';
 type AppMode = 'local' | 'cloud';
 type SyncState = 'idle' | 'syncing' | 'error';
-type SyncError = { message: string; nonce: number };
+type SyncError = { message: string; nonce: number; actionLabel?: string };
 
 function isDevAutoLoginDisabled() {
   return import.meta.env.VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN === 'true'
@@ -37,6 +37,30 @@ function isDevAutoLoginDisabled() {
 }
 
 const MODE_PREFERENCE_KEY = 'auctus_mode_preference';
+
+function chartAccountIdByCode(data: LedgerData, code: string) {
+  return data.chartOfAccounts.find((account) => account.code === code)?.id;
+}
+
+function normalizeProductTransactionAccounts(data: LedgerData, tx: Transaction): Transaction {
+  if (!tx.productId || tx.type === 'transfer') return tx;
+  const product = (data.products || []).find((item) => item.id === tx.productId);
+  if (!product) return tx;
+  if (tx.type === 'income') {
+    return {
+      ...tx,
+      chartAccountId: product.revenueChartAccountId || tx.chartAccountId || chartAccountIdByCode(data, '4000') || chartAccountIdByCode(data, '4010'),
+    };
+  }
+  return {
+    ...tx,
+    chartAccountId: product.inventoryChartAccountId || chartAccountIdByCode(data, '1220') || tx.chartAccountId,
+  };
+}
+
+function poReceivedTotal(po: PurchaseOrder) {
+  return Math.round(po.lines.reduce((sum, line) => sum + (line.receivedQty || 0) * line.unitCost, 0) * 100) / 100;
+}
 
 function getModePreference(): 'local' | 'cloud' | null {
   const pref = localStorage.getItem(MODE_PREFERENCE_KEY);
@@ -140,6 +164,20 @@ export default function App() {
     setSyncError({ message, nonce: Date.now() });
   }
 
+  function isModuleStateConflict(error: unknown) {
+    return error instanceof AuctusApiError && error.statusCode === 409 && error.code === 'module_state_conflict';
+  }
+
+  function reportModuleStateConflict(moduleName: 'Inventory' | 'Payroll', error: unknown) {
+    const apiMessage = error instanceof Error ? error.message : `${moduleName} changed in another session.`;
+    setSyncState('error');
+    setSyncError({
+      message: `${apiMessage} Your unsaved ${moduleName.toLowerCase()} change was not applied. Reload the workspace before editing again.`,
+      nonce: Date.now(),
+      actionLabel: 'Reload',
+    });
+  }
+
   async function loadWorkspaces() {
     try {
       const list = await getBusinesses();
@@ -212,19 +250,431 @@ export default function App() {
     ledgerDataAdapter.save(data);
   }, [data, initialLedgerLoaded, mode]);
 
+  useEffect(() => {
+    if (view === 'payroll' && !permissions.canViewPayroll) {
+      setView('dashboard');
+    }
+  }, [permissions.canViewPayroll, view]);
+
   function updateData(next: LedgerData) {
     setData(next);
   }
 
-  async function refreshRemoteLedger() {
+  async function createBillFromPurchaseOrder(po: PurchaseOrder) {
+    const billDate = todayStr();
+    if (isDateLocked(data, billDate)) {
+      reportError(new Error(`Period lock is active through ${lockedThrough}. A PO bill dated today cannot be created until the lock is cleared or a later date is used.`));
+      return;
+    }
+    if (po.billTransactionId) {
+      reportError(new Error('This purchase order already has a linked supplier bill.'));
+      return;
+    }
+    if (po.status !== 'received') {
+      reportError(new Error('Receive the purchase order in full before creating its supplier bill.'));
+      return;
+    }
+    const amount = poReceivedTotal(po);
+    if (amount <= 0) {
+      reportError(new Error('Receive stock before creating a supplier bill from this purchase order.'));
+      return;
+    }
+
+    const bill: Transaction = {
+      id: uid(),
+      type: 'expense',
+      amount,
+      accountId: data.accounts[0]?.id,
+      chartAccountId: chartAccountIdByCode(data, '1220') || chartAccountIdByCode(data, '7030'),
+      clearingChartAccountId: chartAccountIdByCode(data, '2000'),
+      date: billDate,
+      note: `Supplier bill for PO ${po.id}`,
+      gstMode: 'free',
+      entryMode: 'invoice',
+      contactId: po.supplierId,
+      party: po.supplierName || '',
+      invoiceNo: mode === 'cloud' ? undefined : formatDocumentNumber(data, 'expense'),
+      paymentTerms: 'due_on_receipt',
+      dueDate: dueDateForTerms(billDate, 'due_on_receipt'),
+    };
+
+    const linkInventoryToBill = (ledger: LedgerData, billId: string): LedgerData => ({
+      ...ledger,
+      purchaseOrders: (ledger.purchaseOrders || []).map((item) => item.id === po.id
+        ? { ...item, billTransactionId: billId, billedAt: new Date().toISOString() }
+        : item),
+      inventoryMovements: (ledger.inventoryMovements || []).map((movement) => (
+        movement.sourceId?.startsWith(`${po.id}:`) ? { ...movement, sourceId: billId } : movement
+      )),
+    });
+
+    if (mode === 'cloud') {
+      try {
+        await runAction('Creating supplier bill…', async () => {
+          const created = await auctusApi.createTransaction(bill);
+          await auctusApi.linkPurchaseOrderBill(po.id, created.id);
+          await refreshRemoteLedger();
+        });
+      } catch (error) {
+        reportError(error, 'Supplier bill creation failed.');
+      }
+      return;
+    }
+
+    setData((current) => {
+      const billId = bill.id;
+      const nextSettings = { ...current.settings, nextBillNumber: (current.settings.nextBillNumber || 1) + 1 };
+      const linked = linkInventoryToBill(current, billId);
+      return {
+        ...linked,
+        settings: nextSettings,
+        transactions: [...current.transactions, bill],
+        auditLog: [
+          ...(current.auditLog || []),
+          auditEntry('create', 'transaction', billId, `Created supplier bill ${bill.invoiceNo || billId} from PO ${po.id}`),
+        ],
+      };
+    });
+  }
+
+  function updateInventoryData(next: LedgerData) {
+    if (mode !== 'cloud') {
+      updateData(next);
+      return;
+    }
+
+    setData(next);
+    void runAction('Saving inventory…', async () => {
+      const saved = await auctusApi.replaceInventoryModuleState(next);
+      setData(saved);
+      ledgerDataAdapter.save(saved);
+    }).catch((error) => {
+      if (isModuleStateConflict(error)) {
+        reportModuleStateConflict('Inventory', error);
+        void refreshRemoteLedger({ keepConflictNotice: true });
+        return;
+      }
+      reportError(error, 'Inventory save failed.');
+      void refreshRemoteLedger();
+    });
+  }
+
+  function updatePayrollData(next: LedgerData) {
+    if (mode !== 'cloud') {
+      updateData(next);
+      return;
+    }
+
+    setData(next);
+    void runAction('Saving payroll…', async () => {
+      const saved = await auctusApi.replacePayrollModuleState(next);
+      setData(saved);
+      ledgerDataAdapter.save(saved);
+    }).catch((error) => {
+      if (isModuleStateConflict(error)) {
+        reportModuleStateConflict('Payroll', error);
+        void refreshRemoteLedger({ keepConflictNotice: true });
+        return;
+      }
+      reportError(error, 'Payroll save failed.');
+      void refreshRemoteLedger();
+    });
+  }
+
+  async function saveInventoryProduct(product: Product, saveMode: 'create' | 'update') {
+    if (mode !== 'cloud') {
+      const products = data.products || [];
+      if (saveMode === 'create') {
+        updateData({ ...data, products: [...products, product] });
+      } else {
+        updateData({ ...data, products: products.map((item) => item.id === product.id ? product : item) });
+      }
+      return;
+    }
+
+    try {
+      await runAction(saveMode === 'create' ? 'Saving product…' : 'Updating product…', async () => {
+        const saved = saveMode === 'create'
+          ? await auctusApi.createProduct(product)
+          : await auctusApi.updateProduct(product);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, saveMode === 'create' ? 'Product save failed.' : 'Product update failed.');
+      throw error;
+    }
+  }
+
+  async function archiveInventoryProduct(productId: string) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, products: (data.products || []).map((item) => item.id === productId ? { ...item, archivedAt: new Date().toISOString() } : item) });
+      return;
+    }
+
+    try {
+      await runAction('Archiving product…', async () => {
+        const saved = await auctusApi.archiveProduct(productId);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Product archive failed.');
+      throw error;
+    }
+  }
+
+  async function createInventoryMovement(movement: InventoryMovement) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, inventoryMovements: [...(data.inventoryMovements || []), movement] });
+      return;
+    }
+
+    try {
+      await runAction('Saving movement…', async () => {
+        const saved = await auctusApi.createInventoryMovement(movement);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Inventory movement save failed.');
+      throw error;
+    }
+  }
+
+  async function createInventoryPurchaseOrder(po: PurchaseOrder) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, purchaseOrders: [...(data.purchaseOrders || []), po] });
+      return;
+    }
+
+    try {
+      await runAction('Saving purchase order…', async () => {
+        const saved = await auctusApi.createPurchaseOrder(po);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Purchase order save failed.');
+      throw error;
+    }
+  }
+
+  async function markInventoryPurchaseOrderSent(po: PurchaseOrder) {
+    if (mode !== 'cloud') {
+      updateData({
+        ...data,
+        purchaseOrders: (data.purchaseOrders || []).map((item) => item.id === po.id ? { ...item, status: 'sent' } : item),
+      });
+      return;
+    }
+
+    try {
+      await runAction('Updating purchase order…', async () => {
+        const saved = await auctusApi.markPurchaseOrderSent(po.id);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Purchase order update failed.');
+      throw error;
+    }
+  }
+
+  async function cancelInventoryPurchaseOrder(po: PurchaseOrder) {
+    if (mode !== 'cloud') {
+      updateData({
+        ...data,
+        purchaseOrders: (data.purchaseOrders || []).map((item) => item.id === po.id ? { ...item, status: 'cancelled' } : item),
+      });
+      return;
+    }
+
+    try {
+      await runAction('Cancelling purchase order…', async () => {
+        const saved = await auctusApi.cancelPurchaseOrder(po.id);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Purchase order cancel failed.');
+      throw error;
+    }
+  }
+
+  async function receiveInventoryPurchaseOrder(po: PurchaseOrder, receiptQtys: Record<number, number>, date: string) {
+    if (mode !== 'cloud') {
+      const newMovements: InventoryMovement[] = [];
+      const updatedLines = po.lines.map((line, index) => {
+        const qty = receiptQtys[index] || 0;
+        if (qty > 0) {
+          newMovements.push({
+            id: uid(),
+            productId: line.productId,
+            date,
+            type: 'purchase',
+            quantity: qty,
+            unitCost: line.unitCost,
+            sourceId: `${po.id}:${index}:${date}`,
+            memo: `PO received${po.supplierName ? ' from ' + po.supplierName : ''}`,
+          });
+        }
+        return { ...line, receivedQty: Math.round(((line.receivedQty || 0) + qty) * 100) / 100 };
+      });
+      const allReceived = updatedLines.every((line) => line.receivedQty >= line.orderedQty);
+      updateData({
+        ...data,
+        inventoryMovements: [...(data.inventoryMovements || []), ...newMovements],
+        purchaseOrders: (data.purchaseOrders || []).map((item) =>
+          item.id === po.id
+            ? { ...item, lines: updatedLines, status: allReceived ? 'received' : 'sent', receivedAt: allReceived ? new Date().toISOString() : undefined }
+            : item,
+        ),
+      });
+      return;
+    }
+
+    try {
+      await runAction('Receiving stock…', async () => {
+        const saved = await auctusApi.receivePurchaseOrder(po.id, receiptQtys, date);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Purchase order receipt failed.');
+      throw error;
+    }
+  }
+
+  async function savePayrollEmployee(employee: Employee, saveMode: 'create' | 'update') {
+    if (mode !== 'cloud') {
+      const employees = data.employees || [];
+      if (saveMode === 'create') {
+        updateData({ ...data, employees: [...employees, employee] });
+      } else {
+        updateData({ ...data, employees: employees.map((item) => item.id === employee.id ? employee : item) });
+      }
+      return;
+    }
+
+    try {
+      await runAction(saveMode === 'create' ? 'Saving employee…' : 'Updating employee…', async () => {
+        const saved = saveMode === 'create'
+          ? await auctusApi.createEmployee(employee)
+          : await auctusApi.updateEmployee(employee);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, saveMode === 'create' ? 'Employee save failed.' : 'Employee update failed.');
+      throw error;
+    }
+  }
+
+  async function archivePayrollEmployee(employeeId: string) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, employees: (data.employees || []).map((item) => item.id === employeeId ? { ...item, archivedAt: new Date().toISOString() } : item) });
+      return;
+    }
+
+    try {
+      await runAction('Archiving employee…', async () => {
+        const saved = await auctusApi.archiveEmployee(employeeId);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Employee archive failed.');
+      throw error;
+    }
+  }
+
+  async function createPayrollPayRun(payRun: PayRun) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, payRuns: [...(data.payRuns || []), payRun] });
+      return;
+    }
+
+    try {
+      await runAction('Saving pay run…', async () => {
+        const saved = await auctusApi.createPayRun(payRun);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Pay run save failed.');
+      throw error;
+    }
+  }
+
+  async function finalisePayrollPayRun(payRun: PayRun) {
+    if (mode !== 'cloud') {
+      updateData({
+        ...data,
+        payRuns: (data.payRuns || []).map((item) =>
+          item.id === payRun.id ? { ...item, status: 'finalised', finalisedAt: new Date().toISOString() } : item,
+        ),
+      });
+      return;
+    }
+
+    try {
+      await runAction('Finalising pay run…', async () => {
+        const saved = await auctusApi.finalisePayRun(payRun.id);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Pay run finalise failed.');
+      throw error;
+    }
+  }
+
+  async function createPayrollRemittance(remittance: Remittance) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, remittances: [...(data.remittances || []), remittance] });
+      return;
+    }
+
+    try {
+      await runAction('Saving remittance…', async () => {
+        const saved = await auctusApi.createRemittance(remittance);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'Remittance save failed.');
+      throw error;
+    }
+  }
+
+  async function createPayrollSTPSubmission(submission: STPSubmission) {
+    if (mode !== 'cloud') {
+      updateData({ ...data, stpSubmissions: [...(data.stpSubmissions || []), submission] });
+      return;
+    }
+
+    try {
+      await runAction('Saving STP submission…', async () => {
+        const saved = await auctusApi.createSTPSubmission(submission);
+        setData(saved);
+        ledgerDataAdapter.save(saved);
+      });
+    } catch (error) {
+      reportError(error, 'STP submission save failed.');
+      throw error;
+    }
+  }
+
+  async function refreshRemoteLedger(options: { keepConflictNotice?: boolean } = {}) {
     setSyncState('syncing');
-    setSyncError(null);
+    if (!options.keepConflictNotice) setSyncError(null);
     try {
       const next = await auctusApi.loadLedger();
       setData(next);
       ledgerDataAdapter.save(next);
       setInitialLedgerLoaded(true);
-      setSyncState('idle');
+      setSyncState(options.keepConflictNotice ? 'error' : 'idle');
     } catch (error) {
       reportError(error, 'Sync failed');
     }
@@ -330,6 +780,7 @@ export default function App() {
   }
 
   async function saveTransaction(tx: Transaction) {
+    tx = normalizeProductTransactionAccounts(data, tx);
     if (mode === 'cloud') {
       const existing = data.transactions.find((item) => item.id === tx.id);
       if (existing) {
@@ -357,6 +808,25 @@ export default function App() {
       try {
         await runAction('Saving transaction…', async () => {
           const created = await auctusApi.createTransaction(tx);
+          if (tx.productId) {
+            const product = (data.products || []).find((p) => p.id === tx.productId);
+            if (product) {
+              const items = computeInventoryItems(data);
+              const stockItem = items.find((i) => i.productId === tx.productId);
+              const avgCost = stockItem?.avgCost ?? product.costPrice;
+              const movement: InventoryMovement = {
+                id: uid(),
+                productId: tx.productId,
+                date: tx.date,
+                type: tx.type === 'income' ? 'sale' : 'purchase',
+                quantity: tx.productQty || 1,
+                unitCost: tx.type === 'income' ? avgCost : product.costPrice,
+                memo: tx.note || product.name,
+                sourceId: created.id,
+              };
+              await auctusApi.createInventoryMovement(movement);
+            }
+          }
           for (const payment of tx.payments || []) {
             await auctusApi.recordPayment(created.id, {
               amount: payment.amount,
@@ -1023,7 +1493,7 @@ export default function App() {
           {syncState === 'error' && syncError ? <div className="auth-error">{syncError.message}</div> : null}
           <div className="workspace-actions">
             <button className="btn-secondary" onClick={handleSwitchWorkspace}>Switch Workspace</button>
-            <button className="btn-primary" onClick={refreshRemoteLedger}>{syncState === 'syncing' ? 'Loading…' : 'Retry'}</button>
+            <button className="btn-primary" onClick={() => refreshRemoteLedger()}>{syncState === 'syncing' ? 'Loading…' : 'Retry'}</button>
           </div>
         </div>
       </div>
@@ -1042,11 +1512,13 @@ export default function App() {
         userRole={selectedBusiness?.role}
         syncState={syncState}
         syncError={syncError?.message || null}
+        syncErrorActionLabel={syncError?.actionLabel}
         busyLabel={busyLabel}
         onDismissSyncError={dismissSyncError}
         onRetrySync={mode === 'cloud' ? refreshRemoteLedger : undefined}
         onLogout={mode === 'cloud' ? handleLogout : undefined}
         onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
+        canViewPayroll={permissions.canViewPayroll}
       >
         {view === 'dashboard' ? (
           <Dashboard
@@ -1102,8 +1574,34 @@ export default function App() {
           canWrite={permissions.canWriteAccounting}
         />
       ) : null}
-      {view === 'inventory' ? <Inventory data={data} onDataChange={updateData} canWrite={permissions.canWriteAccounting} /> : null}
-      {view === 'payroll' ? <Payroll data={data} onDataChange={updateData} canWrite={permissions.canWriteAccounting} /> : null}
+      {view === 'inventory' ? (
+        <Inventory
+          data={data}
+          onDataChange={updateInventoryData}
+          canWrite={permissions.canWriteAccounting}
+          onSaveProduct={saveInventoryProduct}
+          onArchiveProduct={archiveInventoryProduct}
+          onCreateMovement={createInventoryMovement}
+          onCreatePurchaseOrder={createInventoryPurchaseOrder}
+          onMarkPurchaseOrderSent={markInventoryPurchaseOrderSent}
+          onCancelPurchaseOrder={cancelInventoryPurchaseOrder}
+          onReceivePurchaseOrder={receiveInventoryPurchaseOrder}
+          onCreateBillFromPO={createBillFromPurchaseOrder}
+        />
+      ) : null}
+      {view === 'payroll' && permissions.canViewPayroll ? (
+        <Payroll
+          data={data}
+          onDataChange={updatePayrollData}
+          canWrite={permissions.canWriteAccounting}
+          onSaveEmployee={savePayrollEmployee}
+          onArchiveEmployee={archivePayrollEmployee}
+          onCreatePayRun={createPayrollPayRun}
+          onFinalisePayRun={finalisePayrollPayRun}
+          onCreateRemittance={createPayrollRemittance}
+          onCreateSTPSubmission={createPayrollSTPSubmission}
+        />
+      ) : null}
       {view === 'reports' ? <Reports data={data} period={period} onPeriodChange={setPeriod} onDataChange={updateData} /> : null}
       {view === 'assets' ? <FixedAssets data={data} onDataChange={updateData} canWrite={permissions.canWriteAccounting} /> : null}
       {view === 'journals' ? (

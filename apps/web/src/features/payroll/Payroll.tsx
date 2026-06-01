@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { printPaySlips } from './payslipPrint';
 import {
+  calculateHourlyGross,
   calculatePaySlip,
   computeLeaveBalances,
   currentFinancialYear,
@@ -16,6 +17,7 @@ import {
 import { Modal } from '../../components/Modal';
 import type {
   Employee,
+  EmploymentBasis,
   LedgerData,
   PayFrequency,
   PayRun,
@@ -30,14 +32,30 @@ interface PayrollProps {
   data: LedgerData;
   onDataChange: (data: LedgerData) => void;
   canWrite?: boolean;
+  onSaveEmployee?: (employee: Employee, mode: 'create' | 'update') => void | Promise<void>;
+  onArchiveEmployee?: (employeeId: string) => void | Promise<void>;
+  onCreatePayRun?: (payRun: PayRun) => void | Promise<void>;
+  onFinalisePayRun?: (payRun: PayRun) => void | Promise<void>;
+  onCreateRemittance?: (remittance: Remittance) => void | Promise<void>;
+  onCreateSTPSubmission?: (submission: STPSubmission) => void | Promise<void>;
 }
 
 type Tab = 'employees' | 'payruns' | 'remittances' | 'stp';
 
 const FREQ_LABELS: Record<PayFrequency, string> = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' };
+const BASIS_LABELS: Record<EmploymentBasis, string> = { full_time: 'Full-time', part_time: 'Part-time', casual: 'Casual' };
 
 function blankEmployee(): Omit<Employee, 'id'> {
-  return { name: '', payType: 'salary', payRate: 0, payFrequency: 'fortnightly', taxFreeThreshold: true };
+  return {
+    name: '',
+    payType: 'salary',
+    payRate: 0,
+    payFrequency: 'fortnightly',
+    taxFreeThreshold: true,
+    employmentBasis: 'full_time',
+    ordinaryHoursPerWeek: 38,
+    casualLoadingRate: 0.25,
+  };
 }
 
 function defaultPeriod(): { start: string; end: string; payDate: string } {
@@ -54,6 +72,12 @@ function hoursToDisplay(hours: number): string {
   return `${hours.toFixed(1)} hrs${days > 0 ? ` (${days}d${rem > 0 ? ` ${rem}h` : ''})` : ''}`;
 }
 
+function ordinaryHoursForPeriod(emp: Employee): number {
+  const weeklyHours = emp.ordinaryHoursPerWeek ?? 38;
+  const multiplier = emp.payFrequency === 'weekly' ? 1 : emp.payFrequency === 'fortnightly' ? 2 : 52 / 12;
+  return Math.round(weeklyHours * multiplier * 100) / 100;
+}
+
 function downloadCSV(filename: string, csv: string) {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -64,7 +88,17 @@ function downloadCSV(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
+export function Payroll({
+  data,
+  onDataChange,
+  canWrite = true,
+  onSaveEmployee,
+  onArchiveEmployee,
+  onCreatePayRun,
+  onFinalisePayRun,
+  onCreateRemittance,
+  onCreateSTPSubmission,
+}: PayrollProps) {
   const [tab, setTab] = useState<Tab>('employees');
   const [empModal, setEmpModal] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
@@ -74,6 +108,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
   const [runPeriod, setRunPeriod] = useState(defaultPeriod());
   const [runAccountId, setRunAccountId] = useState('');
   const [runSlips, setRunSlips] = useState<Record<string, string>>({});
+  const [runAdjustments, setRunAdjustments] = useState<Record<string, { allowance: string; deduction: string; reimbursement: string }>>({});
 
   const [remModal, setRemModal] = useState(false);
   const [remForm, setRemForm] = useState<Omit<Remittance, 'id'>>({ date: todayStr(), type: 'payg', amount: 0, payAccountId: '', memo: '' });
@@ -108,23 +143,48 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
 
   function openEditEmployee(emp: Employee) {
     setEditingEmp(emp);
-    setEmpForm({ name: emp.name, payType: emp.payType, payRate: emp.payRate, payFrequency: emp.payFrequency, taxFreeThreshold: emp.taxFreeThreshold, superFundName: emp.superFundName, tfn: emp.tfn });
+    setEmpForm({
+      name: emp.name,
+      payType: emp.payType,
+      payRate: emp.payRate,
+      payFrequency: emp.payFrequency,
+      taxFreeThreshold: emp.taxFreeThreshold,
+      employmentBasis: emp.employmentBasis ?? 'full_time',
+      ordinaryHoursPerWeek: emp.ordinaryHoursPerWeek ?? 38,
+      casualLoadingRate: emp.casualLoadingRate ?? 0.25,
+      superFundName: emp.superFundName,
+      tfn: emp.tfn,
+    });
     setEmpModal(true);
   }
 
-  function saveEmployee() {
+  async function saveEmployee() {
     if (!empForm.name.trim()) return;
     const employees = data.employees || [];
     if (editingEmp) {
-      onDataChange({ ...data, employees: employees.map((e) => e.id === editingEmp.id ? { ...editingEmp, ...empForm } : e) });
+      const employee = { ...editingEmp, ...empForm };
+      if (onSaveEmployee) {
+        await onSaveEmployee(employee, 'update');
+      } else {
+        onDataChange({ ...data, employees: employees.map((e) => e.id === editingEmp.id ? employee : e) });
+      }
     } else {
-      onDataChange({ ...data, employees: [...employees, { ...empForm, id: uid() }] });
+      const employee = { ...empForm, id: uid() };
+      if (onSaveEmployee) {
+        await onSaveEmployee(employee, 'create');
+      } else {
+        onDataChange({ ...data, employees: [...employees, employee] });
+      }
     }
     setEmpModal(false);
   }
 
-  function archiveEmployee(id: string) {
-    onDataChange({ ...data, employees: (data.employees || []).map((e) => e.id === id ? { ...e, archivedAt: new Date().toISOString() } : e) });
+  async function archiveEmployee(id: string) {
+    if (onArchiveEmployee) {
+      await onArchiveEmployee(id);
+    } else {
+      onDataChange({ ...data, employees: (data.employees || []).map((e) => e.id === id ? { ...e, archivedAt: new Date().toISOString() } : e) });
+    }
   }
 
   function openNewPayRun() {
@@ -134,9 +194,12 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     const slips: Record<string, string> = {};
     for (const emp of activeEmployees) {
       const periods = emp.payFrequency === 'weekly' ? 52 : emp.payFrequency === 'fortnightly' ? 26 : 12;
-      slips[emp.id] = emp.payType === 'salary' ? String(Math.round((emp.payRate / periods) * 100) / 100) : '';
+      slips[emp.id] = emp.payType === 'salary'
+        ? String(Math.round((emp.payRate / periods) * 100) / 100)
+        : String(ordinaryHoursForPeriod(emp));
     }
     setRunSlips(slips);
+    setRunAdjustments({});
     setRunModal(true);
   }
 
@@ -144,13 +207,24 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     return activeEmployees
       .filter((e) => Number(runSlips[e.id]) > 0)
       .map((e) => {
-        const gross = Number(runSlips[e.id]) || 0;
-        const slip = calculatePaySlip(e, gross);
-        return { id: uid(), ...slip, employee: e };
+        const input = Number(runSlips[e.id]) || 0;
+        const hours = e.payType === 'hourly' ? input : undefined;
+        const gross = e.payType === 'hourly' ? calculateHourlyGross(e, input) : input;
+        const adjustmentInput = runAdjustments[e.id];
+        const allowance = Number(adjustmentInput?.allowance) || 0;
+        const deduction = Number(adjustmentInput?.deduction) || 0;
+        const reimbursement = Number(adjustmentInput?.reimbursement) || 0;
+        const adjustments = [
+          allowance > 0 ? { id: `${e.id}_allowance`, type: 'allowance' as const, label: 'Taxable allowance', amount: allowance, taxable: true, superable: true } : null,
+          deduction > 0 ? { id: `${e.id}_deduction`, type: 'deduction' as const, label: 'Post-tax deduction', amount: deduction } : null,
+          reimbursement > 0 ? { id: `${e.id}_reimbursement`, type: 'reimbursement' as const, label: 'Reimbursement', amount: reimbursement, taxable: false, superable: false } : null,
+        ].filter((item): item is NonNullable<typeof item> => item !== null);
+        const slip = calculatePaySlip(e, gross, adjustments);
+        return { id: uid(), ...slip, hours, employee: e };
       });
   }
 
-  function savePayRun(finalise: boolean) {
+  async function savePayRun(finalise: boolean) {
     const slips = previewSlips();
     if (slips.length === 0) return;
     const payRun: PayRun = {
@@ -164,17 +238,25 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
       createdAt: new Date().toISOString(),
       finalisedAt: finalise ? new Date().toISOString() : undefined,
     };
-    onDataChange({ ...data, payRuns: [...(data.payRuns || []), payRun] });
+    if (onCreatePayRun) {
+      await onCreatePayRun(payRun);
+    } else {
+      onDataChange({ ...data, payRuns: [...(data.payRuns || []), payRun] });
+    }
     setRunModal(false);
   }
 
-  function finalisePayRun(run: PayRun) {
-    onDataChange({
-      ...data,
-      payRuns: (data.payRuns || []).map((r) =>
-        r.id === run.id ? { ...r, status: 'finalised', finalisedAt: new Date().toISOString() } : r,
-      ),
-    });
+  async function finalisePayRun(run: PayRun) {
+    if (onFinalisePayRun) {
+      await onFinalisePayRun(run);
+    } else {
+      onDataChange({
+        ...data,
+        payRuns: (data.payRuns || []).map((r) =>
+          r.id === run.id ? { ...r, status: 'finalised', finalisedAt: new Date().toISOString() } : r,
+        ),
+      });
+    }
   }
 
   function openRemittance(type: RemittanceType) {
@@ -182,10 +264,14 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     setRemModal(true);
   }
 
-  function saveRemittance() {
+  async function saveRemittance() {
     if (!remForm.amount || remForm.amount <= 0) return;
     const rem: Remittance = { ...remForm, id: uid() };
-    onDataChange({ ...data, remittances: [...(data.remittances || []), rem] });
+    if (onCreateRemittance) {
+      await onCreateRemittance(rem);
+    } else {
+      onDataChange({ ...data, remittances: [...(data.remittances || []), rem] });
+    }
     setRemModal(false);
   }
 
@@ -195,7 +281,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
     setStpModal(true);
   }
 
-  function saveStpSubmission() {
+  async function saveStpSubmission() {
     if (!stpRun) return;
     const sub: STPSubmission = {
       id: uid(),
@@ -204,14 +290,24 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
       status: 'submitted',
       referenceNumber: stpRef.trim() || undefined,
     };
-    onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), sub] });
+    if (onCreateSTPSubmission) {
+      await onCreateSTPSubmission(sub);
+    } else {
+      onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), sub] });
+    }
     setStpModal(false);
   }
 
-  function handleEOFY() {
+  async function handleEOFY() {
     const newSubs = markAllSubmitted(data, fy.start, fy.end);
     if (newSubs.length === 0) return;
-    onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), ...newSubs] });
+    if (onCreateSTPSubmission) {
+      for (const submission of newSubs) {
+        await onCreateSTPSubmission(submission);
+      }
+    } else {
+      onDataChange({ ...data, stpSubmissions: [...(data.stpSubmissions || []), ...newSubs] });
+    }
   }
 
   function handleExportCSV() {
@@ -273,20 +369,25 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
         )}
       </div>
 
+      <div className="payroll-estimate-banner">
+        PAYG withholding shown here is an estimate based on annualised resident tax rates and simplified Medicare levy handling. Use ATO PAYG withholding tax tables or payroll advice before lodging or paying wages.
+      </div>
+
       {tab === 'employees' && (
         <table className="ledger-table">
           <thead>
-            <tr><th>Name</th><th>Pay Type</th><th>Pay Rate</th><th>Frequency</th><th>Tax-Free</th><th className="num">Annual Leave</th><th className="num">Sick Leave</th><th></th></tr>
+            <tr><th>Name</th><th>Basis</th><th>Pay Type</th><th>Pay Rate</th><th>Frequency</th><th>Tax-Free</th><th className="num">Annual Leave</th><th className="num">Sick Leave</th><th></th></tr>
           </thead>
           <tbody>
             {activeEmployees.length === 0 && (
-              <tr><td colSpan={8} className="empty-row">No employees yet. Click "+ Add Employee" to get started.</td></tr>
+              <tr><td colSpan={9} className="empty-row">No employees yet. Click "+ Add Employee" to get started.</td></tr>
             )}
             {activeEmployees.map((e) => {
               const bal = leaveBalances[e.id];
               return (
                 <tr key={e.id}>
                   <td>{e.name}</td>
+                  <td className="muted">{BASIS_LABELS[e.employmentBasis ?? 'full_time']}</td>
                   <td className="muted">{e.payType === 'salary' ? 'Salary' : 'Hourly'}</td>
                   <td className="num">{fmtMoney(e.payRate)}{e.payType === 'hourly' ? '/hr' : '/yr'}</td>
                   <td className="muted">{FREQ_LABELS[e.payFrequency]}</td>
@@ -311,7 +412,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
       {tab === 'payruns' && (
         <table className="ledger-table">
           <thead>
-            <tr><th>Period</th><th>Pay Date</th><th className="num">Gross</th><th className="num">PAYG</th><th className="num">Super</th><th className="num">Net Pay</th><th>Status</th><th></th></tr>
+            <tr><th>Period</th><th>Pay Date</th><th className="num">Gross</th><th className="num">PAYG Est.</th><th className="num">Super</th><th className="num">Net Pay</th><th>Status</th><th></th></tr>
           </thead>
           <tbody>
             {payRuns.length === 0 && (
@@ -408,7 +509,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
               </div>
               <table className="ledger-table">
                 <thead>
-                  <tr><th>Pay Date</th><th>Period</th><th className="num">Employees</th><th className="num">Gross</th><th className="num">PAYG</th><th className="num">Super</th><th></th></tr>
+                  <tr><th>Pay Date</th><th>Period</th><th className="num">Employees</th><th className="num">Gross</th><th className="num">PAYG Est.</th><th className="num">Super</th><th></th></tr>
                 </thead>
                 <tbody>
                   {stpPending.map((run) => {
@@ -439,11 +540,11 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
           <div className="stp-section-title">Payment Summaries — {fy.label}</div>
           <table className="ledger-table">
             <thead>
-              <tr><th>Employee</th><th>TFN</th><th className="num">YTD Gross</th><th className="num">YTD PAYG</th><th className="num">YTD Super</th><th className="num">Pay Runs</th></tr>
+              <tr><th>Employee</th><th>TFN</th><th className="num">YTD Gross</th><th className="num">YTD PAYG Est.</th><th className="num">YTD Super</th><th className="num">Allowances</th><th className="num">Deductions</th><th className="num">Reimb.</th><th className="num">Pay Runs</th></tr>
             </thead>
             <tbody>
               {paymentSummaries.length === 0 && (
-                <tr><td colSpan={6} className="empty-row">No finalised pay runs in {fy.label} yet.</td></tr>
+                <tr><td colSpan={9} className="empty-row">No finalised pay runs in {fy.label} yet.</td></tr>
               )}
               {paymentSummaries.map((s) => (
                 <tr key={s.employee.id}>
@@ -452,6 +553,9 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
                   <td className="num">{fmtMoney(s.ytdGross)}</td>
                   <td className="num">{fmtMoney(s.ytdPayg)}</td>
                   <td className="num">{fmtMoney(s.ytdSuper)}</td>
+                  <td className="num muted">{fmtMoney(s.ytdAllowances)}</td>
+                  <td className="num muted">{fmtMoney(s.ytdDeductions)}</td>
+                  <td className="num muted">{fmtMoney(s.ytdReimbursements)}</td>
                   <td className="num muted">{s.payRunCount}</td>
                 </tr>
               ))}
@@ -494,9 +598,24 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
                 <option value="hourly">Hourly</option>
               </select>
             </label>
+            <label>Employment Basis
+              <select value={empForm.employmentBasis || 'full_time'} onChange={(e) => setEmpForm({ ...empForm, employmentBasis: e.target.value as EmploymentBasis })}>
+                <option value="full_time">Full-time</option>
+                <option value="part_time">Part-time</option>
+                <option value="casual">Casual</option>
+              </select>
+            </label>
             <label>{empForm.payType === 'salary' ? 'Annual Salary' : 'Hourly Rate'}
               <input type="number" step="0.01" min="0" value={empForm.payRate} onChange={(e) => setEmpForm({ ...empForm, payRate: parseFloat(e.target.value) || 0 })} />
             </label>
+            <label>Ordinary Hours / Week
+              <input type="number" step="0.1" min="0" max="168" value={empForm.ordinaryHoursPerWeek ?? 38} onChange={(e) => setEmpForm({ ...empForm, ordinaryHoursPerWeek: parseFloat(e.target.value) || 0 })} />
+            </label>
+            {empForm.employmentBasis === 'casual' && (
+              <label>Casual Loading %
+                <input type="number" step="0.1" min="0" max="100" value={Math.round(((empForm.casualLoadingRate ?? 0.25) * 100) * 10) / 10} onChange={(e) => setEmpForm({ ...empForm, casualLoadingRate: (parseFloat(e.target.value) || 0) / 100 })} />
+              </label>
+            )}
             <label>Pay Frequency
               <select value={empForm.payFrequency} onChange={(e) => setEmpForm({ ...empForm, payFrequency: e.target.value as PayFrequency })}>
                 <option value="weekly">Weekly</option>
@@ -532,18 +651,36 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
           </div>
           <table className="ledger-table" style={{ marginTop: 12 }}>
             <thead>
-              <tr><th>Employee</th><th>Frequency</th><th className="num">Gross</th><th className="num">PAYG</th><th className="num">Super</th><th className="num">Net</th></tr>
+              <tr><th>Employee</th><th>Basis</th><th>Frequency</th><th className="num">Hours / Gross</th><th className="num">Allowance</th><th className="num">Deduction</th><th className="num">Reimb.</th><th className="num">Gross</th><th className="num">PAYG Est.</th><th className="num">Super</th><th className="num">Net</th></tr>
             </thead>
             <tbody>
               {activeEmployees.map((emp) => {
                 const grossStr = runSlips[emp.id] || '';
-                const gross = Number(grossStr) || 0;
-                const slip = gross > 0 ? calculatePaySlip(emp, gross) : null;
+                const adjustmentInput = runAdjustments[emp.id] || { allowance: '', deduction: '', reimbursement: '' };
+                const input = Number(grossStr) || 0;
+                const gross = emp.payType === 'hourly' ? calculateHourlyGross(emp, input) : input;
+                const adjustments = [
+                  Number(adjustmentInput.allowance) > 0 ? { type: 'allowance' as const, label: 'Taxable allowance', amount: Number(adjustmentInput.allowance), taxable: true, superable: true } : null,
+                  Number(adjustmentInput.deduction) > 0 ? { type: 'deduction' as const, label: 'Post-tax deduction', amount: Number(adjustmentInput.deduction) } : null,
+                  Number(adjustmentInput.reimbursement) > 0 ? { type: 'reimbursement' as const, label: 'Reimbursement', amount: Number(adjustmentInput.reimbursement), taxable: false, superable: false } : null,
+                ].filter((item): item is NonNullable<typeof item> => item !== null);
+                const slip = gross > 0 ? calculatePaySlip(emp, gross, adjustments) : null;
+                const updateAdjustment = (key: keyof typeof adjustmentInput, value: string) => {
+                  setRunAdjustments({
+                    ...runAdjustments,
+                    [emp.id]: { ...adjustmentInput, [key]: value },
+                  });
+                };
                 return (
                   <tr key={emp.id}>
                     <td>{emp.name}</td>
+                    <td className="muted">{BASIS_LABELS[emp.employmentBasis ?? 'full_time']}</td>
                     <td className="muted">{FREQ_LABELS[emp.payFrequency]}</td>
-                    <td><input type="number" step="0.01" min="0" value={grossStr} onChange={(e) => setRunSlips({ ...runSlips, [emp.id]: e.target.value })} style={{ width: 90, textAlign: 'right' }} /></td>
+                    <td><input type="number" step="0.01" min="0" value={grossStr} onChange={(e) => setRunSlips({ ...runSlips, [emp.id]: e.target.value })} style={{ width: 90, textAlign: 'right' }} placeholder={emp.payType === 'hourly' ? 'Hours' : 'Gross'} /></td>
+                    <td><input type="number" step="0.01" min="0" value={adjustmentInput.allowance} onChange={(e) => updateAdjustment('allowance', e.target.value)} style={{ width: 80, textAlign: 'right' }} /></td>
+                    <td><input type="number" step="0.01" min="0" value={adjustmentInput.deduction} onChange={(e) => updateAdjustment('deduction', e.target.value)} style={{ width: 80, textAlign: 'right' }} /></td>
+                    <td><input type="number" step="0.01" min="0" value={adjustmentInput.reimbursement} onChange={(e) => updateAdjustment('reimbursement', e.target.value)} style={{ width: 80, textAlign: 'right' }} /></td>
+                    <td className="num muted">{gross > 0 ? fmtMoney(gross) : '—'}</td>
                     <td className="num muted">{slip ? fmtMoney(slip.paygWithheld) : '—'}</td>
                     <td className="num muted">{slip ? fmtMoney(slip.superAmount) : '—'}</td>
                     <td className="num">{slip ? fmtMoney(slip.netPay) : '—'}</td>
@@ -552,7 +689,7 @@ export function Payroll({ data, onDataChange, canWrite = true }: PayrollProps) {
               })}
               {preview.length > 0 && (
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
-                  <td colSpan={2}>Total</td>
+                  <td colSpan={7}>Total</td>
                   <td className="num">{fmtMoney(previewTotalGross)}</td>
                   <td className="num">{fmtMoney(previewTotalPayg)}</td>
                   <td className="num">{fmtMoney(previewTotalSuper)}</td>

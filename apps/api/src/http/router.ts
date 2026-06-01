@@ -25,6 +25,17 @@ import {
   resetBusinessLedgerData,
   restoreBusinessLedgerBackup,
 } from "../ledgerBackup/routes.js";
+import {
+  archiveBusinessProduct,
+  cancelBusinessPurchaseOrder,
+  createBusinessInventoryMovement,
+  createBusinessProduct,
+  createBusinessPurchaseOrder,
+  linkBusinessPurchaseOrderBill,
+  markBusinessPurchaseOrderSent,
+  receiveBusinessPurchaseOrder,
+  updateBusinessProduct,
+} from "../inventory/routes.js";
 import { getBusinessLedger } from "../ledger/routes.js";
 import {
   createBusinessManualJournal,
@@ -32,6 +43,16 @@ import {
   updateBusinessManualJournal,
   voidBusinessManualJournal,
 } from "../manualJournals/routes.js";
+import { replaceBusinessInventoryState, replaceBusinessPayrollState } from "../moduleState/routes.js";
+import {
+  archiveBusinessEmployee,
+  createBusinessEmployee,
+  createBusinessPayRun,
+  createBusinessRemittance,
+  createBusinessSTPSubmission,
+  finaliseBusinessPayRun,
+  updateBusinessEmployee,
+} from "../payroll/routes.js";
 import { clearBusinessPeriodLocks, createBusinessPeriodLock } from "../periodLocks/routes.js";
 import {
   createBusinessCreditAllocation,
@@ -128,6 +149,96 @@ const routes: Route[] = [
     method: "POST",
     path: "/v1/businesses/:businessId/period-locks",
     handler: createBusinessPeriodLock,
+  },
+  {
+    method: "PUT",
+    path: "/v1/businesses/:businessId/inventory-state",
+    handler: replaceBusinessInventoryState,
+  },
+  {
+    method: "PUT",
+    path: "/v1/businesses/:businessId/payroll-state",
+    handler: replaceBusinessPayrollState,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/employees",
+    handler: createBusinessEmployee,
+  },
+  {
+    method: "PATCH",
+    path: "/v1/businesses/:businessId/employees/:employeeId",
+    handler: updateBusinessEmployee,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/employees/:employeeId/archive",
+    handler: archiveBusinessEmployee,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/pay-runs",
+    handler: createBusinessPayRun,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/pay-runs/:payRunId/finalise",
+    handler: finaliseBusinessPayRun,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/remittances",
+    handler: createBusinessRemittance,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/stp-submissions",
+    handler: createBusinessSTPSubmission,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/products",
+    handler: createBusinessProduct,
+  },
+  {
+    method: "PATCH",
+    path: "/v1/businesses/:businessId/products/:productId",
+    handler: updateBusinessProduct,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/products/:productId/archive",
+    handler: archiveBusinessProduct,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/inventory-movements",
+    handler: createBusinessInventoryMovement,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/purchase-orders",
+    handler: createBusinessPurchaseOrder,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/purchase-orders/:purchaseOrderId/mark-sent",
+    handler: markBusinessPurchaseOrderSent,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/purchase-orders/:purchaseOrderId/cancel",
+    handler: cancelBusinessPurchaseOrder,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/purchase-orders/:purchaseOrderId/receive",
+    handler: receiveBusinessPurchaseOrder,
+  },
+  {
+    method: "POST",
+    path: "/v1/businesses/:businessId/purchase-orders/:purchaseOrderId/link-bill",
+    handler: linkBusinessPurchaseOrderBill,
   },
   {
     method: "POST",

@@ -5,8 +5,14 @@
 | Feature | Document | Status |
 |---------|---------|--------|
 | AI Natural Language Entry | [AI_NATURAL_LANGUAGE_ROADMAP.md](./AI_NATURAL_LANGUAGE_ROADMAP.md) | Planned |
-| Inventory Management | [INVENTORY_PAYROLL_ROADMAP.md](./INVENTORY_PAYROLL_ROADMAP.md) | Planned |
-| Payroll | [INVENTORY_PAYROLL_ROADMAP.md](./INVENTORY_PAYROLL_ROADMAP.md) | Planned |
+| Inventory Management | [INVENTORY_PAYROLL_ROADMAP.md](./INVENTORY_PAYROLL_ROADMAP.md) | In progress |
+| Payroll | [INVENTORY_PAYROLL_ROADMAP.md](./INVENTORY_PAYROLL_ROADMAP.md) | In progress |
+
+## Next Engineering Pass
+
+- Add dedicated cloud E2E coverage for inventory and payroll granular API flows.
+- Keep old inventory/payroll module-state replacement endpoints as compatibility/recovery paths only.
+- Run a real Supabase smoke after the restored project has been idle-tested.
 
 ## Suggested Build Order
 
