@@ -167,11 +167,27 @@ describe("ledger export audit trail", () => {
         unitCost: 12,
         sourceId: "tx_1",
       }],
+      transactions: [{
+        id: "tx_1",
+        type: "expense",
+        amount: 60,
+        accountId: "bank_1",
+        chartAccountId: "ca_inventory",
+        date: "2026-02-03",
+        gstMode: "free",
+        entryMode: "invoice",
+        party: "Supplier",
+        invoiceNo: "BILL-1",
+        productId: "prod_1",
+        productQty: 5,
+      }],
       purchaseOrders: [{
         id: "po_1",
         date: "2026-02-01",
+        expectedDate: "2026-02-10",
         supplierName: "Supplier",
         status: "received",
+        memo: "Mobile restore PO",
         receivedAt: "2026-02-02T00:00:00.000Z",
         billTransactionId: "tx_1",
         billedAt: "2026-02-03T00:00:00.000Z",
@@ -202,7 +218,8 @@ describe("ledger export audit trail", () => {
           paygWithheld: 300,
           superAmount: 172.5,
           netPay: 1200,
-          adjustments: [],
+          hours: 38,
+          adjustments: [{ id: "adj_1", type: "allowance", label: "Travel", amount: 25, taxable: true, superable: false }],
         }],
       }],
       remittances: [{
@@ -211,6 +228,7 @@ describe("ledger export audit trail", () => {
         type: "payg",
         amount: 300,
         payAccountId: "bank_1",
+        memo: "Mobile restore PAYG",
       }],
       stpSubmissions: [{
         id: "stp_1",
@@ -218,6 +236,7 @@ describe("ledger export audit trail", () => {
         submittedAt: "2026-02-08T00:00:00.000Z",
         status: "accepted",
         referenceNumber: "STP-1",
+        memo: "Mobile restore STP",
       }],
     });
 
@@ -240,5 +259,43 @@ describe("ledger export audit trail", () => {
       expect.objectContaining({ table: "remittances", operation: "insert" }),
       expect.objectContaining({ table: "stp_submissions", operation: "insert" }),
     ]));
+    const insertedRows = (table: string) => (
+      mutations.find((mutation) => mutation.table === table && mutation.operation === "insert")?.payload || []
+    ) as Array<Record<string, unknown>>;
+    const productRow = insertedRows("products")[0];
+    const transactionRow = insertedRows("transactions")[0];
+    const movementRow = insertedRows("inventory_movements")[0];
+    const purchaseOrderRow = insertedRows("purchase_orders")[0];
+    const payRunRow = insertedRows("pay_runs")[0];
+    const paySlipRow = insertedRows("pay_slips")[0];
+    const remittanceRow = insertedRows("remittances")[0];
+    const stpRow = insertedRows("stp_submissions")[0];
+
+    expect(transactionRow).toMatchObject({
+      product_id: productRow.id,
+      product_qty: 5,
+    });
+    expect(movementRow).toMatchObject({
+      product_id: productRow.id,
+      source_id: transactionRow.id,
+    });
+    expect(purchaseOrderRow).toMatchObject({
+      expected_date: "2026-02-10",
+      memo: "Mobile restore PO",
+      bill_transaction_id: transactionRow.id,
+    });
+    expect(paySlipRow).toMatchObject({
+      pay_run_id: payRunRow.id,
+      hours: 38,
+      adjustments: [expect.objectContaining({ id: "adj_1", label: "Travel", amount: 25 })],
+    });
+    expect(remittanceRow).toMatchObject({
+      memo: "Mobile restore PAYG",
+    });
+    expect(stpRow).toMatchObject({
+      pay_run_id: payRunRow.id,
+      reference_number: "STP-1",
+      memo: "Mobile restore STP",
+    });
   });
 });

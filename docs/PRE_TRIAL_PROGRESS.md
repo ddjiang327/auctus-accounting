@@ -685,3 +685,21 @@ Verification:
 - `node --check scripts/pretrial-audit.mjs` passed.
 - `npm run audit:pretrial` passed with expected local warnings.
 - `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=20260601050000 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 16 checks, 1 warning, 0 failures.
+
+### 28) Mobile full-ledger restore coverage for inventory/payroll fields
+
+Strengthened API restore tests for the current Mobile cloud sync strategy, where Mobile still saves a full `LedgerData` payload through the restore endpoint:
+
+- Extended `apps/api/src/tests/ledgerAudit.test.ts` restore coverage with:
+  - Product-linked transaction fields (`productId`, `productQty`).
+  - Inventory movement source links.
+  - Purchase order expected date, memo, and linked bill transaction.
+  - Pay slip hours and adjustment payload.
+  - Remittance memo.
+  - STP reference and memo.
+- Added assertions that restored rows keep relationship integrity after the restore ID-remapping step.
+
+Verification:
+- `npm run test -w apps/api -- ledgerAudit.test.ts` passed: 8 tests.
+- `npm run test -w apps/api` passed: 12 files, 68 tests.
+- `npm run build` passed.
