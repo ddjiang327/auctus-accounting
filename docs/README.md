@@ -15,4 +15,4 @@ Useful commands:
 
 - `npm run audit:pretrial`: local/target Supabase pre-trial audit.
 - `npm run audit:production`: same audit with production URL checks enabled by `AUCTUS_PRODUCTION_*` env vars.
-- `npm run acceptance:production-roles`: production Bookkeeper/Viewer role acceptance smoke with temporary users and cleanup.
+- `npm run acceptance:production-roles`: production owner/admin/bookkeeper/viewer role acceptance smoke with temporary users and cleanup.

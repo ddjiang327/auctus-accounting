@@ -716,3 +716,18 @@ Closed the mobile cloud mismatch created by the current full-ledger restore sync
 Verification:
 - `npx tsc --noEmit -p apps/mobile/tsconfig.json` passed.
 - `npm run build` passed.
+
+### 30) Production role acceptance admin coverage
+
+Closed the production role-smoke coverage gap where `admin` was documented as owner-equivalent but not included in `npm run acceptance:production-roles`:
+
+- The production role script now creates temporary `owner`, `admin`, `bookkeeper`, and `viewer` users.
+- It verifies `owner` and `admin` can see management UI controls in Settings and Accounts.
+- It verifies `owner` and `admin` receive `200` from the production backup endpoint using real Supabase sessions.
+- It keeps the existing bookkeeper write/no-admin UI and viewer read-only/backup-403 checks.
+
+Verification:
+- `node --check scripts/production-role-acceptance.mjs` passed.
+- `npm run acceptance:production-roles` passed against production:
+  - Web: `https://auctus-web.netlify.app`
+  - API: `https://auctus-api.vercel.app`

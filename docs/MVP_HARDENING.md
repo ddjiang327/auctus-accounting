@@ -132,7 +132,7 @@ Latest automated verification: 2026-06-25.
 - `npm run build` passed.
 - `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=20260601050000 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 16 passed, 1 warning, 0 failures. It confirmed the Netlify Web shell, Vercel API health check, exact production CORS origin, production CORS preflight, local migration files through `20260601050000`, and the explicit migration verification marker. The remaining warning is local-only dev auto-login variables in `apps/web/.env.local`.
 - `npm run smoke:production` passed: created a temporary confirmed Supabase user, signed in through `https://auctus-web.netlify.app`, created a temporary workspace through the production API, loaded Home/Net Worth, created a contact/category/transaction/inventory/payroll records, downloaded and verified a backend backup, reset the temporary backend ledger, restored the backup, verified the data returned, and cleaned up the temporary user/workspace.
-- `npm run acceptance:production-roles` passed: bookkeeper write/no-admin UI, viewer read-only UI, and viewer backup 403.
+- `npm run acceptance:production-roles` passed: owner/admin management UI and backup 200, bookkeeper write/no-admin UI, viewer read-only UI, and viewer backup 403.
 - `npm run test -w apps/api` passed.
 - `npm test -w packages/accounting-core` passed with BAS cash-basis settlement and credit-allocation coverage.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.

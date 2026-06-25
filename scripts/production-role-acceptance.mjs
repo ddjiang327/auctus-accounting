@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
-const roles = ['owner', 'bookkeeper', 'viewer'];
+const roles = ['owner', 'admin', 'bookkeeper', 'viewer'];
 
 function readEnv(path) {
   const target = resolve(root, path);
@@ -133,6 +133,37 @@ async function waitForHeading(name) {
   await page.getByRole('heading', { name }).first().waitFor({ state: 'visible', timeout: 20_000 });
 }
 
+async function expectBackupStatus(user, expectedStatus) {
+  const { data, error } = await anon.auth.signInWithPassword({ email: user.email, password: user.password });
+  if (error || !data.session) throw new Error(error?.message ?? `${user.role} API sign-in failed.`);
+  const response = await fetch(`${apiUrl}/v1/businesses/${businessId}/backup`, {
+    headers: { authorization: `Bearer ${data.session.access_token}` },
+  });
+  if (response.status !== expectedStatus) {
+    throw new Error(`${user.role} backup request returned ${response.status}, expected ${expectedStatus}.`);
+  }
+}
+
+async function verifyAdminRole(role) {
+  const user = users.find((item) => item.role === role);
+  if (!user) throw new Error(`Missing ${role} user.`);
+  await signIn(user);
+
+  await clickNav('Settings');
+  await waitForHeading('Settings');
+  for (const expected of ['Track GST', 'Period Lock', 'Manage Categories', businessName, 'Download Backup', 'Restore Backup', 'Reset Backend Ledger']) {
+    await page.getByText(expected).first().waitFor({ state: 'visible', timeout: 20_000 });
+  }
+
+  await clickNav('Accounts');
+  await waitForHeading('Accounts');
+  for (const expected of ['Add', 'Bank Feed', 'Reconcile']) {
+    await page.getByRole('button', { name: expected }).waitFor({ state: 'visible', timeout: 20_000 });
+  }
+
+  await expectBackupStatus(user, 200);
+}
+
 async function verifyBookkeeper() {
   const bookkeeper = users.find((user) => user.role === 'bookkeeper');
   await signIn(bookkeeper);
@@ -199,14 +230,7 @@ async function verifyViewer() {
     }
   }
 
-  const { data, error } = await anon.auth.signInWithPassword({ email: viewer.email, password: viewer.password });
-  if (error || !data.session) throw new Error(error?.message ?? 'Viewer API sign-in failed.');
-  const response = await fetch(`${apiUrl}/v1/businesses/${businessId}/backup`, {
-    headers: { authorization: `Bearer ${data.session.access_token}` },
-  });
-  if (response.status !== 403) {
-    throw new Error(`Viewer backup request returned ${response.status}, expected 403.`);
-  }
+  await expectBackupStatus(viewer, 403);
 }
 
 try {
@@ -215,6 +239,8 @@ try {
   page = await browser.newPage();
   page.on('dialog', (dialog) => dialog.accept());
 
+  await verifyAdminRole('owner');
+  await verifyAdminRole('admin');
   await verifyBookkeeper();
   await verifyViewer();
 
@@ -222,7 +248,7 @@ try {
   console.log(`Web: ${webUrl}`);
   console.log(`API: ${apiUrl}`);
   console.log(`Temporary workspace: ${businessName}`);
-  console.log('Verified: bookkeeper write/no-admin UI, viewer read-only UI, viewer backup 403');
+  console.log('Verified: owner/admin management UI and backup 200, bookkeeper write/no-admin UI, viewer read-only UI and backup 403');
 } finally {
   if (browser) await browser.close();
   await cleanup();
