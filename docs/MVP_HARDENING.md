@@ -127,14 +127,18 @@ Pre-trial verification:
 - [x] Create a test user and test business on production Supabase.
 - [x] Create, edit, archive, export, restore, and reset a disposable trial workspace.
 
-Latest automated verification: 2026-05-12.
+Latest automated verification: 2026-06-25.
 
 - `npm run build` passed.
-- `npm run audit:production` passed with production URL inputs: 15 passed, 1 warning, 0 failures. It confirmed the Netlify Web shell, Vercel API health check, exact production CORS origin, production CORS preflight, and Supabase migrations through `20260507010000`.
-- `npm run smoke:production` passed: created a temporary confirmed Supabase user, signed in through `https://auctus-web.netlify.app`, created a temporary workspace through the production API, loaded Home/Net Worth, created a contact/category/transaction, downloaded and verified a backend backup, reset the temporary backend ledger, restored the backup, verified the transaction returned, and cleaned up the temporary user/workspace.
-- `npm run test -w apps/api` passed: 7 files, 44 tests.
+- `npm run audit:production` passed with production URL inputs: 14 passed, 2 warnings, 0 failures. It confirmed the Netlify Web shell, Vercel API health check, exact production CORS origin, and production CORS preflight. The remaining warnings are local-only dev auto-login variables in `apps/web/.env.local` and no Supabase CLI binary available in this shell for migration listing.
+- `npm run smoke:production` passed: created a temporary confirmed Supabase user, signed in through `https://auctus-web.netlify.app`, created a temporary workspace through the production API, loaded Home/Net Worth, created a contact/category/transaction/inventory/payroll records, downloaded and verified a backend backup, reset the temporary backend ledger, restored the backup, verified the data returned, and cleaned up the temporary user/workspace.
+- `npm run acceptance:production-roles` passed: bookkeeper write/no-admin UI, viewer read-only UI, and viewer backup 403.
+- `npm run test -w apps/api` passed.
+- `npm test -w packages/accounting-core` passed with BAS cash-basis settlement and credit-allocation coverage.
 - `npx tsc -p apps/mobile/tsconfig.json --noEmit` passed.
-- `npm run e2e` passed: 10 Playwright tests (8 cloud + 1 local-mode + 1 real-role UI), including:
+- `npx playwright test tests/e2e/auctus-lazy-navigation.spec.ts tests/e2e/auctus-local-backup.spec.ts --project=local-mode` passed: 4 tests.
+- Web bundle splitting is active and the main JS chunk is below the Vite warning threshold at `495.55 kB`.
+- Previous `npm run e2e` coverage includes:
   - Cloud export → restore → pre-restore backup recovery.
   - Local backup download → restore → safety backup download → recovery from pre-restore backup.
   - Recoverable API error UX (unreachable, 401, 403).

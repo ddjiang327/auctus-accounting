@@ -639,3 +639,35 @@ Verification:
   - API: `https://auctus-api.vercel.app`
   - Supabase project: `zvcbnocynsxzyrvxcsbn`
 - Temporary production role users and workspace were cleaned up after the check.
+
+### 26) June 2026 BAS hardening, bundle split, and production smoke
+
+Completed a focused production hardening pass on 2026-06-25:
+
+- Fixed cash-basis BAS settlement handling so invoice payments and credit-note allocations are treated as gross settlement amounts, including GST-exclusive source documents.
+- Added accounting-core coverage for:
+  - GST-exclusive cash-basis invoice payments.
+  - Voided invoice payments.
+  - Cash-basis customer credit allocation dates.
+  - Cash-basis supplier credit allocation dates.
+  - GST-disabled BAS totals.
+- Aligned Mobile BAS summary/reporting:
+  - Reports screen now uses `basReport` for period BAS summary.
+  - Home GST metric now uses `basReport` instead of legacy `gstAggregate`.
+  - Mobile BAS CSV/HTML exports show the configured cash/accrual basis.
+- Split the Web feature bundle with lazy-loaded views and removed the mixed static/dynamic `supabaseClient` import warning.
+- Added local-mode lazy navigation coverage for Home, Activity, Sales, Purchases, Contacts, Accounts, Inventory, Payroll, Reports, Assets, Journals, and Settings.
+- Stabilized production smoke reset verification by waiting for reset markers to disappear from the refreshed UI before failing.
+
+Verification:
+- `npm test -w packages/accounting-core` passed.
+- `npm run test -w apps/api` passed.
+- `npx tsc --noEmit -p apps/mobile/tsconfig.json` passed.
+- `npm run build` passed; Web main JS chunk is now below the Vite warning threshold at `495.55 kB`.
+- `npx playwright test tests/e2e/auctus-lazy-navigation.spec.ts tests/e2e/auctus-local-backup.spec.ts --project=local-mode` passed: 4 tests.
+- `npm run smoke:production` passed against:
+  - Web: `https://auctus-web.netlify.app`
+  - API: `https://auctus-api.vercel.app`
+- `npm run acceptance:production-roles` passed against production.
+- `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 14 checks, 2 warnings, 0 failures.
+- Remaining audit warnings are reviewed as acceptable for this shell: local-only dev auto-login variables in `apps/web/.env.local`, and no Supabase CLI binary available for migration listing.
