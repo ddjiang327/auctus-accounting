@@ -174,8 +174,9 @@ Decision:
 - Mobile remains local-first when cloud API configuration is absent.
 - When cloud API is configured, users sign in, choose a business, load the server ledger, save changes locally, and push the full ledger snapshot back to the server.
 - MVP mobile cloud sync does not attempt multi-device offline conflict merging. Last successful save wins until a proper conflict model is designed.
+- Because mobile cloud writes currently use the owner/admin restore endpoint, mobile cloud workspaces are read-only for bookkeeper and viewer roles. Bookkeepers should use the Web app for cloud writes until mobile uses per-action API write endpoints.
 
-Implementation note: current mobile cloud mode loads `/ledger` after login/workspace selection and debounces full-ledger saves through the existing restore endpoint.
+Implementation note: current mobile cloud mode loads `/ledger` after login/workspace selection and debounces full-ledger saves through the existing restore endpoint for owner/admin users.
 
 ## Accountant / BAS Review Checklist
 

@@ -703,3 +703,16 @@ Verification:
 - `npm run test -w apps/api -- ledgerAudit.test.ts` passed: 8 tests.
 - `npm run test -w apps/api` passed: 12 files, 68 tests.
 - `npm run build` passed.
+
+### 29) Mobile cloud role write guard
+
+Closed the mobile cloud mismatch created by the current full-ledger restore sync strategy:
+
+- Mobile cloud workspaces now stay writable for `owner` and `admin` roles.
+- `bookkeeper` and `viewer` roles see an explicit mobile read-only banner because mobile saves through the owner/admin restore endpoint.
+- Mobile write entry points now guard edits, payments, allocations, voids, contacts, manual journals, recurring templates, backup, restore, reset, account changes, report settings, AI parsing, and global add actions before mutating local state.
+- Documented the role constraint in `docs/ACCOUNTING_DECISIONS.md`.
+
+Verification:
+- `npx tsc --noEmit -p apps/mobile/tsconfig.json` passed.
+- `npm run build` passed.

@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type SetStateAction } from 'react';
 import { Alert, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton, colors } from './src/components/ui';
 import type { CreditNoteAllocation, PaymentAllocation } from './src/components/InvoiceList';
@@ -54,6 +54,26 @@ export default function App() {
   const hasProcessedRecurring = useRef(false);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextCloudSave = useRef(false);
+  const canWriteMobileCloudLedger = appMode !== 'cloud' || !selectedBusiness || selectedBusiness.role === 'owner' || selectedBusiness.role === 'admin';
+  const isMobileCloudReadOnly = appMode === 'cloud' && !!selectedBusiness && !canWriteMobileCloudLedger;
+
+  function showMobileCloudReadOnly() {
+    Alert.alert(
+      'Mobile cloud read-only',
+      'This cloud workspace is read-only on mobile for your role because mobile currently saves whole-ledger snapshots. Use the Web app for bookkeeper writes, or ask an owner/admin to edit from mobile.'
+    );
+  }
+
+  function ensureCanWriteMobileLedger() {
+    if (canWriteMobileCloudLedger) return true;
+    showMobileCloudReadOnly();
+    return false;
+  }
+
+  function setWritableData(next: SetStateAction<LedgerData | null>) {
+    if (!ensureCanWriteMobileLedger()) return;
+    setData(next);
+  }
 
   useEffect(() => {
     loadLockEnabled().then(async (enabled) => {
@@ -171,6 +191,13 @@ export default function App() {
     if (!data || authPhase !== 'app') return;
     saveLedgerData(data);
     if (!isCloudConfigured() || !selectedBusiness) return;
+    if (!canWriteMobileCloudLedger) {
+      if (pushTimer.current) clearTimeout(pushTimer.current);
+      skipNextCloudSave.current = false;
+      setSyncState('idle');
+      setSyncError('Mobile cloud is read-only for this role.');
+      return;
+    }
     if (skipNextCloudSave.current) {
       skipNextCloudSave.current = false;
       return;
@@ -190,10 +217,11 @@ export default function App() {
           setSyncError(error instanceof Error ? error.message : 'Cloud save failed');
         });
     }, 2000);
-  }, [data, authPhase, selectedBusiness]);
+  }, [data, authPhase, selectedBusiness, canWriteMobileCloudLedger]);
 
   useEffect(() => {
     if (!data || hasProcessedRecurring.current) return;
+    if (!canWriteMobileCloudLedger) return;
     hasProcessedRecurring.current = true;
     const today = todayStr();
     const due = (data.recurringTemplates || []).filter(
@@ -249,7 +277,7 @@ export default function App() {
       }
       return { ...current, settings, transactions: newTransactions, recurringTemplates: updatedTemplates, auditLog: newAuditLog };
     });
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, canWriteMobileCloudLedger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (authPhase === 'checking') {
     return <SafeAreaView style={styles.loading}><Text>Loading Auctus...</Text></SafeAreaView>;
@@ -293,6 +321,7 @@ export default function App() {
   }
 
   function saveTx(tx: Transaction) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     const existingTx = data.transactions.find((item) => item.id === tx.id);
     if (existingTx && isDateLocked(data, existingTx.date)) {
@@ -358,6 +387,7 @@ export default function App() {
   }
 
   function savePayment(tx: Transaction, amount: number, date: string, accountId: string) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     if (isDateLocked(data, date)) {
       Alert.alert('Period locked', `Payments dated ${date} cannot be added because the period is locked.`);
@@ -393,6 +423,7 @@ export default function App() {
   }
 
   function voidPayment(tx: Transaction, paymentId: string) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     const payment = (tx.payments || []).find((p) => p.id === paymentId);
     if (!payment) return;
@@ -410,6 +441,7 @@ export default function App() {
   }
 
   function voidTransaction(tx: Transaction) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     const lockedDate = [tx.date, ...(tx.payments || []).map((payment) => payment.date)].find((date) => isDateLocked(data, date));
     if (lockedDate) {
@@ -424,6 +456,7 @@ export default function App() {
   }
 
   function saveAllocatedPayments(allocations: PaymentAllocation[]) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data || !allocations.length) return;
     const lockedAllocation = allocations.find((allocation) => isDateLocked(data, allocation.date));
     if (lockedAllocation) {
@@ -483,6 +516,7 @@ export default function App() {
   }
 
   function saveCreditAllocations(allocations: CreditNoteAllocation[]) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data || !allocations.length) return;
     const lockedAllocation = allocations.find((allocation) => isDateLocked(data, allocation.date));
     if (lockedAllocation) {
@@ -509,6 +543,7 @@ export default function App() {
   }
 
   function saveRecurringTemplate(template: RecurringTemplate) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     const exists = (data.recurringTemplates || []).some((t) => t.id === template.id);
     setData((current) => current ? {
@@ -521,6 +556,7 @@ export default function App() {
   }
 
   function deleteRecurringTemplate(templateId: string) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     setData((current) => current ? {
       ...current,
@@ -530,6 +566,7 @@ export default function App() {
   }
 
   function toggleRecurringTemplate(templateId: string) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     setData((current) => current ? {
       ...current,
@@ -539,6 +576,7 @@ export default function App() {
   }
 
   function markSent(tx: Transaction) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     if (isDateLocked(data, tx.date)) {
       Alert.alert('Period locked', `Documents dated ${tx.date} cannot be changed because the period is locked.`);
@@ -552,6 +590,7 @@ export default function App() {
   }
 
   function saveContact(contact: Contact) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     const exists = data.contacts.some((item) => item.id === contact.id);
     setData({
@@ -562,6 +601,7 @@ export default function App() {
   }
 
   function saveManualJournal(journal: LedgerData['manualJournals'][number]) {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     if (isDateLocked(data, journal.date)) {
       Alert.alert('Period locked', `Manual journals dated ${journal.date} cannot be posted because the period is locked.`);
@@ -596,17 +636,19 @@ export default function App() {
   }
 
   async function backup() {
+    if (!ensureCanWriteMobileLedger()) return;
     if (!data) return;
     await exportLedgerBackup(data);
   }
 
   async function restore() {
+    if (!ensureCanWriteMobileLedger()) return;
     try {
       const restored = await importLedgerBackup();
       if (!restored) return;
       Alert.alert('Restore backup?', `This will replace local data with ${restored.transactions.length} transactions.`, [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', style: 'destructive', onPress: () => setData(restored) },
+        { text: 'Restore', style: 'destructive', onPress: () => setWritableData(restored) },
       ]);
     } catch (error) {
       Alert.alert('Restore failed', error instanceof Error ? error.message : 'Invalid backup file');
@@ -631,22 +673,28 @@ export default function App() {
     <SafeAreaView style={styles.app}>
       <StatusBar style="dark" />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {tab === 'home' && <HomeScreen data={data} onEdit={(tx) => { setNewEntryType(undefined); setEditingTx(tx); setFormOpen(true); }} />}
-        {tab === 'sales' && <SalesScreen data={data} onEdit={(tx) => { setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={setPayingTx} onNew={() => { setEditingTx(null); setNewEntryType('income'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
-        {tab === 'purchases' && <PurchasesScreen data={data} onEdit={(tx) => { setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={setPayingTx} onNew={() => { setEditingTx(null); setNewEntryType('expense'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
-        {tab === 'accounts' && <AccountsScreen data={data} onDataChange={setData} />}
-        {tab === 'reports' && <ReportsScreen data={data} onDataChange={setData} />}
+        {isMobileCloudReadOnly && (
+          <View style={styles.readOnlyBanner}>
+            <Text style={styles.readOnlyTitle}>Mobile cloud read-only</Text>
+            <Text style={styles.readOnlyText}>Your role can view this workspace on mobile. Bookkeeper writes should use the Web app until mobile supports per-action cloud saves.</Text>
+          </View>
+        )}
+        {tab === 'home' && <HomeScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setEditingTx(tx); setFormOpen(true); }} />}
+        {tab === 'sales' && <SalesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType('income'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
+        {tab === 'purchases' && <PurchasesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType('expense'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
+        {tab === 'accounts' && <AccountsScreen data={data} onDataChange={setWritableData} />}
+        {tab === 'reports' && <ReportsScreen data={data} onDataChange={setWritableData} />}
         {tab === 'settings' && (
           <SettingsScreen
             data={data}
-            onDataChange={setData}
+            onDataChange={setWritableData}
             lockEnabled={lockEnabled}
-            onToggleGst={() => setData({ ...data, settings: { ...data.settings, gstEnabled: !data.settings.gstEnabled } })}
+            onToggleGst={() => { if (!ensureCanWriteMobileLedger()) return; setData({ ...data, settings: { ...data.settings, gstEnabled: !data.settings.gstEnabled } }); }}
             onToggleLock={toggleLock}
             onLockNow={() => setLocked(true)}
             onBackup={backup}
             onRestore={restore}
-            onReset={async () => setData(await resetLedgerData())}
+            onReset={async () => { if (!ensureCanWriteMobileLedger()) return; setData(await resetLedgerData()); }}
             onSignOut={appMode === 'cloud' ? handleSignOut : undefined}
             onSwitchWorkspace={appMode === 'cloud' ? () => setAuthPhase('workspace') : undefined}
             cloudAvailable={isCloudConfigured()}
@@ -664,17 +712,21 @@ export default function App() {
           </Pressable>
         ))}
       </View>
-      <Pressable style={styles.aiFab} onPress={() => setAiOpen(true)}>
-        <Text style={styles.fabText}>✨</Text>
-      </Pressable>
-      <Pressable style={styles.fab} onPress={() => setAddOpen(true)}>
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
+      {!isMobileCloudReadOnly && (
+        <>
+          <Pressable style={styles.aiFab} onPress={() => setAiOpen(true)}>
+            <Text style={styles.fabText}>✨</Text>
+          </Pressable>
+          <Pressable style={styles.fab} onPress={() => setAddOpen(true)}>
+            <Text style={styles.fabText}>+</Text>
+          </Pressable>
+        </>
+      )}
       <AddEntryModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onTransaction={() => { setAddOpen(false); setNewEntryType(undefined); setEditingTx(null); setFormOpen(true); }}
-        onManualJournal={() => { setAddOpen(false); setManualJournalOpen(true); }}
+        onTransaction={() => { if (!ensureCanWriteMobileLedger()) return; setAddOpen(false); setNewEntryType(undefined); setEditingTx(null); setFormOpen(true); }}
+        onManualJournal={() => { if (!ensureCanWriteMobileLedger()) return; setAddOpen(false); setManualJournalOpen(true); }}
       />
       <TransactionForm open={formOpen} data={data} tx={editingTx} initialType={newEntryType} initialEntryMode={newEntryMode} onClose={() => { setFormOpen(false); setNewEntryType(undefined); setNewEntryMode(undefined); }} onSave={saveTx} />
       <ManualJournalModal open={manualJournalOpen} data={data} onClose={() => setManualJournalOpen(false)} onSave={saveManualJournal} />
@@ -684,7 +736,7 @@ export default function App() {
           data={data}
           mode={appMode}
           getToken={getAccessToken}
-          onParsed={(draft) => { setAiOpen(false); setEditingTx(null); if (draft.type) setNewEntryType(draft.type); setFormOpen(true); }}
+          onParsed={(draft) => { if (!ensureCanWriteMobileLedger()) return; setAiOpen(false); setEditingTx(null); if (draft.type) setNewEntryType(draft.type); setFormOpen(true); }}
           onClose={() => setAiOpen(false)}
         />
       )}
@@ -726,6 +778,9 @@ const styles = StyleSheet.create({
   loadingTitle: { fontSize: 22, fontWeight: '900', color: colors.text, marginBottom: 8 },
   loadingText: { color: colors.muted, textAlign: 'center', marginHorizontal: 28, marginBottom: 16 },
   loadingActions: { width: '80%', gap: 10 },
+  readOnlyBanner: { margin: 14, marginBottom: 0, padding: 12, borderWidth: 1, borderColor: '#D6A21B', backgroundColor: '#FFF8E1', borderRadius: 8 },
+  readOnlyTitle: { color: '#6B4E00', fontWeight: '900', fontSize: 14 },
+  readOnlyText: { color: '#6B4E00', fontWeight: '600', fontSize: 12, lineHeight: 17, marginTop: 4 },
   tabBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 78, flexDirection: 'row', backgroundColor: '#F2F0EB', borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.08)', paddingBottom: 18 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 10, color: colors.muted, fontWeight: '700' },
