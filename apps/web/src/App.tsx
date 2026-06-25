@@ -1,23 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AppLock } from './components/AppLock';
 import { Shell, type ViewKey } from './components/Shell';
 import { accountBalance, auditEntry, computeInventoryItems, dueDateForTerms, fmt, formatCreditNumber, formatDocumentNumber, isDateLocked, latestLockedThrough, todayStr, txBalance, uid, validateCreditAllocations, validatePaymentInput, validateTransactionInput } from './domain/accounting';
 import type { Account, BankFeedItem, BankReconciliation, BusinessProfile, Category, Contact, CreditAllocation, Employee, InventoryMovement, LedgerData, ManualJournal, PayRun, Period, Product, PurchaseOrder, Remittance, STPSubmission, Transaction } from './domain/models';
 import { AuctusApiError, auctusApi, isAuctusApiConfigured, getBusinesses, selectBusiness, getSelectedBusinessId, devAutoSignIn, logout, type BusinessSummary } from './api/auctusApi';
-import { AiEntryPanel } from './features/ai/AiEntryPanel';
-import { getCurrentUser } from './api/supabaseClient';
-import { Activity } from './features/activity/Activity';
-import { TransactionModal } from './features/activity/TransactionModal';
-import { Accounts } from './features/accounts/Accounts';
-import { Dashboard } from './features/dashboard/Dashboard';
-import { Contacts } from './features/contacts/Contacts';
-import { Documents } from './features/documents/Documents';
-import { Journals } from './features/journals/Journals';
-import { Reports } from './features/reports/Reports';
-import { Inventory } from './features/inventory/Inventory';
-import { Payroll } from './features/payroll/Payroll';
-import { FixedAssets } from './features/assets/FixedAssets';
-import { Settings } from './features/settings/Settings';
+import { getAccessToken, getCurrentUser } from './api/supabaseClient';
 import { ledgerDataAdapter } from './storage/ledgerDataAdapter';
 import { clearLockState, loadLockState, saveLockState } from './storage/lockStore';
 import { AuthScreen } from './components/AuthScreen';
@@ -30,6 +17,20 @@ type AuthPhase = 'checking' | 'login' | 'workspace' | 'mode-select' | 'app';
 type AppMode = 'local' | 'cloud';
 type SyncState = 'idle' | 'syncing' | 'error';
 type SyncError = { message: string; nonce: number; actionLabel?: string };
+
+const Activity = lazy(() => import('./features/activity/Activity').then((module) => ({ default: module.Activity })));
+const Accounts = lazy(() => import('./features/accounts/Accounts').then((module) => ({ default: module.Accounts })));
+const AiEntryPanel = lazy(() => import('./features/ai/AiEntryPanel').then((module) => ({ default: module.AiEntryPanel })));
+const Contacts = lazy(() => import('./features/contacts/Contacts').then((module) => ({ default: module.Contacts })));
+const Dashboard = lazy(() => import('./features/dashboard/Dashboard').then((module) => ({ default: module.Dashboard })));
+const Documents = lazy(() => import('./features/documents/Documents').then((module) => ({ default: module.Documents })));
+const FixedAssets = lazy(() => import('./features/assets/FixedAssets').then((module) => ({ default: module.FixedAssets })));
+const Inventory = lazy(() => import('./features/inventory/Inventory').then((module) => ({ default: module.Inventory })));
+const Journals = lazy(() => import('./features/journals/Journals').then((module) => ({ default: module.Journals })));
+const Payroll = lazy(() => import('./features/payroll/Payroll').then((module) => ({ default: module.Payroll })));
+const Reports = lazy(() => import('./features/reports/Reports').then((module) => ({ default: module.Reports })));
+const Settings = lazy(() => import('./features/settings/Settings').then((module) => ({ default: module.Settings })));
+const TransactionModal = lazy(() => import('./features/activity/TransactionModal').then((module) => ({ default: module.TransactionModal })));
 
 function isDevAutoLoginDisabled() {
   return import.meta.env.VITE_AUCTUS_DISABLE_DEV_AUTO_LOGIN === 'true'
@@ -1491,6 +1492,7 @@ export default function App() {
         onSwitchWorkspace={mode === 'cloud' ? handleSwitchWorkspace : undefined}
         canViewPayroll={permissions.canViewPayroll}
       >
+        <Suspense fallback={<div className="view-loading">Loading view…</div>}>
         {view === 'dashboard' ? (
           <Dashboard
             data={data}
@@ -1609,29 +1611,32 @@ export default function App() {
           permissions={permissions}
         />
       ) : null}
-      <TransactionModal
-        open={txModalOpen}
-        data={data}
-        transaction={editingTx}
-        defaults={txDefaults}
-        onClose={() => {
-          setTxModalOpen(false);
-          setTxDefaults(null);
-        }}
-        onSave={saveTransaction}
-        saving={busyLabel === 'Saving transaction…'}
-      />
+      </Suspense>
+      {txModalOpen ? (
+        <Suspense fallback={null}>
+          <TransactionModal
+            open={txModalOpen}
+            data={data}
+            transaction={editingTx}
+            defaults={txDefaults}
+            onClose={() => {
+              setTxModalOpen(false);
+              setTxDefaults(null);
+            }}
+            onSave={saveTransaction}
+            saving={busyLabel === 'Saving transaction…'}
+          />
+        </Suspense>
+      ) : null}
       <footer className="dev-watermark">
         Cash accounts: {data.accounts.map((account) => `${account.name} ${accountBalance(data, account.id).toFixed(2)}`).join(' · ')}
       </footer>
       {aiPanelOpen && (
+        <Suspense fallback={null}>
         <AiEntryPanel
           data={data}
           mode={mode}
-          getToken={async () => {
-            try { return (await (await import('./api/supabaseClient')).supabase.auth.getSession()).data.session?.access_token ?? null; }
-            catch { return null; }
-          }}
+          getToken={getAccessToken}
           onParsed={(draft) => {
             setAiPanelOpen(false);
             setEditingTx(null);
@@ -1640,6 +1645,7 @@ export default function App() {
           }}
           onClose={() => setAiPanelOpen(false)}
         />
+        </Suspense>
       )}
       </Shell>
     </AppAlertsProvider>

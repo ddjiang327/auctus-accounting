@@ -27,6 +27,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return { id: data.user.id, email: data.user.email ?? '' };
 }
 
+export async function getAccessToken(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data.session?.access_token ?? null;
+}
+
 export async function signInWithEmail(email: string, password: string) {
   if (!isSupabaseConfigured()) throw new Error('Supabase auth is not configured.');
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
