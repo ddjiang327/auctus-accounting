@@ -44,7 +44,7 @@ describe("AI parse draft normalization", () => {
       date: "2026-06-25",
       accountId: undefined,
       categoryId: undefined,
-      chartAccountId: undefined,
+      chartAccountId: "coa_expense",
       contactId: undefined,
       entryMode: "cash",
       gstMode: "inc",
@@ -123,5 +123,23 @@ describe("AI parse draft normalization", () => {
       chartAccountId: "coa_revenue",
       missingFields: [],
     });
+  });
+
+  it("fills a default chart account when AI omits one", () => {
+    const expense = __testing.normalizeDraft({
+      type: "expense",
+      amount: 35,
+      accountId: "bank_1",
+      missingFields: [],
+    }, context);
+    const income = __testing.normalizeDraft({
+      type: "income",
+      amount: 35,
+      accountId: "bank_1",
+      missingFields: [],
+    }, context);
+
+    expect(expense.chartAccountId).toBe("coa_expense");
+    expect(income.chartAccountId).toBe("coa_revenue_alt");
   });
 });

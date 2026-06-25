@@ -31,6 +31,14 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function defaultChartAccountId(context: ParseContext, type: ParseDraft['type']): string | undefined {
+  if (type === 'transfer') return undefined;
+  const preferredCode = type === 'income' ? '4010' : '7030';
+  const expectedClass = type === 'income' ? 'revenue' : 'expense';
+  return context.chartOfAccounts.find((account) => account.code === preferredCode)?.id
+    || context.chartOfAccounts.find((account) => account.class === expectedClass)?.id;
+}
+
 function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const raw = (input && typeof input === 'object' ? input : {}) as Partial<ParseDraft>;
   const missing = Array.isArray(raw.missingFields)
@@ -58,7 +66,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     if (account.id !== raw.chartAccountId) return false;
     return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
   }) ? raw.chartAccountId : undefined;
-  const chartAccountId = categoryChartAccountId || parsedChartAccountId;
+  const chartAccountId = categoryChartAccountId || parsedChartAccountId || defaultChartAccountId(context, type);
 
   const contactId = type === 'transfer' ? undefined : context.contacts.some((contact) => {
     if (contact.id !== raw.contactId) return false;
