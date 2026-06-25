@@ -84,6 +84,14 @@ async function waitForHeading(name) {
   await page.getByRole('heading', { name }).first().waitFor({ state: 'visible', timeout: 20_000 });
 }
 
+async function waitForMarkerGone(marker, failureMessage) {
+  try {
+    await page.getByText(marker).waitFor({ state: 'hidden', timeout: 20_000 });
+  } catch {
+    throw new Error(failureMessage);
+  }
+}
+
 function modal(title) {
   return page.locator('.sheet').filter({ has: page.getByRole('heading', { name: title }) });
 }
@@ -336,20 +344,14 @@ try {
   await resetLedger();
   await clickNav('Activity');
   await waitForHeading('Activity');
-  if (await page.getByText(transactionNote).isVisible().catch(() => false)) {
-    throw new Error('Reset backend ledger did not remove the smoke transaction.');
-  }
+  await waitForMarkerGone(transactionNote, 'Reset backend ledger did not remove the smoke transaction.');
   await clickNav('Inventory');
   await waitForHeading('Inventory');
   await page.getByRole('button', { name: 'Products' }).click();
-  if (await page.getByText(productName).isVisible().catch(() => false)) {
-    throw new Error('Reset backend ledger did not remove the smoke product.');
-  }
+  await waitForMarkerGone(productName, 'Reset backend ledger did not remove the smoke product.');
   await clickNav('Payroll');
   await waitForHeading('Payroll');
-  if (await page.getByText(employeeName).isVisible().catch(() => false)) {
-    throw new Error('Reset backend ledger did not remove the smoke employee.');
-  }
+  await waitForMarkerGone(employeeName, 'Reset backend ledger did not remove the smoke employee.');
 
   await restoreBackup(backupPath);
   await clickNav('Activity');
