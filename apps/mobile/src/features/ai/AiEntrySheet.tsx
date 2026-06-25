@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import type { LedgerData, Transaction } from '../../domain/models';
 import { parseTransactionText, type ParseDraft } from './aiApi';
+import { buildSuggestions } from './aiSuggestions';
 
 let ExpoSpeechRec: typeof import('expo-speech-recognition') | null = null;
 try {
@@ -84,6 +85,7 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
   const inputRef = useRef<TextInput>(null);
 
   const speechAvailable = ExpoSpeechRec !== null && Platform.OS !== 'web';
+  const suggestions = useMemo(() => buildSuggestions(data, text), [data, text]);
 
   useEffect(() => {
     Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
@@ -152,6 +154,13 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
     onParsed(tx as Partial<Transaction>);
   }
 
+  function applySuggestion(fillText: string) {
+    setText(fillText);
+    setDraft(null);
+    setError('');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
   const typeLabel = draft?.type === 'income' ? 'Income' : draft?.type === 'transfer' ? 'Transfer' : 'Expense';
   const typeColor = draft?.type === 'income' ? colors.green : draft?.type === 'transfer' ? colors.blue : colors.orange;
 
@@ -206,6 +215,27 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
         )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        {suggestions.length > 0 && !draft && (
+          <View style={styles.suggestions}>
+            <Text style={styles.suggestionLabel}>{text.trim() ? 'Matches' : 'Recent'}</Text>
+            <View style={styles.suggestionList}>
+              {suggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion.key}
+                  style={styles.suggestionChip}
+                  onPress={() => applySuggestion(suggestion.fillText)}
+                  disabled={loading || voiceState === 'listening'}
+                >
+                  <Text style={styles.suggestionText} numberOfLines={1}>
+                    {suggestion.label}
+                    {suggestion.count > 1 ? ` x${suggestion.count}` : ''}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {draft && (
           <View style={styles.draftCard}>
@@ -287,6 +317,14 @@ const styles = StyleSheet.create({
   listeningRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   listeningText: { fontSize: 13, color: colors.red },
   errorText: { fontSize: 13, color: colors.red, marginBottom: 8 },
+  suggestions: { marginBottom: 10, gap: 7 },
+  suggestionLabel: { color: colors.muted, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  suggestionList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  suggestionChip: {
+    maxWidth: '100%', backgroundColor: colors.surface, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.line,
+  },
+  suggestionText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   draftCard: {
     backgroundColor: colors.surface, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: colors.line, marginBottom: 12,
