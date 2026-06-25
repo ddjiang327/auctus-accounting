@@ -128,6 +128,11 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
             <dl className="ai-draft-fields">
               {draft.amount != null && <><dt>Amount</dt><dd>${draft.amount.toFixed(2)}</dd></>}
               {draft.date && <><dt>Date</dt><dd>{draft.date}</dd></>}
+              {draft.accountId && <><dt>{draft.type === 'transfer' ? 'From' : 'Account'}</dt><dd>{accountLabel(data, draft.accountId)}</dd></>}
+              {draft.accountToId && <><dt>To</dt><dd>{accountLabel(data, draft.accountToId)}</dd></>}
+              {draft.categoryId && <><dt>Category</dt><dd>{categoryLabel(data, draft.categoryId)}</dd></>}
+              {draft.chartAccountId && <><dt>Ledger</dt><dd>{chartAccountLabel(data, draft.chartAccountId)}</dd></>}
+              {draft.contactId && <><dt>Contact</dt><dd>{contactLabel(data, draft.contactId)}</dd></>}
               {draft.party && <><dt>Party</dt><dd>{draft.party}</dd></>}
               {draft.note && <><dt>Note</dt><dd>{draft.note}</dd></>}
               {draft.entryMode && <><dt>Mode</dt><dd>{draft.entryMode}</dd></>}
@@ -151,4 +156,21 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
       </div>
     </div>
   );
+}
+
+function accountLabel(data: LedgerData, id: string) {
+  return data.accounts.find((account) => account.id === id)?.name || id;
+}
+
+function categoryLabel(data: LedgerData, id: string) {
+  return [...data.categories.expense, ...data.categories.income].find((category) => category.id === id)?.name || id;
+}
+
+function chartAccountLabel(data: LedgerData, id: string) {
+  const account = data.chartOfAccounts.find((item) => item.id === id);
+  return account ? `${account.code} ${account.name}` : id;
+}
+
+function contactLabel(data: LedgerData, id: string) {
+  return data.contacts.find((contact) => contact.id === id)?.name || id;
 }

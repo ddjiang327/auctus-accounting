@@ -251,6 +251,11 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
             <View style={styles.draftFields}>
               {draft.amount != null && <DraftRow label="Amount" value={`$${draft.amount.toFixed(2)}`} />}
               {draft.date ? <DraftRow label="Date" value={draft.date} /> : null}
+              {draft.accountId ? <DraftRow label={draft.type === 'transfer' ? 'From' : 'Account'} value={accountLabel(data, draft.accountId)} /> : null}
+              {draft.accountToId ? <DraftRow label="To" value={accountLabel(data, draft.accountToId)} /> : null}
+              {draft.categoryId ? <DraftRow label="Category" value={categoryLabel(data, draft.categoryId)} /> : null}
+              {draft.chartAccountId ? <DraftRow label="Ledger" value={chartAccountLabel(data, draft.chartAccountId)} /> : null}
+              {draft.contactId ? <DraftRow label="Contact" value={contactLabel(data, draft.contactId)} /> : null}
               {draft.party ? <DraftRow label="Party" value={draft.party} /> : null}
               {draft.note ? <DraftRow label="Note" value={draft.note} /> : null}
               {draft.entryMode ? <DraftRow label="Mode" value={draft.entryMode} /> : null}
@@ -278,6 +283,23 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
       </Animated.View>
     </Modal>
   );
+}
+
+function accountLabel(data: LedgerData, id: string) {
+  return data.accounts.find((account) => account.id === id)?.name || id;
+}
+
+function categoryLabel(data: LedgerData, id: string) {
+  return [...data.categories.expense, ...data.categories.income].find((category) => category.id === id)?.name || id;
+}
+
+function chartAccountLabel(data: LedgerData, id: string) {
+  const account = data.chartOfAccounts.find((item) => item.id === id);
+  return account ? `${account.code} ${account.name}` : id;
+}
+
+function contactLabel(data: LedgerData, id: string) {
+  return data.contacts.find((contact) => contact.id === id)?.name || id;
 }
 
 function DraftRow({ label, value }: { label: string; value: string }) {

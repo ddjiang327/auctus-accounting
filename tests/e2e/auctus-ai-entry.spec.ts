@@ -54,6 +54,8 @@ test.describe('Auctus AI quick entry', () => {
 
     await expect(page.locator('.ai-entry-draft')).toContainText('$123.45');
     await expect(page.locator('.ai-entry-draft')).toContainText('2026-06-18');
+    await expect(page.locator('.ai-entry-draft')).toContainText('Everyday Account');
+    await expect(page.locator('.ai-entry-draft')).toContainText('Other');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
