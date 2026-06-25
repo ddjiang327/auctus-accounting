@@ -1,13 +1,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Header, Screen, SectionTitle, colors } from '../components/ui';
 import { TransactionRows } from '../components/TransactionRows';
-import { accountBalance, aggregate, contactName, fmtMoney, gstAggregate, isCreditNote, isInvoice, todayStr, totalAssets, txBalance, txGst, txTotal } from '../domain/accounting';
+import { accountBalance, aggregate, basReport, contactName, fmtMoney, isCreditNote, isInvoice, periodRange, todayStr, totalAssets, txBalance, txGst, txTotal } from '../domain/accounting';
 import type { LedgerData, Transaction } from '../domain/models';
 
 export function HomeScreen({ data, onEdit }: { data: LedgerData; onEdit: (tx: Transaction) => void }) {
   const totals = totalAssets(data);
   const month = aggregate(data, 'month');
-  const gst = gstAggregate(data, 'quarter');
+  const gstRange = periodRange('quarter');
+  const bas = basReport(data, formatDate(gstRange[0]), formatDate(addDays(gstRange[1], -1)));
   const cashBalance = data.accounts
     .filter((account) => account.type === 'cash' || account.type === 'bank' || account.type === 'ewallet')
     .reduce((sum, account) => sum + accountBalance(data, account.id), 0);
@@ -38,7 +39,7 @@ export function HomeScreen({ data, onEdit }: { data: LedgerData; onEdit: (tx: Tr
       </Card>
       <View style={styles.metricGrid}>
         <MetricCard label="Cash Balance" value={fmtMoney(cashBalance)} tone="green" />
-        <MetricCard label={gst.net >= 0 ? 'GST Payable' : 'GST Refund'} value={fmtMoney(Math.abs(gst.net))} tone={gst.net >= 0 ? 'red' : 'green'} />
+        <MetricCard label={bas.netGst >= 0 ? 'GST Payable' : 'GST Refund'} value={fmtMoney(Math.abs(bas.netGst))} tone={bas.netGst >= 0 ? 'red' : 'green'} />
       </View>
       <SectionTitle>Receivables / Payables</SectionTitle>
       <View style={styles.metricGrid}>
@@ -124,6 +125,19 @@ function monthlyTrend(data: LedgerData, count: number) {
       profit: summary.balance,
     };
   });
+}
+
+function formatDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function monthlySummary(data: LedgerData, start: Date, end: Date) {
