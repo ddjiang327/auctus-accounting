@@ -4,6 +4,24 @@ This note summarizes the recent hardening work completed without requiring local
 
 ## Completed
 
+### 2026-06-25) Inventory/payroll cloud UI smoke
+
+- Added `tests/e2e/auctus-inventory-payroll-ui.spec.ts`.
+- The smoke signs in through the Web UI, creates an isolated workspace, exercises the inventory and payroll screens, reloads the app, verifies persisted records, and deletes the temporary workspace:
+  - Product creation through Inventory.
+  - Purchase order creation, mark sent, and stock receipt.
+  - Sale inventory movement.
+  - Employee creation.
+  - Finalised pay run.
+  - PAYG remittance.
+  - STP submission history.
+- Repaired the local Playwright Chromium cache with `npx playwright install chromium` after Chromium reported missing browser resources and V8 startup snapshots.
+
+Verification:
+- `npx playwright test tests/e2e/auctus-inventory-payroll-ui.spec.ts --project=chromium` passed.
+- `npm run test -w apps/api` passed (12 files, 68 tests).
+- `npm run build` passed.
+
 ### 2026-06-25) Inventory/payroll cloud API smoke after Supabase resume
 
 - Supabase project `zvcbnocynsxzyrvxcsbn` was resumed and DNS resolution for `zvcbnocynsxzyrvxcsbn.supabase.co` recovered.

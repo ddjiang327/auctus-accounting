@@ -4,6 +4,7 @@
 
 1. Extend dedicated cloud E2E coverage for inventory and payroll:
    - API smoke added in `tests/e2e/auctus-inventory-payroll-api.spec.ts`
+   - UI smoke added in `tests/e2e/auctus-inventory-payroll-ui.spec.ts`
    - Product create/update/archive
    - Inventory movement and negative stock validation
    - Purchase order create/send/receive/link supplier bill
@@ -16,13 +17,15 @@
    - Consider narrowing their use to restore/import or admin recovery flows
 3. Run a real Supabase smoke after project restoration:
    - Inventory/payroll granular API smoke passed after Supabase project resume
-   - Remaining: UI sign-in/workspace pass plus export and restore backup
+   - Inventory/payroll UI smoke passed after Playwright Chromium reinstall
+   - Remaining: export and restore backup pass including inventory/payroll records
 
 ## Current Implementation Status
 
 - Inventory and payroll data are now persisted in normalized Supabase tables in cloud mode.
 - Normal inventory/payroll UI flows use granular API routes instead of replacing the whole module state.
 - Cloud API smoke now covers granular inventory and payroll persistence against a real Supabase workspace.
+- Cloud UI smoke now covers inventory/payroll creation, persistence after reload, and workspace cleanup.
 - Bulk module state replacement remains for compatibility and conflict-protected recovery paths.
 - Backup/restore includes inventory and payroll entities.
 - API, accounting-core, build, and E2E validation passed after the storage/API changes.
