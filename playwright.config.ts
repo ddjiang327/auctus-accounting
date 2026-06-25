@@ -22,7 +22,7 @@ export default defineConfig({
     {
       name: 'local-mode',
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5174' },
-      testMatch: '**/auctus-local-backup.spec.ts',
+      testMatch: ['**/auctus-local-backup.spec.ts', '**/auctus-lazy-navigation.spec.ts'],
     },
     {
       name: 'role-ui',
