@@ -10,9 +10,9 @@
 
 ## Next Engineering Pass
 
-- Add dedicated cloud E2E coverage for inventory and payroll granular API flows.
+- Move Mobile cloud writes from owner/admin full-ledger restore saves to per-action API write endpoints so bookkeepers can safely write from mobile.
 - Keep old inventory/payroll module-state replacement endpoints as compatibility/recovery paths only.
-- Run a real Supabase smoke after the restored project has been idle-tested.
+- Keep production smoke/role acceptance cleanup strict so temporary production users and workspaces cannot fail silently.
 
 ## Suggested Build Order
 
@@ -68,6 +68,12 @@ Two modes targeting different user groups.
 - Current architecture — Supabase backend, account required
 - Adds multi-device sync, automatic backup, and future collaboration features
 - Monetisation target
+
+## Recently Completed
+
+- Dedicated cloud E2E coverage for inventory/payroll granular API flows.
+- Real Supabase inventory/payroll API, UI, backup/reset/restore, and production smoke coverage after project resume.
+- Production role acceptance covering owner/admin management access, bookkeeper day-to-day writes, and viewer read-only behavior.
 
 ### Reference
 

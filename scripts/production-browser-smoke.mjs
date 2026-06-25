@@ -58,21 +58,30 @@ let page;
 let browser;
 
 async function cleanup() {
+  const cleanupErrors = [];
+
   if (!businessId) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from('businesses')
       .select('id')
       .eq('name', businessName)
       .maybeSingle();
+    if (error) cleanupErrors.push(`lookup workspace: ${error.message}`);
     businessId = data?.id ?? '';
   }
 
   if (businessId) {
-    await admin.from('businesses').delete().eq('id', businessId);
+    const { error } = await admin.from('businesses').delete().eq('id', businessId);
+    if (error) cleanupErrors.push(`delete workspace ${businessId}: ${error.message}`);
   }
 
   if (userId) {
-    await admin.auth.admin.deleteUser(userId);
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) cleanupErrors.push(`delete user ${userId}: ${error.message}`);
+  }
+
+  if (cleanupErrors.length) {
+    throw new Error(`Production smoke cleanup failed: ${cleanupErrors.join(' | ')}`);
   }
 }
 

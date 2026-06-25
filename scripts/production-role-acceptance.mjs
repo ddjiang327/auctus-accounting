@@ -57,12 +57,20 @@ let page;
 let browser;
 
 async function cleanup() {
+  const cleanupErrors = [];
+
   if (businessId) {
-    await admin.from('businesses').delete().eq('id', businessId);
+    const { error } = await admin.from('businesses').delete().eq('id', businessId);
+    if (error) cleanupErrors.push(`delete workspace ${businessId}: ${error.message}`);
   }
 
   for (const user of users) {
-    await admin.auth.admin.deleteUser(user.id);
+    const { error } = await admin.auth.admin.deleteUser(user.id);
+    if (error) cleanupErrors.push(`delete ${user.role} user ${user.id}: ${error.message}`);
+  }
+
+  if (cleanupErrors.length) {
+    throw new Error(`Production role acceptance cleanup failed: ${cleanupErrors.join(' | ')}`);
   }
 }
 

@@ -731,3 +731,18 @@ Verification:
 - `npm run acceptance:production-roles` passed against production:
   - Web: `https://auctus-web.netlify.app`
   - API: `https://auctus-api.vercel.app`
+
+### 31) Production smoke cleanup hardening and roadmap refresh
+
+Tightened the production verification scripts so temporary resource cleanup cannot silently fail:
+
+- `scripts/production-browser-smoke.mjs` now checks Supabase cleanup errors for workspace lookup, workspace delete, and temporary user delete.
+- `scripts/production-role-acceptance.mjs` now checks Supabase cleanup errors for workspace and all temporary role users.
+- Cleanup attempts continue across all known resources and fail the script with a combined cleanup error if anything remains.
+- Refreshed `docs/ROADMAP.md` so completed inventory/payroll cloud smoke work is no longer listed as the next engineering pass.
+
+Verification:
+- `node --check scripts/production-browser-smoke.mjs` passed.
+- `node --check scripts/production-role-acceptance.mjs` passed.
+- `git diff --check` passed.
+- `npm run build` passed.
