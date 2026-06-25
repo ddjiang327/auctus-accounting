@@ -129,6 +129,8 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
               {draft.amount != null && <><dt>Amount</dt><dd>${draft.amount.toFixed(2)}</dd></>}
               {draft.date && <><dt>Date</dt><dd>{draft.date}</dd></>}
               {draft.dueDate && <><dt>Due</dt><dd>{draft.dueDate}</dd></>}
+              {draft.invoiceNo && <><dt>Invoice No.</dt><dd>{draft.invoiceNo}</dd></>}
+              {draft.creditNoteNo && <><dt>Credit No.</dt><dd>{draft.creditNoteNo}</dd></>}
               {draft.accountId && <><dt>{draft.type === 'transfer' ? 'From' : 'Account'}</dt><dd>{accountLabel(data, draft.accountId)}</dd></>}
               {draft.accountToId && <><dt>To</dt><dd>{accountLabel(data, draft.accountToId)}</dd></>}
               {draft.categoryId && <><dt>Category</dt><dd>{categoryLabel(data, draft.categoryId)}</dd></>}

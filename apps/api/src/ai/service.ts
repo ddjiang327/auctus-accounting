@@ -29,6 +29,8 @@ export interface ParseDraft {
   gstMode?: 'inc' | 'exc' | 'free' | null;
   paymentTerms?: string;
   dueDate?: string;
+  invoiceNo?: string;
+  creditNoteNo?: string;
   missingFields: string[];
   clarification?: string;
 }
@@ -118,6 +120,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const dueDate = entryMode === 'invoice'
     ? validDate(raw.dueDate) ? raw.dueDate : dueDateForTerms(date, paymentTerms)
     : undefined;
+  const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
+  const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;
 
   return {
     type,
@@ -134,6 +138,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     gstMode,
     paymentTerms,
     dueDate,
+    invoiceNo,
+    creditNoteNo,
     missingFields: unique(missing),
     clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
   };
@@ -177,7 +183,8 @@ ${chartOfAccounts}
 - When GST is enabled and not specified, default gstMode to "inc"
 - List truly unknown required fields in missingFields (e.g. "amount" if no dollar value given)
 - Only set clarification if a critical field cannot be guessed at all
-- For transfers, set type="transfer", accountId=source account, accountToId=destination account`;
+- For transfers, set type="transfer", accountId=source account, accountToId=destination account
+- Preserve invoiceNo or creditNoteNo if the user explicitly mentions a document number`;
 }
 
 const TOOL_SCHEMA = {
@@ -200,6 +207,8 @@ const TOOL_SCHEMA = {
       gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
       paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
       dueDate: { type: 'string' },
+      invoiceNo: { type: 'string' },
+      creditNoteNo: { type: 'string' },
       missingFields: { type: 'array', items: { type: 'string' } },
       clarification: { type: 'string' },
     },

@@ -103,6 +103,8 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const dueDate = entryMode === 'invoice'
     ? validDate(raw.dueDate) ? raw.dueDate : dueDateForTerms(date, paymentTerms)
     : undefined;
+  const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
+  const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;
 
   return {
     type,
@@ -119,6 +121,8 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     gstMode,
     paymentTerms,
     dueDate,
+    invoiceNo,
+    creditNoteNo,
     missingFields: unique(missing),
     clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
   };
@@ -154,7 +158,7 @@ Chart of Accounts:\n${coa}
 Today: ${ctx.today}
 GST: ${ctx.gstEnabled ? 'enabled 10%' : 'disabled'}
 
-Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, list uncertain fields in missingFields.`;
+Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, preserve invoiceNo/creditNoteNo when mentioned, list uncertain fields in missingFields.`;
 }
 
 async function parseViaServer(text: string, context: ParseContext, token: string): Promise<ParseDraft> {
@@ -192,6 +196,8 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
         gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
         paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
         dueDate: { type: 'string' },
+        invoiceNo: { type: 'string' },
+        creditNoteNo: { type: 'string' },
         missingFields: { type: 'array', items: { type: 'string' } },
         clarification: { type: 'string' },
       },

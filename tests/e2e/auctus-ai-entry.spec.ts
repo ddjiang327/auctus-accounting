@@ -189,6 +189,7 @@ test.describe('Auctus AI quick entry', () => {
                 chartAccountId: 'coa_4010',
                 entryMode: 'credit_note',
                 gstMode: 'inc',
+                creditNoteNo: 'CN-AI-7',
                 note: 'Credit for overcharge',
                 missingFields: [],
               },
@@ -204,6 +205,7 @@ test.describe('Auctus AI quick entry', () => {
     await page.locator('.ai-entry-textarea').fill('credit note for overcharge $75');
     await page.getByRole('button', { name: /Parse/i }).click();
     await expect(page.locator('.ai-entry-draft')).toContainText('credit_note');
+    await expect(page.locator('.ai-entry-draft')).toContainText('CN-AI-7');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
@@ -211,6 +213,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('button', { name: 'Sale' })).toHaveClass(/active/);
     await expect(modal.getByRole('button', { name: 'Credit Note' })).toHaveClass(/active/);
     await expect(modal.getByLabel('Amount')).toHaveValue('75');
+    await expect(modal.getByRole('textbox', { name: 'Credit No.' })).toHaveValue('CN-AI-7');
     await expect(modal.getByLabel('Note')).toHaveValue('Credit for overcharge');
   });
 
@@ -233,6 +236,7 @@ test.describe('Auctus AI quick entry', () => {
                 categoryId: 'i_free',
                 entryMode: 'invoice',
                 paymentTerms: 'net_30',
+                invoiceNo: 'INV-AI-42',
                 missingFields: [],
               },
             },
@@ -250,11 +254,13 @@ test.describe('Auctus AI quick entry', () => {
     const draft = page.locator('.ai-entry-draft');
     await expect(draft).toContainText('2026-06-10');
     await expect(draft).toContainText('2026-07-10');
+    await expect(draft).toContainText('INV-AI-42');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
     await expect(modal).toBeVisible();
     await expect(modal.getByRole('button', { name: 'Invoice' })).toHaveClass(/active/);
+    await expect(modal.getByRole('textbox', { name: 'Invoice No.' })).toHaveValue('INV-AI-42');
     await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-10');
   });
 });

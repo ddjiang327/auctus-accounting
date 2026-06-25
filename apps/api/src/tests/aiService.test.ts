@@ -160,4 +160,30 @@ describe("AI parse draft normalization", () => {
       dueDate: "2026-07-10",
     });
   });
+
+  it("preserves invoice and credit note numbers for matching entry modes", () => {
+    const invoice = __testing.normalizeDraft({
+      type: "income",
+      amount: 100,
+      accountId: "bank_1",
+      entryMode: "invoice",
+      invoiceNo: " INV-AI-42 ",
+      creditNoteNo: "CN-IGNORED",
+      missingFields: [],
+    }, context);
+    const credit = __testing.normalizeDraft({
+      type: "income",
+      amount: 50,
+      accountId: "bank_1",
+      entryMode: "credit_note",
+      invoiceNo: "INV-IGNORED",
+      creditNoteNo: " CN-AI-7 ",
+      missingFields: [],
+    }, context);
+
+    expect(invoice.invoiceNo).toBe("INV-AI-42");
+    expect(invoice.creditNoteNo).toBeUndefined();
+    expect(credit.creditNoteNo).toBe("CN-AI-7");
+    expect(credit.invoiceNo).toBeUndefined();
+  });
 });
