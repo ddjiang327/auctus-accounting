@@ -1,7 +1,7 @@
 import type { ApiEnv } from '../config/env.js';
 
 interface Account { id: string; name: string; type: string; }
-interface Category { id: string; name: string; }
+interface Category { id: string; name: string; chartAccountId?: string; }
 interface Contact { id: string; name: string; type: string; }
 interface ChartAccount { id: string; code: string; name: string; class: string; }
 
@@ -62,14 +62,18 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   if (type === 'transfer' && !accountToId) missing.push('destination account');
 
   const categories = type === 'income' ? ctx.categories.income : ctx.categories.expense;
-  const categoryId = type === 'transfer'
-    ? undefined
-    : categories.some((category) => category.id === raw.categoryId) ? raw.categoryId : undefined;
+  const category = type === 'transfer' ? undefined : categories.find((item) => item.id === raw.categoryId);
+  const categoryId = category?.id;
 
-  const chartAccountId = type === 'transfer' ? undefined : ctx.chartOfAccounts.some((account) => {
+  const categoryChartAccountId = category?.chartAccountId && ctx.chartOfAccounts.some((account) => {
+    if (account.id !== category.chartAccountId) return false;
+    return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
+  }) ? category.chartAccountId : undefined;
+  const parsedChartAccountId = type === 'transfer' ? undefined : ctx.chartOfAccounts.some((account) => {
     if (account.id !== raw.chartAccountId) return false;
     return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
   }) ? raw.chartAccountId : undefined;
+  const chartAccountId = categoryChartAccountId || parsedChartAccountId;
 
   const contactId = type === 'transfer' ? undefined : ctx.contacts.some((contact) => {
     if (contact.id !== raw.contactId) return false;
@@ -111,8 +115,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
 
 function buildSystemPrompt(ctx: ParseContext): string {
   const accounts = ctx.accounts.map((a) => `  ${a.id} | ${a.name} (${a.type})`).join('\n');
-  const expenseCategories = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}`).join('\n');
-  const incomeCategories = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}`).join('\n');
+  const expenseCategories = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
+  const incomeCategories = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
   const contacts = ctx.contacts.length
     ? ctx.contacts.map((c) => `  ${c.id} | ${c.name} (${c.type})`).join('\n')
     : '  (none)';

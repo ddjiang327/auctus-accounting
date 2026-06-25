@@ -7,7 +7,7 @@ const context: ParseContext = {
     { id: "cash_1", name: "Petty Cash", type: "cash" },
   ],
   categories: {
-    income: [{ id: "income_sales", name: "Sales" }],
+    income: [{ id: "income_sales", name: "Sales", chartAccountId: "coa_revenue" }],
     expense: [{ id: "expense_office", name: "Office Supplies" }],
   },
   contacts: [
@@ -16,6 +16,7 @@ const context: ParseContext = {
   ],
   chartOfAccounts: [
     { id: "coa_revenue", code: "4000", name: "Sales Revenue", class: "revenue" },
+    { id: "coa_revenue_alt", code: "4010", name: "Service Revenue", class: "revenue" },
     { id: "coa_expense", code: "7030", name: "Office Supplies", class: "expense" },
   ],
   gstEnabled: true,
@@ -101,6 +102,25 @@ describe("AI parse draft normalization", () => {
       contactId: "cust_1",
       entryMode: "credit_note",
       paymentTerms: undefined,
+      missingFields: [],
+    });
+  });
+
+  it("uses the category default chart account before a mismatched AI chart account", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 200,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      chartAccountId: "coa_revenue_alt",
+      entryMode: "cash",
+      missingFields: [],
+    }, context);
+
+    expect(draft).toMatchObject({
+      type: "income",
+      categoryId: "income_sales",
+      chartAccountId: "coa_revenue",
       missingFields: [],
     });
   });

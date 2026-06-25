@@ -48,14 +48,18 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   if (type === 'transfer' && !accountToId) missing.push('destination account');
 
   const categories = type === 'income' ? context.categories.income : context.categories.expense;
-  const categoryId = type === 'transfer'
-    ? undefined
-    : categories.some((category) => category.id === raw.categoryId) ? raw.categoryId : undefined;
+  const category = type === 'transfer' ? undefined : categories.find((item) => item.id === raw.categoryId);
+  const categoryId = category?.id;
 
-  const chartAccountId = type === 'transfer' ? undefined : context.chartOfAccounts.some((account) => {
+  const categoryChartAccountId = category?.chartAccountId && context.chartOfAccounts.some((account) => {
+    if (account.id !== category.chartAccountId) return false;
+    return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
+  }) ? category.chartAccountId : undefined;
+  const parsedChartAccountId = type === 'transfer' ? undefined : context.chartOfAccounts.some((account) => {
     if (account.id !== raw.chartAccountId) return false;
     return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
   }) ? raw.chartAccountId : undefined;
+  const chartAccountId = categoryChartAccountId || parsedChartAccountId;
 
   const contactId = type === 'transfer' ? undefined : context.contacts.some((contact) => {
     if (contact.id !== raw.contactId) return false;
@@ -111,8 +115,8 @@ function buildContext(data: LedgerData): ParseContext {
 
 function buildSystemPrompt(ctx: ParseContext): string {
   const accounts = ctx.accounts.map((a) => `  ${a.id} | ${a.name} (${a.type})`).join('\n');
-  const expCats = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}`).join('\n');
-  const incCats = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}`).join('\n');
+  const expCats = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
+  const incCats = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
   const contacts = ctx.contacts.length ? ctx.contacts.map((c) => `  ${c.id} | ${c.name}`).join('\n') : '  (none)';
   const coa = ctx.chartOfAccounts.map((a) => `  ${a.id} | ${a.code} ${a.name}`).join('\n');
   return `You are an AI accounting assistant. Parse natural language transaction descriptions into structured entries.
