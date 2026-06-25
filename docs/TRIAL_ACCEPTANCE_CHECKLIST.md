@@ -19,14 +19,14 @@ npx tsc -p apps/mobile/tsconfig.json --noEmit
 npm run e2e
 npm run smoke:production
 npm run acceptance:production-roles
-AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production
+AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=20260601050000 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production
 ```
 
 Expected:
 
 - All commands pass.
 - `audit:production` has 0 failures.
-- The only acceptable warning is local-only dev auto-login variables in `apps/web/.env.local`.
+- The only acceptable warning is local-only dev auto-login variables in `apps/web/.env.local`. If `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED` is omitted and the Supabase CLI is not installed, audit will also warn that remote migration verification was skipped.
 
 ## 2. Owner/Admin Manual Pass
 

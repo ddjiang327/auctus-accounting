@@ -669,5 +669,19 @@ Verification:
   - Web: `https://auctus-web.netlify.app`
   - API: `https://auctus-api.vercel.app`
 - `npm run acceptance:production-roles` passed against production.
-- `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 14 checks, 2 warnings, 0 failures.
-- Remaining audit warnings are reviewed as acceptable for this shell: local-only dev auto-login variables in `apps/web/.env.local`, and no Supabase CLI binary available for migration listing.
+- `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=20260601050000 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 16 checks, 1 warning, 0 failures.
+- Remaining audit warning is reviewed as acceptable for this shell: local-only dev auto-login variables in `apps/web/.env.local`.
+
+### 27) Production audit migration verification fallback
+
+Updated `scripts/pretrial-audit.mjs` so migration verification is explicit and less dependent on the current shell:
+
+- Audit now reports the latest local Supabase migration file.
+- If Supabase CLI is available, audit still runs `supabase migration list`.
+- If Supabase CLI is missing, audit can accept an explicit `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=<latest local migration>` marker after dashboard or CLI verification.
+- If the CLI reports a remote migration older than the latest local migration, audit fails instead of only passing the command.
+
+Verification:
+- `node --check scripts/pretrial-audit.mjs` passed.
+- `npm run audit:pretrial` passed with expected local warnings.
+- `AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=20260601050000 AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed: 16 checks, 1 warning, 0 failures.

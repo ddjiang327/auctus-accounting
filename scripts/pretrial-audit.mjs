@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
@@ -35,6 +35,16 @@ function hasAny(env, keys) {
 
 function joinUrl(base, path) {
   return new URL(path, `${base.replace(/\/+$/, '')}/`).toString();
+}
+
+function latestLocalMigration() {
+  const dir = resolve(root, 'supabase/migrations');
+  if (!existsSync(dir)) return '';
+  return readdirSync(dir)
+    .map((file) => file.match(/^(\d{14}).*\.sql$/)?.[1] || '')
+    .filter(Boolean)
+    .sort()
+    .at(-1) || '';
 }
 
 async function checkHealth(url) {
@@ -216,8 +226,15 @@ if (prodApi) {
   warn('Production API health check skipped', 'Set AUCTUS_PRODUCTION_API_URL to verify /health.');
 }
 
+const localMigration = latestLocalMigration();
+if (localMigration) {
+  pass('Local Supabase migrations found', `latest=${localMigration}`);
+} else {
+  warn('Local Supabase migrations not found', 'Expected SQL files in supabase/migrations.');
+}
+
 try {
-  const output = execFileSync('supabase', ['migration', 'list'], {
+  const output = execFileSync(process.env.SUPABASE_CLI_PATH || 'supabase', ['migration', 'list'], {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -227,9 +244,20 @@ try {
     .map((line) => line.trim())
     .filter((line) => /^\d{14}/.test(line))
     .at(-1);
-  pass('Supabase migration list command passed', lastMigration || 'No migration rows parsed.');
+  if (localMigration && lastMigration && lastMigration < localMigration) {
+    fail('Supabase remote migrations lag local migrations', `remote=${lastMigration} local=${localMigration}`);
+  } else {
+    pass('Supabase migration list command passed', lastMigration || 'No migration rows parsed.');
+  }
 } catch (error) {
-  warn('Supabase migration list command failed', error.stderr?.toString().trim() || error.message);
+  const verified = process.env.AUCTUS_SUPABASE_MIGRATIONS_VERIFIED || '';
+  if (verified && localMigration && verified >= localMigration) {
+    pass('Supabase migrations manually verified', `verified=${verified} local=${localMigration}`);
+  } else if (error.code === 'ENOENT') {
+    warn('Supabase migration list skipped', `Install Supabase CLI, set SUPABASE_CLI_PATH, or set AUCTUS_SUPABASE_MIGRATIONS_VERIFIED=${localMigration || '<latest>'} after dashboard/CLI verification.`);
+  } else {
+    warn('Supabase migration list command failed', error.stderr?.toString().trim() || error.message);
+  }
 }
 
 console.log('Pre-trial audit\n');
@@ -240,6 +268,8 @@ for (const check of checks) {
 
 const failures = checks.filter((check) => check.level === 'fail');
 const warnings = checks.filter((check) => check.level === 'warn');
-console.log(`\nSummary: ${checks.length - failures.length - warnings.length} passed, ${warnings.length} warnings, ${failures.length} failures.`);
+const warningLabel = warnings.length === 1 ? 'warning' : 'warnings';
+const failureLabel = failures.length === 1 ? 'failure' : 'failures';
+console.log(`\nSummary: ${checks.length - failures.length - warnings.length} passed, ${warnings.length} ${warningLabel}, ${failures.length} ${failureLabel}.`);
 
 if (failures.length) process.exit(1);
