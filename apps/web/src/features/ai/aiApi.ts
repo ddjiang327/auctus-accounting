@@ -63,7 +63,9 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
       : contact.type === 'supplier' || contact.type === 'both';
   }) ? raw.contactId : undefined;
 
-  const entryMode = type === 'transfer' ? 'cash' : raw.entryMode === 'invoice' ? 'invoice' : 'cash';
+  const entryMode = type === 'transfer'
+    ? 'cash'
+    : raw.entryMode === 'invoice' || raw.entryMode === 'credit_note' ? raw.entryMode : 'cash';
   const gstMode = type === 'transfer' || !context.gstEnabled
     ? null
     : GST_MODES.has(String(raw.gstMode))
@@ -136,7 +138,7 @@ Chart of Accounts:\n${coa}
 Today: ${ctx.today}
 GST: ${ctx.gstEnabled ? 'enabled 10%' : 'disabled'}
 
-Rules: default date=today, match names loosely, entryMode=cash for payments or invoice for invoices, gstMode=inc/exc/free/null, list uncertain fields in missingFields.`;
+Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, list uncertain fields in missingFields.`;
 }
 
 async function parseViaDirectApi(text: string, context: ParseContext): Promise<ParseDraft> {
@@ -156,7 +158,7 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
         contactId: { type: 'string' },
         party: { type: 'string' },
         note: { type: 'string' },
-        entryMode: { type: 'string', enum: ['cash', 'invoice'] },
+        entryMode: { type: 'string', enum: ['cash', 'invoice', 'credit_note'] },
         gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
         paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
         missingFields: { type: 'array', items: { type: 'string' } },

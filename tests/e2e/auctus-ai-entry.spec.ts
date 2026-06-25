@@ -169,4 +169,48 @@ test.describe('Auctus AI quick entry', () => {
     expect(requestSystemPrompt).not.toContain('Archived AI Context Category');
     expect(requestSystemPrompt).not.toContain('e_archived_ai_context');
   });
+
+  test('opens credit note drafts with the correct entry mode', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_credit_note_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'income',
+                amount: 75,
+                accountId: 'a1',
+                categoryId: 'i_free',
+                chartAccountId: 'coa_4010',
+                entryMode: 'credit_note',
+                gstMode: 'inc',
+                note: 'Credit for overcharge',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('credit note for overcharge $75');
+    await page.getByRole('button', { name: /Parse/i }).click();
+    await expect(page.locator('.ai-entry-draft')).toContainText('credit_note');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Sale' })).toHaveClass(/active/);
+    await expect(modal.getByRole('button', { name: 'Credit Note' })).toHaveClass(/active/);
+    await expect(modal.getByLabel('Amount')).toHaveValue('75');
+    await expect(modal.getByLabel('Note')).toHaveValue('Credit for overcharge');
+  });
 });

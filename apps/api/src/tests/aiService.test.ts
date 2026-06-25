@@ -78,4 +78,30 @@ describe("AI parse draft normalization", () => {
       missingFields: [],
     });
   });
+
+  it("preserves credit note entry mode for non-transfer drafts", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 75,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      chartAccountId: "coa_revenue",
+      contactId: "cust_1",
+      entryMode: "credit_note",
+      paymentTerms: "net_30",
+      missingFields: [],
+    }, context);
+
+    expect(draft).toMatchObject({
+      type: "income",
+      amount: 75,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      chartAccountId: "coa_revenue",
+      contactId: "cust_1",
+      entryMode: "credit_note",
+      paymentTerms: undefined,
+      missingFields: [],
+    });
+  });
 });

@@ -25,7 +25,7 @@ export interface ParseDraft {
   contactId?: string;
   party?: string;
   note?: string;
-  entryMode?: 'cash' | 'invoice';
+  entryMode?: 'cash' | 'invoice' | 'credit_note';
   gstMode?: 'inc' | 'exc' | 'free' | null;
   paymentTerms?: string;
   missingFields: string[];
@@ -78,7 +78,9 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
       : contact.type === 'supplier' || contact.type === 'both';
   }) ? raw.contactId : undefined;
 
-  const entryMode = type === 'transfer' ? 'cash' : raw.entryMode === 'invoice' ? 'invoice' : 'cash';
+  const entryMode = type === 'transfer'
+    ? 'cash'
+    : raw.entryMode === 'invoice' || raw.entryMode === 'credit_note' ? raw.entryMode : 'cash';
   const gstMode = type === 'transfer' || !ctx.gstEnabled
     ? null
     : GST_MODES.has(String(raw.gstMode))
@@ -140,7 +142,7 @@ ${chartOfAccounts}
 ## Rules
 - Default date to today if not specified
 - Match account and contact names loosely
-- entryMode: use "invoice" for invoices/bills, "cash" for direct payments
+- entryMode: use "invoice" for invoices/bills, "credit_note" for credit notes or supplier credits, "cash" for direct payments
 - gstMode: "inc" = price includes GST, "exc" = GST on top, "free" = GST exempt, null = unknown
 - When GST is enabled and not specified, default gstMode to "inc"
 - List truly unknown required fields in missingFields (e.g. "amount" if no dollar value given)
@@ -164,7 +166,7 @@ const TOOL_SCHEMA = {
       contactId: { type: 'string' },
       party: { type: 'string' },
       note: { type: 'string' },
-      entryMode: { type: 'string', enum: ['cash', 'invoice'] },
+      entryMode: { type: 'string', enum: ['cash', 'invoice', 'credit_note'] },
       gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
       paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
       missingFields: { type: 'array', items: { type: 'string' } },
