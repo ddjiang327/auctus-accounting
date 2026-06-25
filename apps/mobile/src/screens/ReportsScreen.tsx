@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { ActionButton, Card, Header, Screen, SectionTitle, colors } from '../components/ui';
 import { SelectField } from '../components/SelectField';
-import { aggregate, arApAging, auditEntry, basReport, contactName, financialPosition, fmt, fmtMoney, gstAggregate, inRange, isCreditNote, isDateLocked, isInvoice, journalEntriesInRange, periodRange, todayStr, trialBalance, txBalance, txGst, txPaid, txPayments, txTotal, uid } from '../domain/accounting';
+import { aggregate, arApAging, auditEntry, basReport, contactName, financialPosition, fmt, fmtMoney, inRange, isCreditNote, isDateLocked, isInvoice, journalEntriesInRange, periodRange, todayStr, trialBalance, txBalance, txGst, txPaid, txPayments, txTotal, uid } from '../domain/accounting';
 import type { BasLineItem, BasReport } from '../domain/accounting';
 import type { GsmMode, JournalLine, LedgerData, ManualJournal, Period } from '../domain/models';
 import { shareCsv, toCsv } from '../utils/csvExport';
@@ -16,9 +16,11 @@ export function ReportsScreen({ data, onDataChange }: { data: LedgerData; onData
   const [editingJournal, setEditingJournal] = useState<ManualJournal | null>(null);
   const [basOpen, setBasOpen] = useState(false);
   const summary = aggregate(data, period);
-  const gst = gstAggregate(data, period);
   const position = financialPosition(data);
   const range = periodRange(period);
+  const basFrom = formatDate(range[0]);
+  const basTo = formatDate(addDays(range[1], -1));
+  const bas = basReport(data, basFrom, basTo);
   const receivable = data.transactions.filter((tx) => isInvoice(tx) && tx.type === 'income').reduce((sum, tx) => sum + txBalance(tx, data), 0);
   const payable = data.transactions.filter((tx) => isInvoice(tx) && tx.type === 'expense').reduce((sum, tx) => sum + txBalance(tx, data), 0);
 
@@ -66,11 +68,11 @@ export function ReportsScreen({ data, onDataChange }: { data: LedgerData; onData
         </Pressable>
       </View>
       <Card>
-        <ReportLine label="G1 Total sales incl. GST" value={fmtMoney(gst.salesNet + gst.collected)} />
-        <ReportLine label="1A GST on sales" value={`+${fmt(gst.collected)}`} tone="green" />
-        <ReportLine label="G11 Purchases incl. GST" value={fmtMoney(gst.purchasesNet + gst.paid)} />
-        <ReportLine label="1B GST on purchases" value={`-${fmt(gst.paid)}`} tone="red" />
-        <ReportLine label={`Net GST ${gst.net >= 0 ? 'payable' : 'refundable'}`} value={fmtMoney(Math.abs(gst.net))} tone={gst.net >= 0 ? 'red' : 'green'} />
+        <ReportLine label="G1 Total sales incl. GST" value={fmtMoney(bas.salesGross)} />
+        <ReportLine label="1A GST on sales" value={`+${fmt(bas.gstCollected)}`} tone="green" />
+        <ReportLine label="G11 Purchases incl. GST" value={fmtMoney(bas.purchasesGross)} />
+        <ReportLine label="1B GST on purchases" value={`-${fmt(bas.gstPaid)}`} tone="red" />
+        <ReportLine label={`Net GST ${bas.netGst >= 0 ? 'payable' : 'refundable'}`} value={fmtMoney(Math.abs(bas.netGst))} tone={bas.netGst >= 0 ? 'red' : 'green'} />
       </Card>
       <SectionTitle>CSV Export</SectionTitle>
       <View style={styles.exportRow}>
@@ -527,7 +529,24 @@ function lastFyRange() {
   return { from: new Date(s, 6, 1).toISOString().slice(0, 10), to: new Date(s + 1, 5, 30).toISOString().slice(0, 10) };
 }
 
-function buildCsv(report: BasReport, profile: { name: string; abn?: string }): string {
+function formatDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function basBasisLabel(data: LedgerData) {
+  return data.settings.basBasis === 'accrual' ? 'Accrual basis' : 'Cash basis';
+}
+
+function buildCsv(report: BasReport, profile: { name: string; abn?: string }, basisLabel: string): string {
   const Q = (s: string) => `"${s.replace(/"/g, '""')}"`;
   const N = (n: number) => n.toFixed(2);
   const L = (...cells: string[]) => cells.join(',');
@@ -536,7 +555,7 @@ function buildCsv(report: BasReport, profile: { name: string; abn?: string }): s
   rows.push(L(Q('Business'), Q(profile.name)));
   if (profile.abn) rows.push(L(Q('ABN'), Q(profile.abn)));
   rows.push(L(Q('Period'), Q(`${report.from} to ${report.to}`)));
-  rows.push(L(Q('Basis'), Q('Accrual')));
+  rows.push(L(Q('Basis'), Q(basisLabel)));
   rows.push(L(Q('Generated'), Q(new Date().toISOString().slice(0, 10))));
   rows.push('');
   rows.push(Q('SUMMARY'));
@@ -558,7 +577,7 @@ function buildCsv(report: BasReport, profile: { name: string; abn?: string }): s
   return rows.join('\n');
 }
 
-function buildHtml(report: BasReport, profile: { name: string; abn?: string }): string {
+function buildHtml(report: BasReport, profile: { name: string; abn?: string }, basisLabel: string): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const M = (n: number) => `$${Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const signed = (n: number) => n < 0 ? `<span style="color:#C0392B">(${M(n)})</span>` : M(n);
@@ -591,7 +610,7 @@ hr{border:0;border-top:1px solid #E0DDD8;margin:6px 0}
 @media print{@page{margin:14mm}body{max-width:100%}}
 </style></head><body>
 <h1>Business Activity Statement</h1>
-<p class="meta">${esc(profile.name)}${profile.abn ? ` &nbsp;·&nbsp; ABN ${esc(profile.abn)}` : ''} &nbsp;·&nbsp; Period <strong>${esc(report.from)}</strong> to <strong>${esc(report.to)}</strong> &nbsp;·&nbsp; Accrual Basis &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString('en-AU')}</p>
+<p class="meta">${esc(profile.name)}${profile.abn ? ` &nbsp;·&nbsp; ABN ${esc(profile.abn)}` : ''} &nbsp;·&nbsp; Period <strong>${esc(report.from)}</strong> to <strong>${esc(report.to)}</strong> &nbsp;·&nbsp; ${esc(basisLabel)} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString('en-AU')}</p>
 <h2>Summary</h2>
 <table class="sum">
 <tr><td><span class="code">G1</span> Total sales (incl. GST)</td><td class="r">${M(report.salesGross)}</td></tr>
@@ -607,7 +626,7 @@ hr{border:0;border-top:1px solid #E0DDD8;margin:6px 0}
 ${detailTable(salesRows, report.salesNet, report.gstCollected, report.salesGross)}
 <h2>Purchases Detail (${report.purchasesLines.length} transactions)</h2>
 ${detailTable(purchRows, report.purchasesNet, report.gstPaid, report.purchasesGross)}
-<div class="footer">Generated by Auctus &nbsp;·&nbsp; Accrual basis &nbsp;·&nbsp; Verify with your tax agent before lodging. Not a substitute for professional advice.</div>
+<div class="footer">Generated by Auctus &nbsp;·&nbsp; ${esc(basisLabel)} &nbsp;·&nbsp; Verify with your tax agent before lodging. Not a substitute for professional advice.</div>
 </body></html>`;
 }
 
@@ -625,6 +644,7 @@ function BASReportModal({ open, data, onClose }: { open: boolean; data: LedgerDa
   }, [data, from, to]);
 
   const profile = data.settings.businessProfile;
+  const basisLabel = basBasisLabel(data);
 
   async function shareFile(content: string, filename: string, mimeType: string) {
     setBusy(true);
@@ -658,7 +678,7 @@ function BASReportModal({ open, data, onClose }: { open: boolean; data: LedgerDa
           <View style={styles.basTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.basTitle}>BAS Report</Text>
-              <Text style={styles.basSub}>Accrual basis · Australian GST</Text>
+              <Text style={styles.basSub}>{basisLabel} · Australian GST</Text>
             </View>
             <ActionButton tone="gray" onPress={onClose}>Close</ActionButton>
           </View>
@@ -736,12 +756,12 @@ function BASReportModal({ open, data, onClose }: { open: boolean; data: LedgerDa
               <SectionTitle>Export</SectionTitle>
               <View style={styles.exportRow}>
                 <View style={{ flex: 1 }}>
-                  <ActionButton tone="blue" onPress={() => shareFile(buildCsv(report, profile), `bas-${from}-${to}.csv`, 'text/csv')}>
+                  <ActionButton tone="blue" onPress={() => shareFile(buildCsv(report, profile, basisLabel), `bas-${from}-${to}.csv`, 'text/csv')}>
                     {busy ? '…' : 'Export CSV'}
                   </ActionButton>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <ActionButton onPress={() => shareFile(buildHtml(report, profile), `bas-${from}-${to}.html`, 'text/html')}>
+                  <ActionButton onPress={() => shareFile(buildHtml(report, profile, basisLabel), `bas-${from}-${to}.html`, 'text/html')}>
                     {busy ? '…' : 'Share HTML / PDF'}
                   </ActionButton>
                 </View>
