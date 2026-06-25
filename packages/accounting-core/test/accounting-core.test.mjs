@@ -510,6 +510,70 @@ describe("documents and BAS", () => {
     assert.equal(basReport(data, "2026-02-01", "2026-02-28").gstCollected, 5);
   });
 
+  it("uses gross payment amounts for GST-exclusive invoices on cash-basis BAS", () => {
+    const data = ledger({
+      settings: {
+        ...ledger().settings,
+        basBasis: "cash",
+      },
+      transactions: [
+        {
+          id: "inv_cash_exc",
+          type: "income",
+          entryMode: "invoice",
+          amount: 100,
+          chartAccountId: "coa_sales",
+          clearingChartAccountId: "coa_ar",
+          date: "2026-01-10",
+          gstMode: "exc",
+          payments: [{ id: "pay_1", amount: 55, date: "2026-02-05", accountId: "bank" }],
+        },
+      ],
+    });
+
+    const report = basReport(data, "2026-02-01", "2026-02-28");
+
+    assert.equal(report.salesGross, 55);
+    assert.equal(report.salesNet, 50);
+    assert.equal(report.gstCollected, 5);
+    assert.deepEqual(report.salesLines.map((line) => ({
+      netAmount: line.netAmount,
+      gstAmount: line.gstAmount,
+      grossAmount: line.grossAmount,
+    })), [{ netAmount: 50, gstAmount: 5, grossAmount: 55 }]);
+  });
+
+  it("ignores voided invoice payments on cash-basis BAS", () => {
+    const data = ledger({
+      settings: {
+        ...ledger().settings,
+        basBasis: "cash",
+      },
+      transactions: [
+        {
+          id: "inv_cash_void_payment",
+          type: "income",
+          entryMode: "invoice",
+          amount: 220,
+          chartAccountId: "coa_sales",
+          clearingChartAccountId: "coa_ar",
+          date: "2026-01-10",
+          gstMode: "inc",
+          payments: [
+            { id: "pay_valid", amount: 110, date: "2026-02-05", accountId: "bank" },
+            { id: "pay_void", amount: 110, date: "2026-02-06", accountId: "bank", voidedAt: "2026-02-07T00:00:00.000Z" },
+          ],
+        },
+      ],
+    });
+
+    const report = basReport(data, "2026-02-01", "2026-02-28");
+
+    assert.equal(report.salesGross, 110);
+    assert.equal(report.gstCollected, 10);
+    assert.equal(report.salesLines.length, 1);
+  });
+
   it("reports invoices on document date for accrual-basis BAS", () => {
     const data = ledger({
       settings: {
@@ -533,6 +597,93 @@ describe("documents and BAS", () => {
 
     assert.equal(basReport(data, "2026-01-01", "2026-01-31").gstCollected, 10);
     assert.equal(basReport(data, "2026-02-01", "2026-02-28").gstCollected, 0);
+  });
+
+  it("reports credit notes on allocation date for cash-basis BAS", () => {
+    const data = ledger({
+      settings: {
+        ...ledger().settings,
+        basBasis: "cash",
+      },
+      transactions: [
+        {
+          id: "cn_cash",
+          type: "income",
+          entryMode: "credit_note",
+          amount: 110,
+          chartAccountId: "coa_sales",
+          clearingChartAccountId: "coa_ar",
+          date: "2026-01-10",
+          gstMode: "inc",
+        },
+      ],
+      creditAllocations: [
+        { id: "alloc_1", creditNoteId: "cn_cash", invoiceId: "inv_1", amount: 55, date: "2026-02-05" },
+      ],
+    });
+
+    assert.equal(basReport(data, "2026-01-01", "2026-01-31").gstCollected, 0);
+    const report = basReport(data, "2026-02-01", "2026-02-28");
+
+    assert.equal(report.salesGross, -55);
+    assert.equal(report.salesNet, -50);
+    assert.equal(report.gstCollected, -5);
+  });
+
+  it("reports supplier credits on allocation date for cash-basis BAS", () => {
+    const data = ledger({
+      settings: {
+        ...ledger().settings,
+        basBasis: "cash",
+      },
+      transactions: [
+        {
+          id: "sc_cash",
+          type: "expense",
+          entryMode: "credit_note",
+          amount: 55,
+          chartAccountId: "coa_supplies",
+          clearingChartAccountId: "coa_ap",
+          date: "2026-01-10",
+          gstMode: "inc",
+        },
+      ],
+      creditAllocations: [
+        { id: "alloc_1", creditNoteId: "sc_cash", invoiceId: "bill_1", amount: 55, date: "2026-02-05" },
+      ],
+    });
+
+    assert.equal(basReport(data, "2026-01-01", "2026-01-31").gstPaid, 0);
+    const report = basReport(data, "2026-02-01", "2026-02-28");
+
+    assert.equal(report.purchasesGross, -55);
+    assert.equal(report.purchasesNet, -50);
+    assert.equal(report.gstPaid, -5);
+    assert.equal(report.netGst, 5);
+  });
+
+  it("reports zero BAS when GST is disabled even if transactions retain GST modes", () => {
+    const data = ledger({
+      settings: {
+        ...ledger().settings,
+        gstEnabled: false,
+        basBasis: "accrual",
+      },
+      transactions: [
+        { id: "sale", type: "income", amount: 110, accountId: "bank", chartAccountId: "coa_sales", date: "2026-01-10", gstMode: "inc" },
+        { id: "purchase", type: "expense", amount: 55, accountId: "bank", chartAccountId: "coa_supplies", date: "2026-01-11", gstMode: "inc" },
+      ],
+    });
+
+    const report = basReport(data, "2026-01-01", "2026-01-31");
+
+    assert.equal(report.salesGross, 0);
+    assert.equal(report.purchasesGross, 0);
+    assert.equal(report.gstCollected, 0);
+    assert.equal(report.gstPaid, 0);
+    assert.equal(report.netGst, 0);
+    assert.deepEqual(report.salesLines, []);
+    assert.deepEqual(report.purchasesLines, []);
   });
 
   it("excludes voided transactions from BAS", () => {

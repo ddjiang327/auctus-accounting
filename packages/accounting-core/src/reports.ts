@@ -90,9 +90,10 @@ function addBasLine(
   date: string,
   amount: number,
   sign: number,
+  settlementGross: boolean,
 ) {
   const rate = data.settings.gstRate || 0.1;
-  const split = gstSplit(amount, tx.gstMode, rate);
+  const split = basAmountSplit(amount, tx.gstMode, rate, settlementGross);
   const party = contactName(data, tx.contactId, tx.party);
   const reference = tx.invoiceNo || tx.creditNoteNo || '';
   const line: BasLineItem = {
@@ -110,6 +111,13 @@ function addBasLine(
   return line;
 }
 
+function basAmountSplit(amount: number, mode: GsmMode | undefined, rate: number, settlementGross: boolean) {
+  if (!settlementGross || !mode || mode === 'free') return gstSplit(amount, mode, rate);
+  const total = Number(amount) || 0;
+  const gst = +(total * rate / (1 + rate)).toFixed(2);
+  return { net: +(total - gst).toFixed(2), gst, total, mode };
+}
+
 export function basReport(data: LedgerData, from: string, to: string): BasReport {
   let salesGross = 0, salesNet = 0, gstCollected = 0, gstFreeIncome = 0;
   let purchasesGross = 0, purchasesNet = 0, gstPaid = 0, gstFreePurchases = 0;
@@ -121,26 +129,26 @@ export function basReport(data: LedgerData, from: string, to: string): BasReport
   for (const tx of data.transactions) {
     if (tx.voidedAt || tx.type === 'transfer') continue;
     if (!data.settings.gstEnabled || !tx.gstMode) continue;
-    const rows: Array<{ date: string; amount: number; sign: number }> = [];
+    const rows: Array<{ date: string; amount: number; sign: number; settlementGross: boolean }> = [];
     if (basis === 'accrual' || (!isInvoice(tx) && !isCreditNote(tx))) {
-      rows.push({ date: tx.date, amount: tx.amount, sign: isCreditNote(tx) ? -1 : 1 });
+      rows.push({ date: tx.date, amount: tx.amount, sign: isCreditNote(tx) ? -1 : 1, settlementGross: false });
     } else if (isInvoice(tx)) {
       for (const payment of tx.payments || []) {
         if (payment.voidedAt) continue;
-        rows.push({ date: payment.date, amount: payment.amount, sign: 1 });
+        rows.push({ date: payment.date, amount: payment.amount, sign: 1, settlementGross: true });
       }
     } else if (isCreditNote(tx)) {
       for (const allocation of data.creditAllocations || []) {
         if (allocation.creditNoteId !== tx.id) continue;
-        rows.push({ date: allocation.date, amount: allocation.amount, sign: -1 });
+        rows.push({ date: allocation.date, amount: allocation.amount, sign: -1, settlementGross: true });
       }
     }
 
     for (const row of rows) {
       if (row.date < from || row.date > to) continue;
-      const split = gstSplit(row.amount, tx.gstMode, rate);
+      const split = basAmountSplit(row.amount, tx.gstMode, rate, row.settlementGross);
       const isFree = tx.gstMode === 'free';
-      const line = addBasLine(tx.type === 'income' ? salesLines : purchasesLines, tx, data, row.date, row.amount, row.sign);
+      const line = addBasLine(tx.type === 'income' ? salesLines : purchasesLines, tx, data, row.date, row.amount, row.sign, row.settlementGross);
 
       if (tx.type === 'income') {
         salesGross += row.sign * split.total;

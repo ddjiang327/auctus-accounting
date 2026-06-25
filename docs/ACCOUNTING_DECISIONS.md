@@ -12,7 +12,7 @@ Decision: support both cash basis and accrual basis.
 - Accrual basis: GST is reported when invoice or bill is issued.
 - MVP default assumption: cash basis unless business settings specify otherwise.
 
-Implementation note: `basReport` supports both cash and accrual basis using `settings.basBasis`.
+Implementation note: `basReport` supports both cash and accrual basis using `settings.basBasis`. Cash-basis invoice payments and credit-note allocations are treated as gross settlement amounts, including for GST-exclusive source documents.
 
 ### GST Registration
 
@@ -32,7 +32,7 @@ Decision:
 - Do not allow allocation above the credit note remaining balance.
 - Do not allow allocation above the invoice outstanding balance.
 
-Implementation note: balance calculation ignores voided credit notes. `validateCreditAllocations` enforces allocation limits.
+Implementation note: balance calculation ignores voided credit notes. `validateCreditAllocations` enforces allocation limits. Cash-basis BAS reports credit notes on allocation date; accrual-basis BAS reports them on credit note date.
 
 ## Transfers
 
