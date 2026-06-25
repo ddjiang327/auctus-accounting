@@ -237,6 +237,7 @@ test.describe('Auctus AI quick entry', () => {
                 entryMode: 'invoice',
                 paymentTerms: 'net_30',
                 invoiceNo: 'INV-AI-42',
+                party: 'New Customer Pty Ltd',
                 missingFields: [],
               },
             },
@@ -254,7 +255,11 @@ test.describe('Auctus AI quick entry', () => {
     const draft = page.locator('.ai-entry-draft');
     await expect(draft).toContainText('2026-06-10');
     await expect(draft).toContainText('2026-07-10');
+    await expect(draft).toContainText('Terms');
+    await expect(draft).toContainText('net_30');
     await expect(draft).toContainText('INV-AI-42');
+    await expect(draft).toContainText('Fill in: contact');
+    await expect(draft).toContainText('New Customer Pty Ltd');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });

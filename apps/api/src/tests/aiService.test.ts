@@ -186,4 +186,29 @@ describe("AI parse draft normalization", () => {
     expect(credit.creditNoteNo).toBe("CN-AI-7");
     expect(credit.invoiceNo).toBeUndefined();
   });
+
+  it("flags invoice party names that did not match a known contact", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 250,
+      accountId: "bank_1",
+      entryMode: "invoice",
+      party: "  New Customer  ",
+      note: "  Setup services  ",
+      missingFields: [],
+    }, context);
+    const cashDraft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 20,
+      accountId: "bank_1",
+      entryMode: "cash",
+      party: "  Officeworks  ",
+      missingFields: [],
+    }, context);
+
+    expect(draft.party).toBe("New Customer");
+    expect(draft.note).toBe("Setup services");
+    expect(draft.missingFields).toContain("contact");
+    expect(cashDraft.missingFields).not.toContain("contact");
+  });
 });

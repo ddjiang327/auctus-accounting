@@ -103,6 +103,7 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
       ? contact.type === 'customer' || contact.type === 'both'
       : contact.type === 'supplier' || contact.type === 'both';
   }) ? raw.contactId : undefined;
+  const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : undefined;
 
   const entryMode = type === 'transfer'
     ? 'cash'
@@ -122,6 +123,9 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     : undefined;
   const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
   const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;
+  if (party && !contactId && (entryMode === 'invoice' || entryMode === 'credit_note')) {
+    missing.push('contact');
+  }
 
   return {
     type,
@@ -132,8 +136,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     categoryId,
     chartAccountId,
     contactId,
-    party: typeof raw.party === 'string' ? raw.party : undefined,
-    note: typeof raw.note === 'string' ? raw.note : undefined,
+    party,
+    note: typeof raw.note === 'string' ? raw.note.trim() || undefined : undefined,
     entryMode,
     gstMode,
     paymentTerms,
