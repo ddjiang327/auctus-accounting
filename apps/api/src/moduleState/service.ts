@@ -85,7 +85,7 @@ export const replaceInventoryModuleState = async (
     action: "update",
     entityType: "inventory",
     entityId: businessId,
-    detail: "Updated inventory module state",
+    detail: "Bulk replaced inventory module state",
     metadata: {
       products: products.length,
       inventoryMovements: inventoryMovements.length,
@@ -131,7 +131,7 @@ export const replacePayrollModuleState = async (
     action: "update",
     entityType: "payroll",
     entityId: businessId,
-    detail: "Updated payroll module state",
+    detail: "Bulk replaced payroll module state",
     metadata: {
       employees: employees.length,
       payRuns: payRuns.length,

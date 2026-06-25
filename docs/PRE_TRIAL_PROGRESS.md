@@ -4,6 +4,23 @@ This note summarizes the recent hardening work completed without requiring local
 
 ## Completed
 
+### 2026-06-25) Inventory/payroll cloud API smoke after Supabase resume
+
+- Supabase project `zvcbnocynsxzyrvxcsbn` was resumed and DNS resolution for `zvcbnocynsxzyrvxcsbn.supabase.co` recovered.
+- Added `tests/e2e/auctus-inventory-payroll-api.spec.ts`.
+- The smoke creates an isolated workspace, exercises granular inventory and payroll endpoints, verifies the final ledger snapshot, and deletes the temporary workspace:
+  - Product create/update/archive.
+  - Negative stock validation.
+  - Purchase order create/send/receive/link supplier bill.
+  - Employee create/update/archive.
+  - Pay run create/finalise.
+  - Remittance and STP submission.
+
+Verification:
+- `npx playwright test tests/e2e/auctus-inventory-payroll-api.spec.ts --project=chromium` passed.
+- `npm run test -w apps/api` passed (12 files, 68 tests).
+- `npm run build` passed.
+
 ### 1) Push RLS hardening migration to remote Supabase
 
 - Confirmed the remote project was behind by one migration and then pushed it:

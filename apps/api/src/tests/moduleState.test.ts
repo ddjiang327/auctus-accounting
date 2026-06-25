@@ -61,6 +61,7 @@ describe("module state persistence", () => {
     });
     expect(mockedRecordAuditEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       entityType: "inventory",
+      detail: "Bulk replaced inventory module state",
     }));
   });
 
@@ -114,6 +115,7 @@ describe("module state persistence", () => {
     });
     expect(mockedRecordAuditEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       entityType: "payroll",
+      detail: "Bulk replaced payroll module state",
     }));
   });
 

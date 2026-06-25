@@ -164,15 +164,10 @@ export default function App() {
     setSyncError({ message, nonce: Date.now() });
   }
 
-  function isModuleStateConflict(error: unknown) {
-    return error instanceof AuctusApiError && error.statusCode === 409 && error.code === 'module_state_conflict';
-  }
-
-  function reportModuleStateConflict(moduleName: 'Inventory' | 'Payroll', error: unknown) {
-    const apiMessage = error instanceof Error ? error.message : `${moduleName} changed in another session.`;
+  function reportBulkModuleStateBlocked(moduleName: 'Inventory' | 'Payroll') {
     setSyncState('error');
     setSyncError({
-      message: `${apiMessage} Your unsaved ${moduleName.toLowerCase()} change was not applied. Reload the workspace before editing again.`,
+      message: `${moduleName} changes are saved through dedicated cloud actions. The workspace was reloaded to avoid replacing the entire ${moduleName.toLowerCase()} state.`,
       nonce: Date.now(),
       actionLabel: 'Reload',
     });
@@ -343,20 +338,8 @@ export default function App() {
       return;
     }
 
-    setData(next);
-    void runAction('Saving inventory…', async () => {
-      const saved = await auctusApi.replaceInventoryModuleState(next);
-      setData(saved);
-      ledgerDataAdapter.save(saved);
-    }).catch((error) => {
-      if (isModuleStateConflict(error)) {
-        reportModuleStateConflict('Inventory', error);
-        void refreshRemoteLedger({ keepConflictNotice: true });
-        return;
-      }
-      reportError(error, 'Inventory save failed.');
-      void refreshRemoteLedger();
-    });
+    reportBulkModuleStateBlocked('Inventory');
+    void refreshRemoteLedger({ keepConflictNotice: true });
   }
 
   function updatePayrollData(next: LedgerData) {
@@ -365,20 +348,8 @@ export default function App() {
       return;
     }
 
-    setData(next);
-    void runAction('Saving payroll…', async () => {
-      const saved = await auctusApi.replacePayrollModuleState(next);
-      setData(saved);
-      ledgerDataAdapter.save(saved);
-    }).catch((error) => {
-      if (isModuleStateConflict(error)) {
-        reportModuleStateConflict('Payroll', error);
-        void refreshRemoteLedger({ keepConflictNotice: true });
-        return;
-      }
-      reportError(error, 'Payroll save failed.');
-      void refreshRemoteLedger();
-    });
+    reportBulkModuleStateBlocked('Payroll');
+    void refreshRemoteLedger({ keepConflictNotice: true });
   }
 
   async function saveInventoryProduct(product: Product, saveMode: 'create' | 'update') {
