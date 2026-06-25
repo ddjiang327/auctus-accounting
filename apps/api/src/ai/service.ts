@@ -28,6 +28,7 @@ export interface ParseDraft {
   entryMode?: 'cash' | 'invoice' | 'credit_note';
   gstMode?: 'inc' | 'exc' | 'free' | null;
   paymentTerms?: string;
+  dueDate?: string;
   missingFields: string[];
   clarification?: string;
 }
@@ -40,6 +41,17 @@ function validDate(value: unknown): value is string {
   return typeof value === 'string'
     && DATE_PATTERN.test(value)
     && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+}
+
+function addDays(dateStr: string, days: number) {
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function dueDateForTerms(dateStr: string, terms?: string) {
+  const days = terms === 'net_7' ? 7 : terms === 'net_14' ? 14 : terms === 'net_30' ? 30 : terms === 'net_60' ? 60 : 0;
+  return addDays(dateStr, days);
 }
 
 function unique(values: string[]) {
@@ -102,10 +114,15 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     ? raw.paymentTerms
     : undefined;
 
+  const date = validDate(raw.date) ? raw.date : ctx.today;
+  const dueDate = entryMode === 'invoice'
+    ? validDate(raw.dueDate) ? raw.dueDate : dueDateForTerms(date, paymentTerms)
+    : undefined;
+
   return {
     type,
     amount,
-    date: validDate(raw.date) ? raw.date : ctx.today,
+    date,
     accountId,
     accountToId: type === 'transfer' ? accountToId : undefined,
     categoryId,
@@ -116,6 +133,7 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     entryMode,
     gstMode,
     paymentTerms,
+    dueDate,
     missingFields: unique(missing),
     clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
   };
@@ -181,6 +199,7 @@ const TOOL_SCHEMA = {
       entryMode: { type: 'string', enum: ['cash', 'invoice', 'credit_note'] },
       gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
       paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
+      dueDate: { type: 'string' },
       missingFields: { type: 'array', items: { type: 'string' } },
       clarification: { type: 'string' },
     },

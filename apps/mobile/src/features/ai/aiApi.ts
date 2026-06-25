@@ -28,6 +28,17 @@ function validDate(value: unknown): value is string {
     && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
 }
 
+function addDays(dateStr: string, days: number) {
+  const date = new Date(`${dateStr}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function dueDateForTerms(dateStr: string, terms?: string) {
+  const days = terms === 'net_7' ? 7 : terms === 'net_14' ? 14 : terms === 'net_30' ? 30 : terms === 'net_60' ? 60 : 0;
+  return addDays(dateStr, days);
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -88,10 +99,15 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     ? raw.paymentTerms
     : undefined;
 
+  const date = validDate(raw.date) ? raw.date : context.today;
+  const dueDate = entryMode === 'invoice'
+    ? validDate(raw.dueDate) ? raw.dueDate : dueDateForTerms(date, paymentTerms)
+    : undefined;
+
   return {
     type,
     amount,
-    date: validDate(raw.date) ? raw.date : context.today,
+    date,
     accountId,
     accountToId: type === 'transfer' ? accountToId : undefined,
     categoryId,
@@ -102,6 +118,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     entryMode,
     gstMode,
     paymentTerms,
+    dueDate,
     missingFields: unique(missing),
     clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
   };
@@ -174,6 +191,7 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
         entryMode: { type: 'string', enum: ['cash', 'invoice', 'credit_note'] },
         gstMode: { type: 'string', enum: ['inc', 'exc', 'free'] },
         paymentTerms: { type: 'string', enum: ['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60'] },
+        dueDate: { type: 'string' },
         missingFields: { type: 'array', items: { type: 'string' } },
         clarification: { type: 'string' },
       },

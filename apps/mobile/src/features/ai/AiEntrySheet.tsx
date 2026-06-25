@@ -251,6 +251,7 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
             <View style={styles.draftFields}>
               {draft.amount != null && <DraftRow label="Amount" value={`$${draft.amount.toFixed(2)}`} />}
               {draft.date ? <DraftRow label="Date" value={draft.date} /> : null}
+              {draft.dueDate ? <DraftRow label="Due" value={draft.dueDate} /> : null}
               {draft.accountId ? <DraftRow label={draft.type === 'transfer' ? 'From' : 'Account'} value={accountLabel(data, draft.accountId)} /> : null}
               {draft.accountToId ? <DraftRow label="To" value={accountLabel(data, draft.accountToId)} /> : null}
               {draft.categoryId ? <DraftRow label="Category" value={categoryLabel(data, draft.categoryId)} /> : null}

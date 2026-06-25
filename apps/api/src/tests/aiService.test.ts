@@ -142,4 +142,22 @@ describe("AI parse draft normalization", () => {
     expect(expense.chartAccountId).toBe("coa_expense");
     expect(income.chartAccountId).toBe("coa_revenue_alt");
   });
+
+  it("derives invoice due date from payment terms", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      entryMode: "invoice",
+      paymentTerms: "net_30",
+      missingFields: [],
+    }, context);
+
+    expect(draft).toMatchObject({
+      entryMode: "invoice",
+      paymentTerms: "net_30",
+      dueDate: "2026-07-10",
+    });
+  });
 });
