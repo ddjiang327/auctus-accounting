@@ -48,6 +48,7 @@ export default function App() {
   const [manualJournalOpen, setManualJournalOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [aiDraft, setAiDraft] = useState<Partial<Transaction> | null>(null);
   const [newEntryType, setNewEntryType] = useState<TransactionType | undefined>(undefined);
   const [newEntryMode, setNewEntryMode] = useState<EntryMode | undefined>(undefined);
   const [payingTx, setPayingTx] = useState<Transaction | null>(null);
@@ -382,6 +383,7 @@ export default function App() {
     });
     setFormOpen(false);
     setEditingTx(null);
+    setAiDraft(null);
     setNewEntryType(undefined);
     setNewEntryMode(undefined);
   }
@@ -679,9 +681,9 @@ export default function App() {
             <Text style={styles.readOnlyText}>Your role can view this workspace on mobile. Bookkeeper writes should use the Web app until mobile supports per-action cloud saves.</Text>
           </View>
         )}
-        {tab === 'home' && <HomeScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setEditingTx(tx); setFormOpen(true); }} />}
-        {tab === 'sales' && <SalesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType('income'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
-        {tab === 'purchases' && <PurchasesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType('expense'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
+        {tab === 'home' && <HomeScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setNewEntryType(undefined); setEditingTx(tx); setFormOpen(true); }} />}
+        {tab === 'sales' && <SalesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setEditingTx(null); setNewEntryType('income'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
+        {tab === 'purchases' && <PurchasesScreen data={data} onEdit={(tx) => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setNewEntryType(undefined); setNewEntryMode(undefined); setEditingTx(tx); setFormOpen(true); }} onPay={(tx) => { if (!ensureCanWriteMobileLedger()) return; setPayingTx(tx); }} onNew={() => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setEditingTx(null); setNewEntryType('expense'); setNewEntryMode(undefined); setFormOpen(true); }} onAllocate={saveAllocatedPayments} onSaveContact={saveContact} onVoid={voidTransaction} onMarkSent={markSent} onNewCredit={(type) => { if (!ensureCanWriteMobileLedger()) return; setAiDraft(null); setEditingTx(null); setNewEntryType(type); setNewEntryMode('credit_note'); setFormOpen(true); }} onApplyCredit={saveCreditAllocations} onVoidPayment={voidPayment} onSaveRecurring={saveRecurringTemplate} onDeleteRecurring={deleteRecurringTemplate} onToggleRecurring={toggleRecurringTemplate} />}
         {tab === 'accounts' && <AccountsScreen data={data} onDataChange={setWritableData} />}
         {tab === 'reports' && <ReportsScreen data={data} onDataChange={setWritableData} />}
         {tab === 'settings' && (
@@ -725,10 +727,10 @@ export default function App() {
       <AddEntryModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onTransaction={() => { if (!ensureCanWriteMobileLedger()) return; setAddOpen(false); setNewEntryType(undefined); setEditingTx(null); setFormOpen(true); }}
+        onTransaction={() => { if (!ensureCanWriteMobileLedger()) return; setAddOpen(false); setAiDraft(null); setNewEntryType(undefined); setEditingTx(null); setFormOpen(true); }}
         onManualJournal={() => { if (!ensureCanWriteMobileLedger()) return; setAddOpen(false); setManualJournalOpen(true); }}
       />
-      <TransactionForm open={formOpen} data={data} tx={editingTx} initialType={newEntryType} initialEntryMode={newEntryMode} onClose={() => { setFormOpen(false); setNewEntryType(undefined); setNewEntryMode(undefined); }} onSave={saveTx} />
+      <TransactionForm open={formOpen} data={data} tx={editingTx} initialType={newEntryType} initialEntryMode={newEntryMode} initialDraft={aiDraft} onClose={() => { setFormOpen(false); setAiDraft(null); setNewEntryType(undefined); setNewEntryMode(undefined); }} onSave={saveTx} />
       <ManualJournalModal open={manualJournalOpen} data={data} onClose={() => setManualJournalOpen(false)} onSave={saveManualJournal} />
       <PaymentModal open={!!payingTx} data={data} tx={payingTx} onClose={() => setPayingTx(null)} onSave={savePayment} />
       {aiOpen && data && (
@@ -736,7 +738,7 @@ export default function App() {
           data={data}
           mode={appMode}
           getToken={getAccessToken}
-          onParsed={(draft) => { if (!ensureCanWriteMobileLedger()) return; setAiOpen(false); setEditingTx(null); if (draft.type) setNewEntryType(draft.type); setFormOpen(true); }}
+          onParsed={(draft) => { if (!ensureCanWriteMobileLedger()) return; setAiOpen(false); setEditingTx(null); setAiDraft(draft); setNewEntryType(draft.type); setNewEntryMode(draft.entryMode); setFormOpen(true); }}
           onClose={() => setAiOpen(false)}
         />
       )}

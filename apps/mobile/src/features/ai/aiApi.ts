@@ -34,12 +34,14 @@ function buildSystemPrompt(ctx: ParseContext): string {
   const expCats = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}`).join('\n');
   const incCats = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}`).join('\n');
   const contacts = ctx.contacts.length ? ctx.contacts.map((c) => `  ${c.id} | ${c.name}`).join('\n') : '  (none)';
+  const coa = ctx.chartOfAccounts.map((a) => `  ${a.id} | ${a.code} ${a.name}`).join('\n');
   return `You are an AI accounting assistant. Parse natural language transaction descriptions into structured entries.
 
 Payment Accounts:\n${accounts}
 Expense Categories:\n${expCats}
 Income Categories:\n${incCats}
 Contacts:\n${contacts}
+Chart of Accounts:\n${coa}
 Today: ${ctx.today}
 GST: ${ctx.gstEnabled ? 'enabled 10%' : 'disabled'}
 

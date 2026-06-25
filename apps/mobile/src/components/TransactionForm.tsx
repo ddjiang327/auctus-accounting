@@ -5,18 +5,20 @@ import { SelectField } from './SelectField';
 import { chartAccountName, clearingAccountId, contactName, defaultChartAccountId, dueDateForTerms, formatCreditNumber, formatDocumentNumber, uid } from '../domain/accounting';
 import type { EntryMode, GsmMode, LedgerData, PaymentTerms, Transaction, TransactionType } from '../domain/models';
 
-export function TransactionForm({ open, data, tx, initialType, initialEntryMode, onClose, onSave }: {
+export function TransactionForm({ open, data, tx, initialType, initialEntryMode, initialDraft, onClose, onSave }: {
   open: boolean;
   data: LedgerData;
   tx: Transaction | null;
   initialType?: TransactionType;
   initialEntryMode?: EntryMode;
+  initialDraft?: Partial<Transaction> | null;
   onClose: () => void;
   onSave: (tx: Transaction) => void;
 }) {
-  const [type, setType] = useState<TransactionType>(tx?.type || initialType || 'expense');
-  const [entryMode, setEntryMode] = useState<EntryMode>(tx?.entryMode || initialEntryMode || 'cash');
-  const [amount, setAmount] = useState(String(tx?.amount || ''));
+  const [type, setType] = useState<TransactionType>(tx?.type || initialDraft?.type || initialType || 'expense');
+  const [entryMode, setEntryMode] = useState<EntryMode>(tx?.entryMode || initialDraft?.entryMode || initialEntryMode || 'cash');
+  const [amount, setAmount] = useState(String(tx?.amount || initialDraft?.amount || ''));
+  const [date, setDate] = useState(tx?.date || initialDraft?.date || new Date().toISOString().slice(0, 10));
   const [categoryId, setCategoryId] = useState(tx?.categoryId || data.categories.expense[0]?.id || '');
   const [chartAccountId, setChartAccountId] = useState(tx?.chartAccountId || defaultChartAccountId(data, tx?.type || 'expense', tx?.categoryId || data.categories.expense[0]?.id));
   const [accountId, setAccountId] = useState(tx?.accountId || data.accounts[0]?.id || '');
@@ -33,25 +35,30 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
 
   useEffect(() => {
     if (!open) return;
-    const nextType = tx?.type || initialType || 'expense';
+    const nextType = tx?.type || initialDraft?.type || initialType || 'expense';
+    const nextDate = tx?.date || initialDraft?.date || new Date().toISOString().slice(0, 10);
+    const nextEntryMode = tx?.entryMode || initialDraft?.entryMode || initialEntryMode || (initialType && initialType !== 'transfer' ? 'invoice' : 'cash');
     setType(nextType);
-    setEntryMode(tx?.entryMode || initialEntryMode || (initialType && initialType !== 'transfer' ? 'invoice' : 'cash'));
-    setAmount(String(tx?.amount || ''));
-    const nextCategoryId = tx?.categoryId || (nextType === 'income' ? data.categories.income[0]?.id : data.categories.expense[0]?.id) || '';
+    setEntryMode(nextEntryMode);
+    setAmount(String(tx?.amount || initialDraft?.amount || ''));
+    setDate(nextDate);
+    const nextCategoryId = tx?.categoryId || initialDraft?.categoryId || (nextType === 'income' ? data.categories.income[0]?.id : data.categories.expense[0]?.id) || '';
     setCategoryId(nextCategoryId);
-    setChartAccountId(tx?.chartAccountId || defaultChartAccountId(data, nextType, nextCategoryId));
-    setAccountId(tx?.accountId || data.accounts[0]?.id || '');
-    setAccountToId(tx?.accountToId || data.accounts[1]?.id || data.accounts[0]?.id || '');
-    setGstMode(tx?.gstMode === undefined ? 'inc' : tx.gstMode);
-    setPaymentTerms(tx?.paymentTerms || 'net_30');
-    setDueDate(tx?.dueDate || dueDateForTerms(tx?.date || new Date().toISOString().slice(0, 10), tx?.paymentTerms || 'net_30'));
-    setInvoiceNo(tx?.invoiceNo || (tx ? '' : formatDocumentNumber(data, nextType)));
-    setCreditNoteNo(tx?.creditNoteNo || (tx ? '' : formatCreditNumber(data, nextType)));
-    setContactId(tx?.contactId || '');
-    setNote(tx?.note || '');
-    setParty(tx?.party || '');
+    setChartAccountId(tx?.chartAccountId || initialDraft?.chartAccountId || defaultChartAccountId(data, nextType, nextCategoryId));
+    setAccountId(tx?.accountId || initialDraft?.accountId || data.accounts[0]?.id || '');
+    setAccountToId(tx?.accountToId || initialDraft?.accountToId || data.accounts[1]?.id || data.accounts[0]?.id || '');
+    setGstMode(tx?.gstMode === undefined ? (initialDraft?.gstMode === undefined ? 'inc' : initialDraft.gstMode) : tx.gstMode);
+    const nextPaymentTerms = tx?.paymentTerms || initialDraft?.paymentTerms || 'net_30';
+    setPaymentTerms(nextPaymentTerms);
+    setDueDate(tx?.dueDate || initialDraft?.dueDate || dueDateForTerms(nextDate, nextPaymentTerms));
+    setInvoiceNo(tx?.invoiceNo || initialDraft?.invoiceNo || (tx ? '' : formatDocumentNumber(data, nextType)));
+    setCreditNoteNo(tx?.creditNoteNo || initialDraft?.creditNoteNo || (tx ? '' : formatCreditNumber(data, nextType)));
+    const nextContactId = tx?.contactId || initialDraft?.contactId || matchContactId(data, nextType, initialDraft?.party);
+    setContactId(nextContactId);
+    setNote(tx?.note || initialDraft?.note || '');
+    setParty(tx?.party || initialDraft?.party || contactName(data, nextContactId) || '');
     setPaidNow('');
-  }, [data, data.accounts, data.categories.expense, data.categories.income, initialEntryMode, initialType, open, tx]);
+  }, [data, data.accounts, data.categories.expense, data.categories.income, initialDraft, initialEntryMode, initialType, open, tx]);
 
   const chartChoices = type === 'income'
     ? data.chartOfAccounts.filter((account) => account.class === 'revenue')
@@ -59,7 +66,6 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
       ? data.chartOfAccounts.filter((account) => account.class === 'expense')
       : [];
   const defaultPaymentAccountId = data.accounts.find((account) => account.type === 'bank' || account.type === 'cash')?.id || data.accounts[0]?.id || '';
-  const txDate = tx?.date || new Date().toISOString().slice(0, 10);
   const contactChoices = (data.contacts || []).filter((contact) => !contact.archivedAt && (
     type === 'income' ? contact.type === 'customer' || contact.type === 'both' : contact.type === 'supplier' || contact.type === 'both'
   ));
@@ -78,7 +84,7 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
       clearingChartAccountId: (entryMode === 'invoice' || isCN) && type !== 'transfer' ? clearingAccountId(data, type) : undefined,
       accountId: entryMode === 'invoice' && type !== 'transfer' ? (tx?.accountId || defaultPaymentAccountId) : isCN ? undefined : accountId,
       accountToId: type === 'transfer' ? accountToId : undefined,
-      date: txDate,
+      date,
       note: note.trim(),
       gstMode: type === 'transfer' ? null : gstMode,
       entryMode: type === 'transfer' ? 'cash' : entryMode,
@@ -90,7 +96,7 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
       dueDate: entryMode === 'invoice' ? dueDate : undefined,
       payments: entryMode === 'invoice' ? [
         ...(tx?.payments || []),
-        ...(Number(paidNow) > 0 ? [{ id: uid('p'), amount: Number(paidNow), date: txDate, accountId }] : []),
+        ...(Number(paidNow) > 0 ? [{ id: uid('p'), amount: Number(paidNow), date, accountId }] : []),
       ] : undefined,
     };
     onSave(next);
@@ -129,6 +135,7 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
               </View>
             ) : null}
             <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="Amount" keyboardType="decimal-pad" />
+            <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="Date YYYY-MM-DD" />
             {type !== 'transfer' ? (
               <>
                 <Text style={styles.fieldLabel}>{type === 'income' ? 'Revenue Account' : 'Expense Account'}</Text>
@@ -196,7 +203,7 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
                       setParty(contact?.name || '');
                       if (entryMode === 'invoice' && contact?.paymentTerms) {
                         setPaymentTerms(contact.paymentTerms);
-                        setDueDate(dueDateForTerms(txDate, contact.paymentTerms));
+                        setDueDate(dueDateForTerms(date, contact.paymentTerms));
                       }
                     }}
                   />
@@ -217,7 +224,7 @@ export function TransactionForm({ open, data, tx, initialType, initialEntryMode,
                         <Pressable
                           key={term}
                           style={[styles.chip, paymentTerms === term && styles.chipSelected]}
-                          onPress={() => { setPaymentTerms(term); setDueDate(dueDateForTerms(txDate, term)); }}
+                          onPress={() => { setPaymentTerms(term); setDueDate(dueDateForTerms(date, term)); }}
                         >
                           <Text style={styles.chipText}>{term === 'due_on_receipt' ? 'Due now' : term.replace('_', ' ').toUpperCase()}</Text>
                         </Pressable>
@@ -257,3 +264,14 @@ const styles = StyleSheet.create({
   lockedValue: { marginTop: 3, color: colors.text, fontSize: 16, fontWeight: '800' },
   lockedDetail: { marginTop: 2, color: colors.muted, fontSize: 12 },
 });
+
+function matchContactId(data: LedgerData, type: TransactionType, party?: string) {
+  const normalized = party?.trim().toLowerCase();
+  if (!normalized) return '';
+  return (data.contacts || []).find((contact) => {
+    if (contact.archivedAt || contact.name.trim().toLowerCase() !== normalized) return false;
+    return type === 'income'
+      ? contact.type === 'customer' || contact.type === 'both'
+      : contact.type === 'supplier' || contact.type === 'both';
+  })?.id || '';
+}
