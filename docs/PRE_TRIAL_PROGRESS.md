@@ -4,6 +4,19 @@ This note summarizes the recent hardening work completed without requiring local
 
 ## Completed
 
+### 2026-06-25) Latest main production deployment verified
+
+- Pushed local `main` to GitHub after the inventory/payroll hardening commits:
+  - `ba9c9a3` Harden inventory payroll cloud flows
+  - `9b232d1` Add inventory payroll UI smoke
+  - `6565201` Add inventory payroll backup restore smoke
+  - `e9de25b` Expand production smoke for inventory payroll
+- Confirmed the Vercel API production deployment reached Ready.
+- Verified production after deployment:
+  - `npm run smoke:production` passed against `https://auctus-web.netlify.app` and `https://auctus-api.vercel.app`, including inventory, payroll, backup, reset, and restore.
+  - `npm run acceptance:production-roles` passed against production.
+  - `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed with 14 checks, 2 warnings, and 0 failures.
+
 ### 2026-06-25) Production inventory/payroll smoke expansion
 
 - Expanded `scripts/production-browser-smoke.mjs` so `npm run smoke:production` now verifies inventory and payroll in production, not only the core contact/category/transaction flow.
