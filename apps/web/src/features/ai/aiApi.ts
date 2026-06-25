@@ -17,6 +17,81 @@ interface ParseContext {
   today: string;
 }
 
+const PAYMENT_TERMS = new Set(['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60']);
+const GST_MODES = new Set(['inc', 'exc', 'free']);
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function validDate(value: unknown): value is string {
+  return typeof value === 'string'
+    && DATE_PATTERN.test(value)
+    && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+}
+
+function unique(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
+  const raw = (input && typeof input === 'object' ? input : {}) as Partial<ParseDraft>;
+  const missing = Array.isArray(raw.missingFields)
+    ? raw.missingFields.filter((field): field is string => typeof field === 'string')
+    : [];
+
+  const type: ParseDraft['type'] = raw.type === 'income' || raw.type === 'transfer' ? raw.type : 'expense';
+  const amount = typeof raw.amount === 'number' && Number.isFinite(raw.amount) && raw.amount > 0 ? raw.amount : 0;
+  if (!amount) missing.push('amount');
+
+  const accountId = context.accounts.some((account) => account.id === raw.accountId) ? raw.accountId : undefined;
+  const accountToId = context.accounts.some((account) => account.id === raw.accountToId) ? raw.accountToId : undefined;
+  if (!accountId) missing.push(type === 'transfer' ? 'source account' : 'account');
+  if (type === 'transfer' && !accountToId) missing.push('destination account');
+
+  const categories = type === 'income' ? context.categories.income : context.categories.expense;
+  const categoryId = type === 'transfer'
+    ? undefined
+    : categories.some((category) => category.id === raw.categoryId) ? raw.categoryId : undefined;
+
+  const chartAccountId = type === 'transfer' ? undefined : context.chartOfAccounts.some((account) => {
+    if (account.id !== raw.chartAccountId) return false;
+    return type === 'income' ? account.class === 'revenue' : account.class === 'expense';
+  }) ? raw.chartAccountId : undefined;
+
+  const contactId = type === 'transfer' ? undefined : context.contacts.some((contact) => {
+    if (contact.id !== raw.contactId) return false;
+    return type === 'income'
+      ? contact.type === 'customer' || contact.type === 'both'
+      : contact.type === 'supplier' || contact.type === 'both';
+  }) ? raw.contactId : undefined;
+
+  const entryMode = type === 'transfer' ? 'cash' : raw.entryMode === 'invoice' ? 'invoice' : 'cash';
+  const gstMode = type === 'transfer' || !context.gstEnabled
+    ? null
+    : GST_MODES.has(String(raw.gstMode))
+      ? raw.gstMode
+      : 'inc';
+  const paymentTerms = entryMode === 'invoice' && PAYMENT_TERMS.has(String(raw.paymentTerms))
+    ? raw.paymentTerms
+    : undefined;
+
+  return {
+    type,
+    amount,
+    date: validDate(raw.date) ? raw.date : context.today,
+    accountId,
+    accountToId: type === 'transfer' ? accountToId : undefined,
+    categoryId,
+    chartAccountId,
+    contactId,
+    party: typeof raw.party === 'string' ? raw.party : undefined,
+    note: typeof raw.note === 'string' ? raw.note : undefined,
+    entryMode,
+    gstMode,
+    paymentTerms,
+    missingFields: unique(missing),
+    clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
+  };
+}
+
 function buildContext(data: LedgerData): ParseContext {
   return {
     accounts: data.accounts,
@@ -114,7 +189,7 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
   const body = await res.json() as { content: Array<{ type: string; name?: string; input?: unknown }> };
   const toolUse = body.content.find((b) => b.type === 'tool_use' && b.name === 'parse_transaction');
   if (!toolUse?.input) throw new Error('AI did not return a result');
-  return toolUse.input as ParseDraft;
+  return normalizeDraft(toolUse.input, context);
 }
 
 export async function parseTransactionText(
