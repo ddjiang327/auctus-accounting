@@ -17,12 +17,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: ['**/auctus-local-backup.spec.ts', '**/auctus-role-ui.spec.ts'],
+      testIgnore: ['**/auctus-ai-entry.spec.ts', '**/auctus-local-backup.spec.ts', '**/auctus-role-ui.spec.ts'],
     },
     {
       name: 'local-mode',
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5174' },
-      testMatch: ['**/auctus-local-backup.spec.ts', '**/auctus-lazy-navigation.spec.ts'],
+      testMatch: ['**/auctus-ai-entry.spec.ts', '**/auctus-local-backup.spec.ts', '**/auctus-lazy-navigation.spec.ts'],
     },
     {
       name: 'role-ui',
@@ -44,7 +44,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'VITE_SUPABASE_URL="" VITE_SUPABASE_ANON_KEY="" npm run dev -w apps/web -- --host 127.0.0.1 --port 5174',
+      command: 'VITE_SUPABASE_URL="" VITE_SUPABASE_ANON_KEY="" VITE_ANTHROPIC_API_KEY="test-ai-entry-key" npm run dev -w apps/web -- --host 127.0.0.1 --port 5174',
       url: 'http://127.0.0.1:5174',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
