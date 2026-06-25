@@ -115,4 +115,58 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Date')).toHaveValue(today);
     await expect(modal.getByLabel('GST')).toHaveValue('inc');
   });
+
+  test('does not include archived categories in local AI context', async ({ page }) => {
+    let requestSystemPrompt = '';
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      const body = route.request().postDataJSON() as { system?: string };
+      requestSystemPrompt = body.system || '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_active_context',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 12,
+                accountId: 'a1',
+                categoryId: 'e_other',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('auctus_react_data_v1');
+      if (!raw) throw new Error('Ledger data was not saved.');
+      const ledger = JSON.parse(raw);
+      ledger.categories.expense.push({
+        id: 'e_archived_ai_context',
+        name: 'Archived AI Context Category',
+        icon: 'X',
+        color: '#000000',
+        archivedAt: '2026-06-01T00:00:00.000Z',
+      });
+      localStorage.setItem('auctus_react_data_v1', JSON.stringify(ledger));
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('context check');
+    await page.getByRole('button', { name: /Parse/i }).click();
+    await expect(page.locator('.ai-entry-draft')).toContainText('$12.00');
+
+    expect(requestSystemPrompt).toContain('Other');
+    expect(requestSystemPrompt).not.toContain('Archived AI Context Category');
+    expect(requestSystemPrompt).not.toContain('e_archived_ai_context');
+  });
 });

@@ -95,7 +95,10 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
 function buildContext(data: LedgerData): ParseContext {
   return {
     accounts: data.accounts,
-    categories: data.categories,
+    categories: {
+      income: data.categories.income.filter((category) => !category.archivedAt),
+      expense: data.categories.expense.filter((category) => !category.archivedAt),
+    },
     contacts: data.contacts.filter((c) => !c.archivedAt),
     chartOfAccounts: data.chartOfAccounts,
     gstEnabled: data.settings.gstEnabled ?? false,
