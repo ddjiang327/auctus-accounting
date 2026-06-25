@@ -4,6 +4,25 @@ This note summarizes the recent hardening work completed without requiring local
 
 ## Completed
 
+### 2026-06-25) Production inventory/payroll smoke expansion
+
+- Expanded `scripts/production-browser-smoke.mjs` so `npm run smoke:production` now verifies inventory and payroll in production, not only the core contact/category/transaction flow.
+- The production smoke creates a temporary confirmed Supabase user and temporary workspace on production, then verifies:
+  - Contact, category, and transaction creation.
+  - Product, purchase order, stock receipt, and sale movement.
+  - Employee, finalised pay run, PAYG remittance, and STP submission.
+  - Backup JSON contains all core accounting, inventory, and payroll markers.
+  - Backend reset removes the markers.
+  - Restore brings the markers back.
+- Updated `scripts/production-role-acceptance.mjs` to handle the production mode selector before login and to wait on accessible headings.
+
+Verification:
+- `npm run smoke:production` passed against `https://auctus-web.netlify.app` and `https://auctus-api.vercel.app`.
+- `npm run acceptance:production-roles` passed against production.
+- `AUCTUS_PRODUCTION_WEB_URL=https://auctus-web.netlify.app AUCTUS_PRODUCTION_API_URL=https://auctus-api.vercel.app AUCTUS_PRODUCTION_API_CORS_ORIGIN=https://auctus-web.netlify.app npm run audit:production` passed with 14 checks, 2 warnings, and 0 failures.
+- `npm run test -w apps/api` passed (12 files, 68 tests).
+- `npm run build` passed.
+
 ### 2026-06-25) Inventory/payroll backup reset restore smoke
 
 - Added `tests/e2e/auctus-inventory-payroll-backup-restore.spec.ts`.

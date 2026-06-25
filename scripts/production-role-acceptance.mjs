@@ -108,6 +108,10 @@ async function signIn(user) {
     sessionStorage.clear();
   });
   await page.reload({ waitUntil: 'networkidle' });
+  const cloudModeButton = page.getByRole('button', { name: /Sign in.*Cloud Sync/i });
+  if (await cloudModeButton.isVisible().catch(() => false)) {
+    await cloudModeButton.click();
+  }
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill(user.password);
   await page.locator('form.auth-form').getByRole('button', { name: /^Sign In$/ }).click();
@@ -126,7 +130,7 @@ async function clickNav(name) {
 }
 
 async function waitForHeading(name) {
-  await page.locator('h1', { hasText: name }).waitFor({ state: 'visible', timeout: 20_000 });
+  await page.getByRole('heading', { name }).first().waitFor({ state: 'visible', timeout: 20_000 });
 }
 
 async function verifyBookkeeper() {
