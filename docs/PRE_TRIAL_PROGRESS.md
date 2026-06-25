@@ -4,6 +4,21 @@ This note summarizes the recent hardening work completed without requiring local
 
 ## Completed
 
+### 2026-06-25) Inventory/payroll backup reset restore smoke
+
+- Added `tests/e2e/auctus-inventory-payroll-backup-restore.spec.ts`.
+- The smoke signs in through the Web UI, creates an isolated workspace, creates inventory and payroll records, downloads a backup, resets the backend ledger, restores the backup, verifies the records returned, and deletes the temporary workspace:
+  - Product, purchase order, stock receipt, and sale movement.
+  - Employee, finalised pay run, PAYG remittance, and STP submission.
+  - Backup JSON contains the inventory/payroll markers before reset.
+  - Reset removes the markers from the workspace.
+  - Restore brings the inventory/payroll markers back.
+
+Verification:
+- `npx playwright test tests/e2e/auctus-inventory-payroll-backup-restore.spec.ts --project=chromium` passed.
+- `npm run test -w apps/api` passed (12 files, 68 tests).
+- `npm run build` passed.
+
 ### 2026-06-25) Inventory/payroll cloud UI smoke
 
 - Added `tests/e2e/auctus-inventory-payroll-ui.spec.ts`.
