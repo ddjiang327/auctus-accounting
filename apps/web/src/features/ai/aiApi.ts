@@ -130,11 +130,15 @@ function normalizeName(value?: string) {
   return value?.trim().toLowerCase();
 }
 
-function matchByIdOrName<T extends { id: string; name: string }>(items: T[], value?: string) {
+function matchByIdOrName<T extends { id: string; name: string }>(items: T[], value?: string): { item?: T; ambiguous: boolean } {
   const normalized = normalizeName(value);
-  if (!normalized) return undefined;
-  return items.find((item) => item.id === value)
-    || items.find((item) => normalizeName(item.name) === normalized);
+  if (!normalized) return { ambiguous: false };
+  const idMatch = items.find((item) => item.id === value);
+  if (idMatch) return { item: idMatch, ambiguous: false };
+  const nameMatches = items.filter((item) => normalizeName(item.name) === normalized);
+  return nameMatches.length === 1
+    ? { item: nameMatches[0], ambiguous: false }
+    : { ambiguous: nameMatches.length > 1 };
 }
 
 function contactSupportsType(contact: ParseContext['contacts'][number], type: ParseDraft['type']) {
@@ -142,6 +146,24 @@ function contactSupportsType(contact: ParseContext['contacts'][number], type: Pa
   return type === 'income'
     ? contact.type === 'customer' || contact.type === 'both'
     : contact.type === 'supplier' || contact.type === 'both';
+}
+
+function matchContactByIdOrParty(
+  contacts: ParseContext['contacts'],
+  type: ParseDraft['type'],
+  contactId?: string,
+  party?: string,
+): { item?: ParseContext['contacts'][number]; ambiguous: boolean } {
+  if (type === 'transfer') return { item: undefined, ambiguous: false };
+  const supportedContacts = contacts.filter((contact) => contactSupportsType(contact, type));
+  const idMatch = supportedContacts.find((contact) => contact.id === contactId);
+  if (idMatch) return { item: idMatch, ambiguous: false };
+  const partyName = normalizeName(party);
+  if (!partyName) return { item: undefined, ambiguous: false };
+  const nameMatches = supportedContacts.filter((contact) => normalizeName(contact.name) === partyName);
+  return nameMatches.length === 1
+    ? { item: nameMatches[0], ambiguous: false }
+    : { item: undefined, ambiguous: nameMatches.length > 1 };
 }
 
 function normalizeTransactionType(value: unknown): ParseDraft['type'] {
@@ -163,13 +185,18 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const amount = parseAmount(raw.amount);
   if (!amount) missing.push('amount');
 
-  const accountId = matchByIdOrName(context.accounts, raw.accountId)?.id;
-  const accountToId = matchByIdOrName(context.accounts, raw.accountToId)?.id;
+  const accountMatch = matchByIdOrName(context.accounts, raw.accountId);
+  const accountToMatch = matchByIdOrName(context.accounts, raw.accountToId);
+  const accountId = accountMatch.item?.id;
+  const accountToId = accountToMatch.item?.id;
   if (!accountId) missing.push(type === 'transfer' ? 'source account' : 'account');
   if (type === 'transfer' && !accountToId) missing.push('destination account');
 
   const categories = type === 'income' ? context.categories.income : context.categories.expense;
-  const category = type === 'transfer' ? undefined : matchByIdOrName(categories, raw.categoryId);
+  const categoryMatch = type === 'transfer'
+    ? { item: undefined, ambiguous: false }
+    : matchByIdOrName(categories, raw.categoryId);
+  const category = categoryMatch.item;
   const categoryId = category?.id;
   if (type !== 'transfer' && !categoryId) missing.push('category');
 
@@ -184,11 +211,8 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const chartAccountId = categoryChartAccountId || parsedChartAccountId || defaultChartAccountId(context, type);
 
   const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : undefined;
-  const partyName = normalizeName(party);
-  const matchedContact = type === 'transfer'
-    ? undefined
-    : context.contacts.find((contact) => contact.id === raw.contactId && contactSupportsType(contact, type))
-      || context.contacts.find((contact) => partyName && normalizeName(contact.name) === partyName && contactSupportsType(contact, type));
+  const contactMatch = matchContactByIdOrParty(context.contacts, type, raw.contactId, party);
+  const matchedContact = contactMatch.item;
   const contactId = matchedContact?.id;
 
   const entryMode = type === 'transfer'

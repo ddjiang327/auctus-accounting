@@ -113,6 +113,68 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Note')).toHaveValue('AI returned labels');
   });
 
+  test('asks for confirmation when local AI label matches are ambiguous', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_ambiguous_label_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 64,
+                date: '2026-06-19',
+                accountId: 'Everyday Account',
+                categoryId: 'Other',
+                note: 'AI returned ambiguous labels',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('auctus_react_data_v1');
+      if (!raw) throw new Error('Ledger data was not saved.');
+      const ledger = JSON.parse(raw);
+      ledger.accounts.push({
+        id: 'a_duplicate_everyday',
+        name: 'Everyday Account',
+        type: 'bank',
+        initBalance: 0,
+        icon: 'B',
+        color: '#111111',
+        chartAccountId: 'coa_1010',
+      });
+      ledger.categories.expense.push({
+        id: 'e_duplicate_other',
+        name: 'Other',
+        icon: 'O',
+        color: '#222222',
+      });
+      localStorage.setItem('auctus_react_data_v1', JSON.stringify(ledger));
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Spent $64 from Everyday Account, other');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('$64.00');
+    await expect(draft).toContainText('Fill in: account, category');
+    await expect(draft).toContainText('Can you confirm the account, category?');
+    await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
+  });
+
   test('normalizes natural language transaction types from local AI output', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({

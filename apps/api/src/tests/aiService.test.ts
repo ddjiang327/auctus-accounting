@@ -190,6 +190,37 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("asks for confirmation instead of choosing ambiguous account or category names", () => {
+    const draft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 88,
+      accountId: "Everyday Account",
+      categoryId: "Office Supplies",
+      missingFields: [],
+    }, {
+      ...context,
+      accounts: [
+        ...context.accounts,
+        { id: "bank_2", name: "Everyday Account", type: "bank" },
+      ],
+      categories: {
+        ...context.categories,
+        expense: [
+          ...context.categories.expense,
+          { id: "expense_office_alt", name: "Office Supplies" },
+        ],
+      },
+    });
+
+    expect(draft).toMatchObject({
+      amount: 88,
+      accountId: undefined,
+      categoryId: undefined,
+    });
+    expect(draft.missingFields).toEqual(["account", "category"]);
+    expect(draft.clarification).toBe("Can you confirm the account, category?");
+  });
+
   it("normalizes strict amount strings but rejects vague amount text", () => {
     const amountString = __testing.normalizeDraft({
       type: "expense",
