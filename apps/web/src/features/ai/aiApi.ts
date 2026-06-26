@@ -50,6 +50,17 @@ function defaultChartAccountId(context: ParseContext, type: ParseDraft['type']):
     || context.chartOfAccounts.find((account) => account.class === expectedClass)?.id;
 }
 
+function normalizeName(value?: string) {
+  return value?.trim().toLowerCase();
+}
+
+function contactSupportsType(contact: ParseContext['contacts'][number], type: ParseDraft['type']) {
+  if (type === 'transfer') return false;
+  return type === 'income'
+    ? contact.type === 'customer' || contact.type === 'both'
+    : contact.type === 'supplier' || contact.type === 'both';
+}
+
 function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const raw = (input && typeof input === 'object' ? input : {}) as Partial<ParseDraft>;
   const missing = Array.isArray(raw.missingFields)
@@ -79,13 +90,13 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   }) ? raw.chartAccountId : undefined;
   const chartAccountId = categoryChartAccountId || parsedChartAccountId || defaultChartAccountId(context, type);
 
-  const contactId = type === 'transfer' ? undefined : context.contacts.some((contact) => {
-    if (contact.id !== raw.contactId) return false;
-    return type === 'income'
-      ? contact.type === 'customer' || contact.type === 'both'
-      : contact.type === 'supplier' || contact.type === 'both';
-  }) ? raw.contactId : undefined;
   const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : undefined;
+  const partyName = normalizeName(party);
+  const matchedContact = type === 'transfer'
+    ? undefined
+    : context.contacts.find((contact) => contact.id === raw.contactId && contactSupportsType(contact, type))
+      || context.contacts.find((contact) => partyName && normalizeName(contact.name) === partyName && contactSupportsType(contact, type));
+  const contactId = matchedContact?.id;
 
   const entryMode = type === 'transfer'
     ? 'cash'
@@ -95,9 +106,12 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     : GST_MODES.has(String(raw.gstMode))
       ? raw.gstMode
       : 'inc';
+  const contactPaymentTerms = PAYMENT_TERMS.has(String(matchedContact?.paymentTerms)) ? matchedContact?.paymentTerms : undefined;
   const paymentTerms = entryMode === 'invoice' && PAYMENT_TERMS.has(String(raw.paymentTerms))
     ? raw.paymentTerms
-    : undefined;
+    : entryMode === 'invoice'
+      ? contactPaymentTerms
+      : undefined;
 
   const date = validDate(raw.date) ? raw.date : context.today;
   const dueDate = entryMode === 'invoice'
@@ -163,7 +177,7 @@ function buildSystemPrompt(ctx: ParseContext): string {
   const accounts = ctx.accounts.map((a) => `  ${a.id} | ${a.name} (${a.type})`).join('\n');
   const expCats = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
   const incCats = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
-  const contacts = ctx.contacts.length ? ctx.contacts.map((c) => `  ${c.id} | ${c.name}`).join('\n') : '  (none)';
+  const contacts = ctx.contacts.length ? ctx.contacts.map((c) => `  ${c.id} | ${c.name} (${c.type}${c.paymentTerms ? `, terms=${c.paymentTerms}` : ''})`).join('\n') : '  (none)';
   const coa = ctx.chartOfAccounts.map((a) => `  ${a.id} | ${a.code} ${a.name}`).join('\n');
   return `You are an AI accounting assistant. Parse natural language transaction descriptions into structured entries.
 

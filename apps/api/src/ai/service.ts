@@ -2,7 +2,7 @@ import type { ApiEnv } from '../config/env.js';
 
 interface Account { id: string; name: string; type: string; }
 interface Category { id: string; name: string; chartAccountId?: string; }
-interface Contact { id: string; name: string; type: string; }
+interface Contact { id: string; name: string; type: string; paymentTerms?: string; }
 interface ChartAccount { id: string; code: string; name: string; class: string; }
 
 export interface ParseContext {
@@ -68,6 +68,17 @@ function defaultChartAccountId(ctx: ParseContext, type: ParseDraft['type']): str
     || ctx.chartOfAccounts.find((account) => account.class === expectedClass)?.id;
 }
 
+function normalizeName(value?: string) {
+  return value?.trim().toLowerCase();
+}
+
+function contactSupportsType(contact: Contact, type: ParseDraft['type']) {
+  if (type === 'transfer') return false;
+  return type === 'income'
+    ? contact.type === 'customer' || contact.type === 'both'
+    : contact.type === 'supplier' || contact.type === 'both';
+}
+
 function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const raw = (input && typeof input === 'object' ? input : {}) as Partial<ParseDraft>;
   const missing = Array.isArray(raw.missingFields)
@@ -97,13 +108,13 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   }) ? raw.chartAccountId : undefined;
   const chartAccountId = categoryChartAccountId || parsedChartAccountId || defaultChartAccountId(ctx, type);
 
-  const contactId = type === 'transfer' ? undefined : ctx.contacts.some((contact) => {
-    if (contact.id !== raw.contactId) return false;
-    return type === 'income'
-      ? contact.type === 'customer' || contact.type === 'both'
-      : contact.type === 'supplier' || contact.type === 'both';
-  }) ? raw.contactId : undefined;
   const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : undefined;
+  const partyName = normalizeName(party);
+  const matchedContact = type === 'transfer'
+    ? undefined
+    : ctx.contacts.find((contact) => contact.id === raw.contactId && contactSupportsType(contact, type))
+      || ctx.contacts.find((contact) => partyName && normalizeName(contact.name) === partyName && contactSupportsType(contact, type));
+  const contactId = matchedContact?.id;
 
   const entryMode = type === 'transfer'
     ? 'cash'
@@ -113,9 +124,12 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     : GST_MODES.has(String(raw.gstMode))
       ? raw.gstMode as ParseDraft['gstMode']
       : 'inc';
+  const contactPaymentTerms = PAYMENT_TERMS.has(String(matchedContact?.paymentTerms)) ? matchedContact?.paymentTerms : undefined;
   const paymentTerms = entryMode === 'invoice' && PAYMENT_TERMS.has(String(raw.paymentTerms))
     ? raw.paymentTerms
-    : undefined;
+    : entryMode === 'invoice'
+      ? contactPaymentTerms
+      : undefined;
 
   const date = validDate(raw.date) ? raw.date : ctx.today;
   const dueDate = entryMode === 'invoice'
@@ -154,7 +168,7 @@ function buildSystemPrompt(ctx: ParseContext): string {
   const expenseCategories = ctx.categories.expense.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
   const incomeCategories = ctx.categories.income.map((c) => `  ${c.id} | ${c.name}${c.chartAccountId ? ` | chartAccount=${c.chartAccountId}` : ''}`).join('\n');
   const contacts = ctx.contacts.length
-    ? ctx.contacts.map((c) => `  ${c.id} | ${c.name} (${c.type})`).join('\n')
+    ? ctx.contacts.map((c) => `  ${c.id} | ${c.name} (${c.type}${c.paymentTerms ? `, terms=${c.paymentTerms}` : ''})`).join('\n')
     : '  (none)';
   const chartOfAccounts = ctx.chartOfAccounts.map((a) => `  ${a.id} | ${a.code} ${a.name} [${a.class}]`).join('\n');
 

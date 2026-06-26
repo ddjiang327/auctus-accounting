@@ -11,8 +11,8 @@ const context: ParseContext = {
     expense: [{ id: "expense_office", name: "Office Supplies" }],
   },
   contacts: [
-    { id: "cust_1", name: "Customer Co", type: "customer" },
-    { id: "supp_1", name: "Supplier Co", type: "supplier" },
+    { id: "cust_1", name: "Customer Co", type: "customer", paymentTerms: "net_14" },
+    { id: "supp_1", name: "Supplier Co", type: "supplier", paymentTerms: "net_60" },
   ],
   chartOfAccounts: [
     { id: "coa_revenue", code: "4000", name: "Sales Revenue", class: "revenue" },
@@ -210,5 +210,49 @@ describe("AI parse draft normalization", () => {
     expect(draft.note).toBe("Setup services");
     expect(draft.missingFields).toContain("contact");
     expect(cashDraft.missingFields).not.toContain("contact");
+  });
+
+  it("matches invoice parties to known contacts and applies default terms", () => {
+    const customerInvoice = __testing.normalizeDraft({
+      type: "income",
+      amount: 250,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      entryMode: "invoice",
+      party: " customer co ",
+      missingFields: [],
+    }, context);
+    const supplierBill = __testing.normalizeDraft({
+      type: "expense",
+      amount: 125,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      entryMode: "invoice",
+      party: "Supplier Co",
+      missingFields: [],
+    }, context);
+    const wrongType = __testing.normalizeDraft({
+      type: "income",
+      amount: 125,
+      accountId: "bank_1",
+      entryMode: "invoice",
+      party: "Supplier Co",
+      missingFields: [],
+    }, context);
+
+    expect(customerInvoice).toMatchObject({
+      contactId: "cust_1",
+      paymentTerms: "net_14",
+      dueDate: "2026-06-24",
+      missingFields: [],
+    });
+    expect(supplierBill).toMatchObject({
+      contactId: "supp_1",
+      paymentTerms: "net_60",
+      dueDate: "2026-08-09",
+      missingFields: [],
+    });
+    expect(wrongType.contactId).toBeUndefined();
+    expect(wrongType.missingFields).toContain("contact");
   });
 });
