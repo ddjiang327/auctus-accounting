@@ -105,8 +105,8 @@ test.describe('Auctus AI quick entry', () => {
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
-    await expect(draft).toContainText('Fill in: amount, account');
-    await expect(draft).toContainText('Can you confirm the amount, account?');
+    await expect(draft).toContainText('Fill in: amount, account, category');
+    await expect(draft).toContainText('Can you confirm the amount, account, category?');
     await expect(draft).toContainText(today);
     await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
     await expect(page.locator('.sheet').filter({ hasText: 'New Transaction' })).toHaveCount(0);
@@ -157,16 +157,16 @@ test.describe('Auctus AI quick entry', () => {
     await page.locator('.ai-entry-textarea').fill('Bought printer paper on 2026-06-18');
     await page.getByRole('button', { name: /Parse/i }).click();
     const draft = page.locator('.ai-entry-draft');
-    await expect(draft).toContainText('Can you confirm the amount, account?');
+    await expect(draft).toContainText('Can you confirm the amount, account, category?');
     await expect(draft).toContainText('Officeworks printer paper');
 
-    await page.locator('.ai-entry-textarea').fill('$123.45 from Everyday Account');
+    await page.locator('.ai-entry-textarea').fill('$123.45 from Everyday Account, category Other');
     await page.getByRole('button', { name: /Update draft/i }).click();
 
     expect(clarificationPrompt).toContain('Current draft JSON');
     expect(clarificationPrompt).toContain('Officeworks printer paper');
     expect(clarificationPrompt).toContain('User clarification');
-    expect(clarificationPrompt).toContain('$123.45 from Everyday Account');
+    expect(clarificationPrompt).toContain('$123.45 from Everyday Account, category Other');
 
     await expect(draft).toContainText('$123.45');
     await expect(draft).toContainText('Everyday Account');

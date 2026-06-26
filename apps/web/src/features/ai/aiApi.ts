@@ -84,6 +84,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const categories = type === 'income' ? context.categories.income : context.categories.expense;
   const category = type === 'transfer' ? undefined : categories.find((item) => item.id === raw.categoryId);
   const categoryId = category?.id;
+  if (type !== 'transfer' && !categoryId) missing.push('category');
 
   const categoryChartAccountId = category?.chartAccountId && context.chartOfAccounts.some((account) => {
     if (account.id !== category.chartAccountId) return false;

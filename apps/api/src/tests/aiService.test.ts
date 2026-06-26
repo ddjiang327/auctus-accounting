@@ -58,6 +58,7 @@ describe("AI parse draft normalization", () => {
       type: "expense",
       amount: 0,
       accountId: "bank_1",
+      categoryId: "expense_office",
       missingFields: ["amount"],
       clarification: "What was the total paid?",
     }, context);
@@ -85,8 +86,8 @@ describe("AI parse draft normalization", () => {
       amount: 123.45,
       accountId: "bank_1",
       note: "Officeworks printer paper",
-      missingFields: [],
-      clarification: undefined,
+      missingFields: ["category"],
+      clarification: "Can you confirm the category?",
     });
   });
 
@@ -163,7 +164,7 @@ describe("AI parse draft normalization", () => {
     });
   });
 
-  it("fills a default chart account when AI omits one", () => {
+  it("fills a default chart account but still requires a category when AI omits one", () => {
     const expense = __testing.normalizeDraft({
       type: "expense",
       amount: 35,
@@ -178,7 +179,9 @@ describe("AI parse draft normalization", () => {
     }, context);
 
     expect(expense.chartAccountId).toBe("coa_expense");
+    expect(expense.missingFields).toContain("category");
     expect(income.chartAccountId).toBe("coa_revenue_alt");
+    expect(income.missingFields).toContain("category");
   });
 
   it("derives invoice due date from payment terms", () => {
@@ -256,6 +259,7 @@ describe("AI parse draft normalization", () => {
       amount: 250,
       date: "2026-06-10",
       accountId: "bank_1",
+      categoryId: "income_sales",
       entryMode: "invoice",
       party: " customer co ",
       missingFields: [],
@@ -265,6 +269,7 @@ describe("AI parse draft normalization", () => {
       amount: 125,
       date: "2026-06-10",
       accountId: "bank_1",
+      categoryId: "expense_office",
       entryMode: "invoice",
       party: "Supplier Co",
       missingFields: [],
@@ -273,6 +278,7 @@ describe("AI parse draft normalization", () => {
       type: "income",
       amount: 125,
       accountId: "bank_1",
+      categoryId: "income_sales",
       entryMode: "invoice",
       party: "Supplier Co",
       missingFields: [],
