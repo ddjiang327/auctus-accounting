@@ -211,6 +211,15 @@ function matchContactByIdOrParty(contacts: Contact[], type: ParseDraft['type'], 
     : { item: undefined, ambiguous: nameMatches.length > 1 };
 }
 
+function partyFromContactHint(contactId?: string) {
+  const trimmed = contactId?.trim();
+  if (!trimmed) return undefined;
+  const label = trimmed.includes('|') ? trimmed.split('|').slice(1).join('|').trim() : trimmed;
+  const withoutSuffix = label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (!withoutSuffix || (!trimmed.includes('|') && !/\s/.test(withoutSuffix))) return undefined;
+  return withoutSuffix;
+}
+
 function normalizeTransactionType(value: unknown): ParseDraft['type'] {
   const normalized = normalizeName(String(value ?? '')) || '';
   if (normalized === 'income' || normalized === 'expense' || normalized === 'transfer') return normalized;
@@ -256,7 +265,7 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   }) ? raw.chartAccountId : undefined;
   const chartAccountId = categoryChartAccountId || parsedChartAccountId || defaultChartAccountId(ctx, type);
 
-  const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : undefined;
+  const party = typeof raw.party === 'string' ? raw.party.trim() || undefined : partyFromContactHint(raw.contactId);
   const contactMatch = matchContactByIdOrParty(ctx.contacts, type, raw.contactId, party);
   const matchedContact = contactMatch.item;
   const contactId = matchedContact?.id;

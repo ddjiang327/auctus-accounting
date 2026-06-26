@@ -733,6 +733,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(draft).toContainText('INV-AI-42');
     await expect(draft).toContainText('Fill in: contact');
     await expect(draft).toContainText('Can you confirm the contact?');
+    await expect(draft).toContainText('New Customer Pty Ltd');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });

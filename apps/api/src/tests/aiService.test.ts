@@ -611,6 +611,7 @@ describe("AI parse draft normalization", () => {
     }, context);
 
     expect(draft.contactId).toBeUndefined();
+    expect(draft.party).toBe("Unknown Customer");
     expect(draft.missingFields).toContain("contact");
     expect(draft.clarification).toBe("Can you confirm the contact?");
   });
