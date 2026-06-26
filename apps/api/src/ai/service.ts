@@ -77,6 +77,13 @@ function normalizeName(value?: string) {
   return value?.trim().toLowerCase();
 }
 
+function matchByIdOrName<T extends { id: string; name: string }>(items: T[], value?: string) {
+  const normalized = normalizeName(value);
+  if (!normalized) return undefined;
+  return items.find((item) => item.id === value)
+    || items.find((item) => normalizeName(item.name) === normalized);
+}
+
 function contactSupportsType(contact: Contact, type: ParseDraft['type']) {
   if (type === 'transfer') return false;
   return type === 'income'
@@ -94,13 +101,13 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const amount = typeof raw.amount === 'number' && Number.isFinite(raw.amount) && raw.amount > 0 ? raw.amount : 0;
   if (!amount) missing.push('amount');
 
-  const accountId = ctx.accounts.some((account) => account.id === raw.accountId) ? raw.accountId : undefined;
-  const accountToId = ctx.accounts.some((account) => account.id === raw.accountToId) ? raw.accountToId : undefined;
+  const accountId = matchByIdOrName(ctx.accounts, raw.accountId)?.id;
+  const accountToId = matchByIdOrName(ctx.accounts, raw.accountToId)?.id;
   if (!accountId) missing.push(type === 'transfer' ? 'source account' : 'account');
   if (type === 'transfer' && !accountToId) missing.push('destination account');
 
   const categories = type === 'income' ? ctx.categories.income : ctx.categories.expense;
-  const category = type === 'transfer' ? undefined : categories.find((item) => item.id === raw.categoryId);
+  const category = type === 'transfer' ? undefined : matchByIdOrName(categories, raw.categoryId);
   const categoryId = category?.id;
   if (type !== 'transfer' && !categoryId) missing.push('category');
 

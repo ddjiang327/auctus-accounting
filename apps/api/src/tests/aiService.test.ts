@@ -119,6 +119,34 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("matches account and category names when AI returns labels instead of ids", () => {
+    const draft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 49,
+      accountId: "everyday account",
+      categoryId: "office supplies",
+      missingFields: [],
+    }, context);
+    const transfer = __testing.normalizeDraft({
+      type: "transfer",
+      amount: 100,
+      accountId: "Everyday Account",
+      accountToId: "petty cash",
+      missingFields: [],
+    }, context);
+
+    expect(draft).toMatchObject({
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    });
+    expect(transfer).toMatchObject({
+      accountId: "bank_1",
+      accountToId: "cash_1",
+      missingFields: [],
+    });
+  });
+
   it("preserves credit note entry mode for non-transfer drafts", () => {
     const draft = __testing.normalizeDraft({
       type: "income",
