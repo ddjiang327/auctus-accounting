@@ -512,6 +512,44 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-04');
   });
 
+  test('asks for confirmation when local AI entry mode is unsupported', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_unsupported_entry_mode_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 220,
+                date: '2026-06-20',
+                accountId: 'a2',
+                categoryId: 'e_util',
+                entryMode: 'quote',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Expense quote $220');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('Fill in: entry mode');
+    await expect(draft).toContainText('Can you confirm the entry mode?');
+    await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
+  });
+
   test('blocks incomplete local AI drafts from opening the form', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
@@ -549,8 +587,8 @@ test.describe('Auctus AI quick entry', () => {
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
-    await expect(draft).toContainText('Fill in: account, category, GST');
-    await expect(draft).toContainText('Can you confirm the account, category, GST?');
+    await expect(draft).toContainText('Fill in: account, category, entry mode, GST');
+    await expect(draft).toContainText('Can you confirm the account, category, entry mode, GST?');
     await expect(draft).toContainText(today);
     await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
     await expect(page.locator('.sheet').filter({ hasText: 'New Transaction' })).toHaveCount(0);

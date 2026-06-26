@@ -278,9 +278,12 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const matchedContact = contactMatch.item;
   const contactId = matchedContact?.id;
 
+  const parsedEntryMode = normalizeEntryMode(raw.entryMode);
+  const hasEntryModeHint = raw.entryMode !== undefined && String(raw.entryMode).trim() !== '';
+  if (type !== 'transfer' && hasEntryModeHint && !parsedEntryMode) missing.push('entry mode');
   const entryMode = type === 'transfer'
     ? 'cash'
-    : normalizeEntryMode(raw.entryMode) || 'cash';
+    : parsedEntryMode || 'cash';
   const parsedGstMode = normalizeGstMode(raw.gstMode);
   const hasGstHint = raw.gstMode !== undefined && String(raw.gstMode).trim() !== '';
   if (type !== 'transfer' && ctx.gstEnabled && hasGstHint && !parsedGstMode) missing.push('GST');

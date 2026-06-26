@@ -49,8 +49,8 @@ describe("AI parse draft normalization", () => {
       entryMode: "cash",
       gstMode: "inc",
     });
-    expect(draft.missingFields).toEqual(["category", "amount", "account", "GST"]);
-    expect(draft.clarification).toBe("Can you confirm the category, amount, account, GST?");
+    expect(draft.missingFields).toEqual(["category", "amount", "account", "entry mode", "GST"]);
+    expect(draft.clarification).toBe("Can you confirm the category, amount, account, entry mode, GST?");
   });
 
   it("keeps model clarification when missing fields need review", () => {
@@ -423,6 +423,23 @@ describe("AI parse draft normalization", () => {
       entryMode: "cash",
       paymentTerms: undefined,
       dueDate: undefined,
+    });
+  });
+
+  it("asks for confirmation when explicit entry mode is unsupported", () => {
+    const draft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 80,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      entryMode: "quote",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(draft).toMatchObject({
+      entryMode: "cash",
+      missingFields: ["entry mode"],
+      clarification: "Can you confirm the entry mode?",
     });
   });
 
