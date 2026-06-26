@@ -157,7 +157,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Note')).toHaveValue('AI returned sale type');
   });
 
-  test('normalizes strict amount strings from local AI output', async ({ page }) => {
+  test('normalizes signed strict amount strings from local AI output', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
         status: 200,
@@ -170,7 +170,7 @@ test.describe('Auctus AI quick entry', () => {
               name: 'parse_transaction',
               input: {
                 type: 'expense',
-                amount: '$1,234.50',
+                amount: '-$1,234.50',
                 date: '2026-06-20',
                 accountId: 'a2',
                 categoryId: 'e_other',
@@ -186,7 +186,7 @@ test.describe('Auctus AI quick entry', () => {
     await resetLocalApp(page);
 
     await page.getByTitle('AI Quick Entry').click();
-    await page.locator('.ai-entry-textarea').fill('Spent $1,234.50');
+    await page.locator('.ai-entry-textarea').fill('Spent -$1,234.50');
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
@@ -364,8 +364,8 @@ test.describe('Auctus AI quick entry', () => {
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
-    await expect(draft).toContainText('Fill in: amount, account, category');
-    await expect(draft).toContainText('Can you confirm the amount, account, category?');
+    await expect(draft).toContainText('Fill in: account, category');
+    await expect(draft).toContainText('Can you confirm the account, category?');
     await expect(draft).toContainText(today);
     await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
     await expect(page.locator('.sheet').filter({ hasText: 'New Transaction' })).toHaveCount(0);

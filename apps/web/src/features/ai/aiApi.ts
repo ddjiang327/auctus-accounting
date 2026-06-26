@@ -72,11 +72,11 @@ function dueDateForTerms(dateStr: string, terms?: string) {
 }
 
 function parseAmount(value: unknown) {
-  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : 0;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0 ? Math.abs(value) : 0;
   if (typeof value !== 'string') return 0;
   const normalized = value.trim().replace(/[$,\s]/g, '');
   if (!/^[+-]?\d+(\.\d+)?$/.test(normalized)) return 0;
-  const amount = Number(normalized);
+  const amount = Math.abs(Number(normalized));
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 }
 

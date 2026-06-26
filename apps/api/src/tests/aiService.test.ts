@@ -27,7 +27,7 @@ describe("AI parse draft normalization", () => {
   it("removes hallucinated references and flags required fields for user review", () => {
     const draft = __testing.normalizeDraft({
       type: "expense",
-      amount: -10,
+      amount: 0,
       date: "not-a-date",
       accountId: "missing_account",
       categoryId: "income_sales",
@@ -205,6 +205,13 @@ describe("AI parse draft normalization", () => {
       categoryId: "expense_office",
       missingFields: [],
     } as unknown, context);
+    const negativeAmount = __testing.normalizeDraft({
+      type: "expense",
+      amount: "-$42.75",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
 
     expect(amountString).toMatchObject({
       amount: 1234.5,
@@ -213,6 +220,11 @@ describe("AI parse draft normalization", () => {
     expect(vagueAmount).toMatchObject({
       amount: 0,
       missingFields: ["amount"],
+    });
+    expect(negativeAmount).toMatchObject({
+      type: "expense",
+      amount: 42.75,
+      missingFields: [],
     });
   });
 
