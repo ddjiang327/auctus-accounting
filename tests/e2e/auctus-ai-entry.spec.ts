@@ -225,6 +225,44 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Note')).toHaveValue('AI returned sale type');
   });
 
+  test('asks for confirmation when local AI transfer accounts are the same', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_same_account_transfer_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'transfer',
+                amount: 250,
+                date: '2026-06-19',
+                accountId: 'a2',
+                accountToId: 'a2',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Move $250 from Everyday Account to Everyday Account');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('$250.00');
+    await expect(draft).toContainText('Fill in: destination account');
+    await expect(draft).toContainText('Can you confirm the destination account?');
+    await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
+  });
+
   test('normalizes signed strict amount strings from local AI output', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({

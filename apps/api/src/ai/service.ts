@@ -233,7 +233,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const accountMatch = matchByIdOrName(ctx.accounts, raw.accountId);
   const accountToMatch = matchByIdOrName(ctx.accounts, raw.accountToId);
   const accountId = accountMatch.item?.id;
-  const accountToId = accountToMatch.item?.id;
+  const parsedAccountToId = accountToMatch.item?.id;
+  const accountToId = type === 'transfer' && parsedAccountToId === accountId ? undefined : parsedAccountToId;
   if (!accountId) missing.push(type === 'transfer' ? 'source account' : 'account');
   if (type === 'transfer' && !accountToId) missing.push('destination account');
 

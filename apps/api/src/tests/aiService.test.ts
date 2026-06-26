@@ -119,6 +119,24 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("asks for a destination account when a transfer uses the same source and destination", () => {
+    const draft = __testing.normalizeDraft({
+      type: "transfer",
+      amount: 500,
+      accountId: "bank_1",
+      accountToId: "bank_1",
+      missingFields: [],
+    }, context);
+
+    expect(draft).toMatchObject({
+      type: "transfer",
+      accountId: "bank_1",
+      accountToId: undefined,
+      missingFields: ["destination account"],
+      clarification: "Can you confirm the destination account?",
+    });
+  });
+
   it("normalizes natural language transaction types", () => {
     const sale = __testing.normalizeDraft({
       type: "sale",
