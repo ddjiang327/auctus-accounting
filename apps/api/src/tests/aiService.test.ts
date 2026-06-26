@@ -243,6 +243,20 @@ describe("AI parse draft normalization", () => {
       categoryId: "expense_office",
       missingFields: [],
     } as unknown, context);
+    const currencyAmount = __testing.normalizeDraft({
+      type: "expense",
+      amount: "AUD 1,234.50",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
+    const suffixCurrencyAmount = __testing.normalizeDraft({
+      type: "expense",
+      amount: "1,234.50 AUD",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
 
     expect(amountString).toMatchObject({
       amount: 1234.5,
@@ -255,6 +269,14 @@ describe("AI parse draft normalization", () => {
     expect(negativeAmount).toMatchObject({
       type: "expense",
       amount: 42.75,
+      missingFields: [],
+    });
+    expect(currencyAmount).toMatchObject({
+      amount: 1234.5,
+      missingFields: [],
+    });
+    expect(suffixCurrencyAmount).toMatchObject({
+      amount: 1234.5,
       missingFields: [],
     });
   });

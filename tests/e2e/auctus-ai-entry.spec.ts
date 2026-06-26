@@ -238,7 +238,7 @@ test.describe('Auctus AI quick entry', () => {
               name: 'parse_transaction',
               input: {
                 type: 'expense',
-                amount: '-$1,234.50',
+                amount: 'AUD -$1,234.50',
                 date: '2026-06-20',
                 accountId: 'a2',
                 categoryId: 'e_other',
@@ -254,7 +254,7 @@ test.describe('Auctus AI quick entry', () => {
     await resetLocalApp(page);
 
     await page.getByTitle('AI Quick Entry').click();
-    await page.locator('.ai-entry-textarea').fill('Spent -$1,234.50');
+    await page.locator('.ai-entry-textarea').fill('Spent AUD -$1,234.50');
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
