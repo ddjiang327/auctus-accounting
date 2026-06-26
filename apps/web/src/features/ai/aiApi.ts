@@ -144,13 +144,22 @@ function contactSupportsType(contact: ParseContext['contacts'][number], type: Pa
     : contact.type === 'supplier' || contact.type === 'both';
 }
 
+function normalizeTransactionType(value: unknown): ParseDraft['type'] {
+  const normalized = normalizeName(String(value ?? '')) || '';
+  if (normalized === 'income' || normalized === 'expense' || normalized === 'transfer') return normalized;
+  if (/\b(transfer|move|moved)\b/.test(normalized)) return 'transfer';
+  if (/\b(income|sale|sales|revenue|customer\s*receipt|received|deposit)\b/.test(normalized)) return 'income';
+  if (/\b(expense|purchase|bill|supplier\s*invoice|paid|payment|cost)\b/.test(normalized)) return 'expense';
+  return 'expense';
+}
+
 function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
   const raw = (input && typeof input === 'object' ? input : {}) as Partial<ParseDraft>;
   const missing = Array.isArray(raw.missingFields)
     ? raw.missingFields.filter((field): field is string => typeof field === 'string')
     : [];
 
-  const type: ParseDraft['type'] = raw.type === 'income' || raw.type === 'transfer' ? raw.type : 'expense';
+  const type = normalizeTransactionType(raw.type);
   const amount = parseAmount(raw.amount);
   if (!amount) missing.push('amount');
 

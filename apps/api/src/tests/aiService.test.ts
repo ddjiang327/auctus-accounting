@@ -119,6 +119,49 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes natural language transaction types", () => {
+    const sale = __testing.normalizeDraft({
+      type: "sale",
+      amount: 300,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      missingFields: [],
+    } as unknown, context);
+    const purchase = __testing.normalizeDraft({
+      type: "purchase",
+      amount: 45,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
+    const transfer = __testing.normalizeDraft({
+      type: "move money",
+      amount: 100,
+      accountId: "bank_1",
+      accountToId: "cash_1",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(sale).toMatchObject({
+      type: "income",
+      categoryId: "income_sales",
+      chartAccountId: "coa_revenue",
+      missingFields: [],
+    });
+    expect(purchase).toMatchObject({
+      type: "expense",
+      categoryId: "expense_office",
+      chartAccountId: "coa_expense",
+      missingFields: [],
+    });
+    expect(transfer).toMatchObject({
+      type: "transfer",
+      accountToId: "cash_1",
+      categoryId: undefined,
+      missingFields: [],
+    });
+  });
+
   it("matches account and category names when AI returns labels instead of ids", () => {
     const draft = __testing.normalizeDraft({
       type: "expense",

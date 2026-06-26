@@ -113,6 +113,50 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Note')).toHaveValue('AI returned labels');
   });
 
+  test('normalizes natural language transaction types from local AI output', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_type_label_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'sale',
+                amount: 300,
+                date: '2026-06-18',
+                accountId: 'a2',
+                categoryId: 'i_free',
+                note: 'AI returned sale type',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Sale $300');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft.locator('.ai-draft-type')).toContainText('Income');
+    await expect(draft).toContainText('Freelance');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Sale' })).toHaveClass(/active/);
+    await expect(modal.getByLabel('Category')).toHaveValue('i_free');
+    await expect(modal.getByLabel('Note')).toHaveValue('AI returned sale type');
+  });
+
   test('normalizes strict amount strings from local AI output', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
