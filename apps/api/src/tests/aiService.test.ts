@@ -230,6 +230,48 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes natural language entry modes", () => {
+    const bill = __testing.normalizeDraft({
+      type: "expense",
+      amount: 220,
+      date: "2026-06-20",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      entryMode: "bill",
+      paymentTerms: "net 14",
+      missingFields: [],
+    } as unknown, context);
+    const supplierCredit = __testing.normalizeDraft({
+      type: "expense",
+      amount: 50,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      entryMode: "supplier credit",
+      missingFields: [],
+    } as unknown, context);
+    const receipt = __testing.normalizeDraft({
+      type: "income",
+      amount: 50,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "receipt",
+      paymentTerms: "net 30",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(bill).toMatchObject({
+      entryMode: "invoice",
+      paymentTerms: "net_14",
+      dueDate: "2026-07-04",
+    });
+    expect(supplierCredit.entryMode).toBe("credit_note");
+    expect(receipt).toMatchObject({
+      entryMode: "cash",
+      paymentTerms: undefined,
+      dueDate: undefined,
+    });
+  });
+
   it("uses the category default chart account before a mismatched AI chart account", () => {
     const draft = __testing.normalizeDraft({
       type: "income",

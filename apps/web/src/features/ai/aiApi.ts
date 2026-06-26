@@ -99,6 +99,16 @@ function normalizePaymentTerms(value: unknown): ParseDraft['paymentTerms'] | und
   return days ? `net_${days[1]}` as ParseDraft['paymentTerms'] : undefined;
 }
 
+function normalizeEntryMode(value: unknown): ParseDraft['entryMode'] | undefined {
+  const normalized = normalizeName(String(value ?? '')) || '';
+  if (normalized === 'cash' || normalized === 'invoice' || normalized === 'credit_note') return normalized;
+  if (!normalized) return undefined;
+  if (/\b(credit\s*note|supplier\s*credit|credit\s*memo|refund\s*credit)\b/.test(normalized)) return 'credit_note';
+  if (/\b(invoice|bill|supplier\s*invoice|payable|accounts\s*payable)\b/.test(normalized)) return 'invoice';
+  if (/\b(cash|paid|payment|receipt|card|eftpos)\b/.test(normalized)) return 'cash';
+  return undefined;
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -174,7 +184,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
 
   const entryMode = type === 'transfer'
     ? 'cash'
-    : raw.entryMode === 'invoice' || raw.entryMode === 'credit_note' ? raw.entryMode : 'cash';
+    : normalizeEntryMode(raw.entryMode) || 'cash';
   const gstMode = type === 'transfer' || !context.gstEnabled
     ? null
     : normalizeGstMode(raw.gstMode) || 'inc';

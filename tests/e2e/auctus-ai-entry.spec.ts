@@ -236,6 +236,53 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Date')).toHaveValue('2026-06-20');
   });
 
+  test('normalizes natural language entry modes from local AI output', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_entry_mode_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 220,
+                date: '2026-06-20',
+                accountId: 'a2',
+                categoryId: 'e_util',
+                entryMode: 'bill',
+                paymentTerms: 'net 14',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Electricity bill $220 net 14');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('invoice');
+    await expect(draft).toContainText('net_14');
+    await expect(draft).toContainText('2026-07-04');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Purchase' })).toHaveClass(/active/);
+    await expect(modal.getByRole('button', { name: 'Invoice' })).toHaveClass(/active/);
+    await expect(modal.getByLabel('Terms')).toHaveValue('net_14');
+    await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-04');
+  });
+
   test('blocks incomplete local AI drafts from opening the form', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
