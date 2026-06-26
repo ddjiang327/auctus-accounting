@@ -147,6 +147,32 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes strict amount strings but rejects vague amount text", () => {
+    const amountString = __testing.normalizeDraft({
+      type: "expense",
+      amount: "$1,234.50",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
+    const vagueAmount = __testing.normalizeDraft({
+      type: "expense",
+      amount: "about 50",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(amountString).toMatchObject({
+      amount: 1234.5,
+      missingFields: [],
+    });
+    expect(vagueAmount).toMatchObject({
+      amount: 0,
+      missingFields: ["amount"],
+    });
+  });
+
   it("preserves credit note entry mode for non-transfer drafts", () => {
     const draft = __testing.normalizeDraft({
       type: "income",

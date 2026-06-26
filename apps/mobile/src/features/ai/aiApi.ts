@@ -39,6 +39,15 @@ function dueDateForTerms(dateStr: string, terms?: string) {
   return addDays(dateStr, days);
 }
 
+function parseAmount(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : 0;
+  if (typeof value !== 'string') return 0;
+  const normalized = value.trim().replace(/[$,\s]/g, '');
+  if (!/^[+-]?\d+(\.\d+)?$/.test(normalized)) return 0;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -81,7 +90,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     : [];
 
   const type: ParseDraft['type'] = raw.type === 'income' || raw.type === 'transfer' ? raw.type : 'expense';
-  const amount = typeof raw.amount === 'number' && Number.isFinite(raw.amount) && raw.amount > 0 ? raw.amount : 0;
+  const amount = parseAmount(raw.amount);
   if (!amount) missing.push('amount');
 
   const accountId = matchByIdOrName(context.accounts, raw.accountId)?.id;
