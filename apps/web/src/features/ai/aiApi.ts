@@ -47,10 +47,16 @@ function isoDate(year: number, month: number, day: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function normalizeDate(value: unknown) {
+function normalizeDate(value: unknown, today?: string) {
   if (validDate(value)) return value;
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
+  const normalized = text.toLowerCase();
+  if (today && validDate(today)) {
+    if (normalized === 'today') return today;
+    if (normalized === 'yesterday') return addDays(today, -1);
+    if (normalized === 'tomorrow') return addDays(today, 1);
+  }
   const auNumeric = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (auNumeric) return isoDate(Number(auNumeric[3]), Number(auNumeric[2]), Number(auNumeric[1]));
   const monthFirst = text.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
@@ -226,9 +232,9 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     ? normalizePaymentTerms(raw.paymentTerms) || contactPaymentTerms
     : undefined;
 
-  const date = normalizeDate(raw.date) || context.today;
+  const date = normalizeDate(raw.date, context.today) || context.today;
   const dueDate = entryMode === 'invoice'
-    ? normalizeDate(raw.dueDate) || dueDateForTerms(date, paymentTerms)
+    ? normalizeDate(raw.dueDate, context.today) || dueDateForTerms(date, paymentTerms)
     : undefined;
   const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
   const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;

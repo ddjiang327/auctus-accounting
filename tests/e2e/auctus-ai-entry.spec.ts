@@ -10,6 +10,12 @@ async function resetLocalApp(page: Page) {
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible({ timeout: 15_000 });
 }
 
+function isoDateFromToday(days: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 test.describe('Auctus AI quick entry', () => {
   test('opens an AI draft in the transaction form without dropping parsed fields', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
@@ -340,6 +346,47 @@ test.describe('Auctus AI quick entry', () => {
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
     await expect(modal).toBeVisible();
     await expect(modal.getByLabel('Date')).toHaveValue('2026-06-20');
+  });
+
+  test('normalizes relative dates from local AI output', async ({ page }) => {
+    const expectedDate = isoDateFromToday(-1);
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_relative_date_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 88,
+                date: 'yesterday',
+                accountId: 'a2',
+                categoryId: 'e_other',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Spent $88 yesterday');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText(expectedDate);
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByLabel('Date')).toHaveValue(expectedDate);
   });
 
   test('normalizes natural language entry modes from local AI output', async ({ page }) => {

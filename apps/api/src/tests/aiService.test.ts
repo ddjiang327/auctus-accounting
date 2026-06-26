@@ -482,6 +482,32 @@ describe("AI parse draft normalization", () => {
     expect(ambiguousDate.date).toBe("2026-06-25");
   });
 
+  it("normalizes relative AI dates from the parsing context", () => {
+    const yesterday = __testing.normalizeDraft({
+      type: "expense",
+      amount: 42,
+      date: "yesterday",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    }, context);
+    const invoice = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "today",
+      dueDate: "tomorrow",
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      paymentTerms: "net_30",
+      missingFields: [],
+    }, context);
+
+    expect(yesterday.date).toBe("2026-06-24");
+    expect(invoice.date).toBe("2026-06-25");
+    expect(invoice.dueDate).toBe("2026-06-26");
+  });
+
   it("preserves invoice and credit note numbers for matching entry modes", () => {
     const invoice = __testing.normalizeDraft({
       type: "income",
