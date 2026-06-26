@@ -502,7 +502,7 @@ describe("AI parse draft normalization", () => {
     const numericDate = __testing.normalizeDraft({
       type: "expense",
       amount: 42,
-      date: "20/06/2026",
+      date: "2026/6/20",
       accountId: "bank_1",
       categoryId: "expense_office",
       missingFields: [],

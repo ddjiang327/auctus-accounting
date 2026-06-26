@@ -75,6 +75,8 @@ function normalizeDate(value: unknown, today?: string) {
     if (normalized === 'yesterday') return addDays(today, -1);
     if (normalized === 'tomorrow') return addDays(today, 1);
   }
+  const yearFirst = text.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+  if (yearFirst) return isoDate(Number(yearFirst[1]), Number(yearFirst[2]), Number(yearFirst[3]));
   const auNumeric = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (auNumeric) return isoDate(Number(auNumeric[3]), Number(auNumeric[2]), Number(auNumeric[1]));
   const monthFirst = text.match(/^([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i);
