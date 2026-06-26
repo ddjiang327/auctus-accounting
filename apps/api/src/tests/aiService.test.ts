@@ -510,8 +510,8 @@ describe("AI parse draft normalization", () => {
     const monthDate = __testing.normalizeDraft({
       type: "income",
       amount: 500,
-      date: "June 20, 2026",
-      dueDate: "21 July 2026",
+      date: "June 20th, 2026",
+      dueDate: "21st July 2026",
       accountId: "bank_1",
       categoryId: "income_sales",
       entryMode: "invoice",

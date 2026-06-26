@@ -77,9 +77,9 @@ function normalizeDate(value: unknown, today?: string) {
   }
   const auNumeric = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (auNumeric) return isoDate(Number(auNumeric[3]), Number(auNumeric[2]), Number(auNumeric[1]));
-  const monthFirst = text.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  const monthFirst = text.match(/^([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i);
   if (monthFirst) return isoDate(Number(monthFirst[3]), MONTHS[monthFirst[1].toLowerCase()] || 0, Number(monthFirst[2]));
-  const dayFirst = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  const dayFirst = text.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})$/i);
   if (dayFirst) return isoDate(Number(dayFirst[3]), MONTHS[dayFirst[2].toLowerCase()] || 0, Number(dayFirst[1]));
   return undefined;
 }

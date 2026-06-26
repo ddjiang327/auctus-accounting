@@ -360,7 +360,7 @@ test.describe('Auctus AI quick entry', () => {
               input: {
                 type: 'expense',
                 amount: 88,
-                date: '20/06/2026',
+                date: '20th June 2026',
                 accountId: 'a2',
                 categoryId: 'e_other',
                 missingFields: [],
@@ -374,7 +374,7 @@ test.describe('Auctus AI quick entry', () => {
     await resetLocalApp(page);
 
     await page.getByTitle('AI Quick Entry').click();
-    await page.locator('.ai-entry-textarea').fill('Spent $88 on 20/06/2026');
+    await page.locator('.ai-entry-textarea').fill('Spent $88 on 20th June 2026');
     await page.getByRole('button', { name: /Parse/i }).click();
 
     const draft = page.locator('.ai-entry-draft');
