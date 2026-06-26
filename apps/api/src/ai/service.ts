@@ -140,6 +140,11 @@ function normalizeEntryMode(value: unknown): ParseDraft['entryMode'] | undefined
   return undefined;
 }
 
+function normalizeDocumentNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : undefined;
+  return typeof value === 'string' ? value.trim() || undefined : undefined;
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -288,8 +293,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const dueDate = entryMode === 'invoice'
     ? normalizeDate(raw.dueDate, ctx.today) || dueDateForTerms(date, paymentTerms)
     : undefined;
-  const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
-  const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;
+  const invoiceNo = entryMode === 'invoice' ? normalizeDocumentNumber(raw.invoiceNo) : undefined;
+  const creditNoteNo = entryMode === 'credit_note' ? normalizeDocumentNumber(raw.creditNoteNo) : undefined;
   const hasContactHint = Boolean(party || raw.contactId);
   if (hasContactHint && !contactId && (entryMode === 'invoice' || entryMode === 'credit_note')) {
     missing.push('contact');

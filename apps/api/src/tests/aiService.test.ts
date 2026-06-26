@@ -565,23 +565,23 @@ describe("AI parse draft normalization", () => {
       amount: 100,
       accountId: "bank_1",
       entryMode: "invoice",
-      invoiceNo: " INV-AI-42 ",
+      invoiceNo: 42,
       creditNoteNo: "CN-IGNORED",
       missingFields: [],
-    }, context);
+    } as unknown, context);
     const credit = __testing.normalizeDraft({
       type: "income",
       amount: 50,
       accountId: "bank_1",
       entryMode: "credit_note",
       invoiceNo: "INV-IGNORED",
-      creditNoteNo: " CN-AI-7 ",
+      creditNoteNo: 7,
       missingFields: [],
-    }, context);
+    } as unknown, context);
 
-    expect(invoice.invoiceNo).toBe("INV-AI-42");
+    expect(invoice.invoiceNo).toBe("42");
     expect(invoice.creditNoteNo).toBeUndefined();
-    expect(credit.creditNoteNo).toBe("CN-AI-7");
+    expect(credit.creditNoteNo).toBe("7");
     expect(credit.invoiceNo).toBeUndefined();
   });
 

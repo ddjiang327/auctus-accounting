@@ -662,7 +662,7 @@ test.describe('Auctus AI quick entry', () => {
                 chartAccountId: 'coa_4010',
                 entryMode: 'credit_note',
                 gstMode: 'inc',
-                creditNoteNo: 'CN-AI-7',
+                creditNoteNo: 7,
                 note: 'Credit for overcharge',
                 missingFields: [],
               },
@@ -678,7 +678,7 @@ test.describe('Auctus AI quick entry', () => {
     await page.locator('.ai-entry-textarea').fill('credit note for overcharge $75');
     await page.getByRole('button', { name: /Parse/i }).click();
     await expect(page.locator('.ai-entry-draft')).toContainText('credit_note');
-    await expect(page.locator('.ai-entry-draft')).toContainText('CN-AI-7');
+    await expect(page.locator('.ai-entry-draft')).toContainText('7');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
     const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
@@ -686,7 +686,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('button', { name: 'Sale' })).toHaveClass(/active/);
     await expect(modal.getByRole('button', { name: 'Credit Note' })).toHaveClass(/active/);
     await expect(modal.getByLabel('Amount')).toHaveValue('75');
-    await expect(modal.getByRole('textbox', { name: 'Credit No.' })).toHaveValue('CN-AI-7');
+    await expect(modal.getByRole('textbox', { name: 'Credit No.' })).toHaveValue('7');
     await expect(modal.getByLabel('Note')).toHaveValue('Credit for overcharge');
   });
 
