@@ -49,8 +49,8 @@ describe("AI parse draft normalization", () => {
       entryMode: "cash",
       gstMode: "inc",
     });
-    expect(draft.missingFields).toEqual(["category", "amount", "account"]);
-    expect(draft.clarification).toBe("Can you confirm the category, amount, account?");
+    expect(draft.missingFields).toEqual(["category", "amount", "account", "GST"]);
+    expect(draft.clarification).toBe("Can you confirm the category, amount, account, GST?");
   });
 
   it("keeps model clarification when missing fields need review", () => {
@@ -339,6 +339,23 @@ describe("AI parse draft normalization", () => {
     expect(plusGst.gstMode).toBe("exc");
     expect(gstFree.gstMode).toBe("free");
     expect(included.gstMode).toBe("inc");
+  });
+
+  it("asks for confirmation when explicit GST mode is unsupported", () => {
+    const draft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 80,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      gstMode: "reverse charge",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(draft).toMatchObject({
+      gstMode: "inc",
+      missingFields: ["GST"],
+      clarification: "Can you confirm the GST?",
+    });
   });
 
   it("preserves credit note entry mode for non-transfer drafts", () => {

@@ -281,9 +281,12 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const entryMode = type === 'transfer'
     ? 'cash'
     : normalizeEntryMode(raw.entryMode) || 'cash';
+  const parsedGstMode = normalizeGstMode(raw.gstMode);
+  const hasGstHint = raw.gstMode !== undefined && String(raw.gstMode).trim() !== '';
+  if (type !== 'transfer' && ctx.gstEnabled && hasGstHint && !parsedGstMode) missing.push('GST');
   const gstMode = type === 'transfer' || !ctx.gstEnabled
     ? null
-    : normalizeGstMode(raw.gstMode) || 'inc';
+    : parsedGstMode || 'inc';
   const contactPaymentTerms = normalizePaymentTerms(matchedContact?.paymentTerms);
   const parsedPaymentTerms = normalizePaymentTerms(raw.paymentTerms);
   const hasPaymentTermsHint = raw.paymentTerms !== undefined && String(raw.paymentTerms).trim() !== '';
