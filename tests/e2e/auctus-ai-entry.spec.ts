@@ -769,7 +769,7 @@ test.describe('Auctus AI quick entry', () => {
                 categoryId: 'i_free',
                 entryMode: 'invoice',
                 invoiceNo: 'INV-MATCH-9',
-                party: 'Acme Studios',
+                contactId: 'contact_acme_studios | Acme Studios (customer)',
                 missingFields: [],
               },
             },

@@ -181,9 +181,13 @@ function matchContactByIdOrParty(
 ): { item?: ParseContext['contacts'][number]; ambiguous: boolean } {
   if (type === 'transfer') return { item: undefined, ambiguous: false };
   const supportedContacts = contacts.filter((contact) => contactSupportsType(contact, type));
-  const idMatch = supportedContacts.find((contact) => contact.id === contactId);
+  const contactIdPrefix = contactId?.split('|')[0]?.trim();
+  const idMatch = supportedContacts.find((contact) => contact.id === contactId || contact.id === contactIdPrefix);
   if (idMatch) return { item: idMatch, ambiguous: false };
-  const partyNames = normalizedNameCandidates(party);
+  const partyNames = unique([
+    ...normalizedNameCandidates(contactId),
+    ...normalizedNameCandidates(party),
+  ]);
   if (!partyNames.length) return { item: undefined, ambiguous: false };
   const nameMatches = supportedContacts.filter((contact) => {
     const name = normalizeName(contact.name);

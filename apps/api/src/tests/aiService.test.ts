@@ -589,7 +589,7 @@ describe("AI parse draft normalization", () => {
       accountId: "bank_1",
       categoryId: "income_sales",
       entryMode: "invoice",
-      party: " customer co ",
+      contactId: "cust_1 | Customer Co (customer)",
       missingFields: [],
     }, context);
     const supplierBill = __testing.normalizeDraft({
