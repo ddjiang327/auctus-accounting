@@ -39,12 +39,14 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
   async function handleParse() {
     const trimmed = text.trim();
     if (!trimmed) return;
+    const existingDraft = draft?.missingFields.length ? draft : undefined;
     setLoading(true);
     setError('');
-    setDraft(null);
+    if (!existingDraft) setDraft(null);
     try {
-      const result = await parseTransactionText(trimmed, data, mode, getToken);
+      const result = await parseTransactionText(trimmed, data, mode, getToken, existingDraft);
       setDraft(result);
+      if (existingDraft) setText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'AI parse failed');
     } finally {
@@ -86,9 +88,14 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
           ref={textareaRef}
           className="ai-entry-textarea"
           value={text}
-          onChange={(e) => { setText(e.target.value); setDraft(null); }}
+          onChange={(e) => {
+            setText(e.target.value);
+            setDraft((current) => current?.missingFields.length ? current : null);
+          }}
           onKeyDown={handleKeyDown}
-          placeholder={`Describe a transaction…\ne.g. "${EXAMPLE_HINTS[Math.floor(Math.random() * EXAMPLE_HINTS.length)]}"`}
+          placeholder={draft?.missingFields.length
+            ? 'Answer the question above to update this draft'
+            : `Describe a transaction…\ne.g. "${EXAMPLE_HINTS[Math.floor(Math.random() * EXAMPLE_HINTS.length)]}"`}
           rows={3}
           disabled={loading}
         />
@@ -154,7 +161,7 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
             onClick={handleParse}
             disabled={loading || !text.trim()}
           >
-            {loading ? 'Parsing…' : 'Parse  ⌘↵'}
+            {loading ? 'Parsing…' : draft?.missingFields.length ? 'Update draft  ⌘↵' : 'Parse  ⌘↵'}
           </button>
         </div>
       </div>

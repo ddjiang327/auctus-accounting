@@ -17,7 +17,7 @@ export const parseTransaction = async (
     return;
   }
 
-  const body = await readJsonBody(request) as { text?: unknown; context?: unknown };
+  const body = await readJsonBody(request) as { text?: unknown; context?: unknown; existingDraft?: unknown };
 
   if (typeof body.text !== 'string' || !body.text.trim()) {
     sendJson(response, 400, { error: 'text_required' });
@@ -35,7 +35,12 @@ export const parseTransaction = async (
   }
 
   try {
-    const draft = await parseTransactionText(body.text, body.context as ParseContext, context.env);
+    const draft = await parseTransactionText(
+      body.text,
+      body.context as ParseContext,
+      context.env,
+      body.existingDraft && typeof body.existingDraft === 'object' ? body.existingDraft : undefined,
+    );
     sendJson(response, 200, { draft });
   } catch (error) {
     sendJson(response, 502, {

@@ -246,10 +246,15 @@ export async function parseTransactionText(
   text: string,
   context: ParseContext,
   env: ApiEnv,
+  existingDraft?: Partial<ParseDraft>,
 ): Promise<ParseDraft> {
   if (!env.anthropicApiKey) {
     throw new Error('ANTHROPIC_API_KEY not configured');
   }
+
+  const userContent = existingDraft
+    ? `Current draft JSON:\n${JSON.stringify(existingDraft)}\n\nUser clarification:\n${text}\n\nUpdate the draft using the clarification. Return the full corrected draft.`
+    : text;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -262,7 +267,7 @@ export async function parseTransactionText(
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: buildSystemPrompt(context),
-      messages: [{ role: 'user', content: text }],
+      messages: [{ role: 'user', content: userContent }],
       tools: [TOOL_SCHEMA],
       tool_choice: { type: 'tool', name: 'parse_transaction' },
     }),
@@ -282,7 +287,15 @@ export async function parseTransactionText(
     throw new Error('AI did not return a parse result');
   }
 
-  return normalizeDraft(toolUse.input, context);
+  const input = existingDraft && toolUse.input && typeof toolUse.input === 'object'
+    ? mergeDraftUpdate(existingDraft, toolUse.input)
+    : toolUse.input;
+  return normalizeDraft(input, context);
 }
 
-export const __testing = { normalizeDraft };
+function mergeDraftUpdate(existingDraft: Partial<ParseDraft>, update: object) {
+  const { missingFields: _missingFields, clarification: _clarification, ...base } = existingDraft;
+  return { ...base, ...update };
+}
+
+export const __testing = { normalizeDraft, mergeDraftUpdate };

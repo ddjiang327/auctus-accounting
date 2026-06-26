@@ -131,12 +131,14 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
   async function handleParse() {
     const trimmed = text.trim();
     if (!trimmed) return;
+    const existingDraft = draft?.missingFields.length ? draft : undefined;
     setLoading(true);
     setError('');
-    setDraft(null);
+    if (!existingDraft) setDraft(null);
     try {
-      const result = await parseTransactionText(trimmed, data, mode, getToken);
+      const result = await parseTransactionText(trimmed, data, mode, getToken, existingDraft);
       setDraft(result);
+      if (existingDraft) setText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'AI parse failed');
     } finally {
@@ -188,8 +190,11 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
             ref={inputRef}
             style={styles.textInput}
             value={text}
-            onChangeText={(t) => { setText(t); setDraft(null); }}
-            placeholder={hint}
+            onChangeText={(t) => {
+              setText(t);
+              setDraft((current) => current?.missingFields.length ? current : null);
+            }}
+            placeholder={draft?.missingFields.length ? 'Answer the question above to update this draft' : hint}
             placeholderTextColor={colors.muted}
             multiline
             numberOfLines={3}
@@ -280,7 +285,7 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
             >
               {loading
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.parseBtnText}>Parse  ⌘↵</Text>}
+                : <Text style={styles.parseBtnText}>{draft?.missingFields.length ? 'Update draft' : 'Parse  ⌘↵'}</Text>}
             </Pressable>
           </View>
         </ScrollView>

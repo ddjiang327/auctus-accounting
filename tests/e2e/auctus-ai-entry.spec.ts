@@ -117,6 +117,77 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('GST')).toHaveValue('inc');
   });
 
+  test('updates the same draft from a clarification answer', async ({ page }) => {
+    let requestCount = 0;
+    let clarificationPrompt = '';
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      requestCount += 1;
+      const body = route.request().postDataJSON() as { messages?: Array<{ content?: string }> };
+      if (requestCount === 2) clarificationPrompt = body.messages?.[0]?.content || '';
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: `toolu_clarification_${requestCount}`,
+              name: 'parse_transaction',
+              input: requestCount === 1
+                ? {
+                    type: 'expense',
+                    amount: 0,
+                    date: '2026-06-18',
+                    note: 'Officeworks printer paper',
+                    entryMode: 'cash',
+                    gstMode: 'inc',
+                    missingFields: ['amount', 'account'],
+                  }
+                : {
+                    amount: 123.45,
+                    accountId: 'a2',
+                    categoryId: 'e_other',
+                    missingFields: [],
+                  },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Bought printer paper on 2026-06-18');
+    await page.getByRole('button', { name: /Parse/i }).click();
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('Can you confirm the amount, account?');
+    await expect(draft).toContainText('Officeworks printer paper');
+
+    await page.locator('.ai-entry-textarea').fill('$123.45 from Everyday Account');
+    await page.getByRole('button', { name: /Update draft/i }).click();
+
+    expect(clarificationPrompt).toContain('Current draft JSON');
+    expect(clarificationPrompt).toContain('Officeworks printer paper');
+    expect(clarificationPrompt).toContain('User clarification');
+    expect(clarificationPrompt).toContain('$123.45 from Everyday Account');
+
+    await expect(draft).toContainText('$123.45');
+    await expect(draft).toContainText('Everyday Account');
+    await expect(draft).toContainText('Other');
+    await expect(draft).not.toContainText('Fill in: amount');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByLabel('Amount')).toHaveValue('123.45');
+    await expect(modal.getByLabel('Date')).toHaveValue('2026-06-18');
+    await expect(modal.getByLabel('Account')).toHaveValue('a2');
+    await expect(modal.getByLabel('Category')).toHaveValue('e_other');
+    await expect(modal.getByLabel('Note')).toHaveValue('Officeworks printer paper');
+  });
+
   test('does not include archived categories in local AI context', async ({ page }) => {
     let requestSystemPrompt = '';
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {

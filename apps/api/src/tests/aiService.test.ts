@@ -66,6 +66,30 @@ describe("AI parse draft normalization", () => {
     expect(draft.clarification).toBe("What was the total paid?");
   });
 
+  it("merges clarification updates without carrying stale review fields", () => {
+    const merged = __testing.mergeDraftUpdate({
+      type: "expense",
+      amount: 0,
+      date: "2026-06-18",
+      note: "Officeworks printer paper",
+      entryMode: "cash",
+      missingFields: ["amount", "account"],
+      clarification: "Can you confirm the amount, account?",
+    }, {
+      amount: 123.45,
+      accountId: "bank_1",
+    });
+    const draft = __testing.normalizeDraft(merged, context);
+
+    expect(draft).toMatchObject({
+      amount: 123.45,
+      accountId: "bank_1",
+      note: "Officeworks printer paper",
+      missingFields: [],
+      clarification: undefined,
+    });
+  });
+
   it("normalizes transfers to source and destination accounts only", () => {
     const draft = __testing.normalizeDraft({
       type: "transfer",

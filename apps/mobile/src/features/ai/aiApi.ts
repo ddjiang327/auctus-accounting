@@ -187,11 +187,16 @@ GST: ${ctx.gstEnabled ? 'enabled 10%' : 'disabled'}
 Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, preserve invoiceNo/creditNoteNo when mentioned, list uncertain fields in missingFields, and if missingFields is not empty set clarification to one concise question asking the user for those fields.`;
 }
 
-async function parseViaServer(text: string, context: ParseContext, token: string): Promise<ParseDraft> {
+async function parseViaServer(
+  text: string,
+  context: ParseContext,
+  token: string,
+  existingDraft?: ParseDraft,
+): Promise<ParseDraft> {
   const res = await fetch(`${API_URL}/v1/ai/parse`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({ text, context }),
+    body: JSON.stringify({ text, context, existingDraft }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'AI parse failed' })) as { message?: string; error?: string };
@@ -201,7 +206,7 @@ async function parseViaServer(text: string, context: ParseContext, token: string
   return body.draft;
 }
 
-async function parseViaDirectApi(text: string, context: ParseContext): Promise<ParseDraft> {
+async function parseViaDirectApi(text: string, context: ParseContext, existingDraft?: ParseDraft): Promise<ParseDraft> {
   const toolSchema = {
     name: 'parse_transaction',
     description: 'Parse a natural language transaction into a structured draft',
@@ -231,6 +236,10 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
     },
   };
 
+  const userContent = existingDraft
+    ? `Current draft JSON:\n${JSON.stringify(existingDraft)}\n\nUser clarification:\n${text}\n\nUpdate the draft using the clarification. Return the full corrected draft.`
+    : text;
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -243,7 +252,7 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: buildSystemPrompt(context),
-      messages: [{ role: 'user', content: text }],
+      messages: [{ role: 'user', content: userContent }],
       tools: [toolSchema],
       tool_choice: { type: 'tool', name: 'parse_transaction' },
     }),
@@ -257,7 +266,15 @@ async function parseViaDirectApi(text: string, context: ParseContext): Promise<P
   const body = await res.json() as { content: Array<{ type: string; name?: string; input?: unknown }> };
   const toolUse = body.content.find((b) => b.type === 'tool_use' && b.name === 'parse_transaction');
   if (!toolUse?.input) throw new Error('AI did not return a result');
-  return normalizeDraft(toolUse.input, context);
+  const input = existingDraft && typeof toolUse.input === 'object'
+    ? mergeDraftUpdate(existingDraft, toolUse.input)
+    : toolUse.input;
+  return normalizeDraft(input, context);
+}
+
+function mergeDraftUpdate(existingDraft: ParseDraft, update: object) {
+  const { missingFields: _missingFields, clarification: _clarification, ...base } = existingDraft;
+  return { ...base, ...update };
 }
 
 export async function parseTransactionText(
@@ -265,17 +282,18 @@ export async function parseTransactionText(
   data: LedgerData,
   mode: 'local' | 'cloud',
   getToken: () => Promise<string | null>,
+  existingDraft?: ParseDraft,
 ): Promise<ParseDraft> {
   const context = buildContext(data);
 
   if (mode === 'cloud') {
     const token = await getToken();
     if (!token) throw new Error('Not authenticated');
-    return parseViaServer(text, context, token);
+    return parseViaServer(text, context, token, existingDraft);
   }
 
   if (LOCAL_ANTHROPIC_KEY) {
-    return parseViaDirectApi(text, context);
+    return parseViaDirectApi(text, context, existingDraft);
   }
 
   throw new Error('AI entry requires EXPO_PUBLIC_ANTHROPIC_API_KEY to be set in your .env file');
