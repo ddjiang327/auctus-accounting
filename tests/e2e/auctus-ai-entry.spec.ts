@@ -68,7 +68,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('GST')).toHaveValue('inc');
   });
 
-  test('normalizes invalid local AI draft fields before opening the form', async ({ page }) => {
+  test('blocks incomplete local AI drafts from opening the form', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
         status: 200,
@@ -108,13 +108,8 @@ test.describe('Auctus AI quick entry', () => {
     await expect(draft).toContainText('Fill in: amount, account');
     await expect(draft).toContainText('Can you confirm the amount, account?');
     await expect(draft).toContainText(today);
-    await page.getByRole('button', { name: /Open in form/i }).click();
-
-    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
-    await expect(modal).toBeVisible();
-    await expect(modal.getByLabel('Amount')).toHaveValue('0');
-    await expect(modal.getByLabel('Date')).toHaveValue(today);
-    await expect(modal.getByLabel('GST')).toHaveValue('inc');
+    await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
+    await expect(page.locator('.sheet').filter({ hasText: 'New Transaction' })).toHaveCount(0);
   });
 
   test('updates the same draft from a clarification answer', async ({ page }) => {

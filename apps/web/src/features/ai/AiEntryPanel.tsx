@@ -74,6 +74,7 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
     setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
+  const hasBlockingMissingFields = draft ? draft.missingFields.some((field) => field !== 'contact') : false;
   const typeLabel = draft?.type === 'income' ? 'Income' : draft?.type === 'transfer' ? 'Transfer' : 'Expense';
 
   return (
@@ -149,7 +150,12 @@ export function AiEntryPanel({ data, mode, getToken, onParsed, onClose }: AiEntr
               {draft.entryMode && <><dt>Mode</dt><dd>{draft.entryMode}</dd></>}
               {draft.gstMode && <><dt>GST</dt><dd>{draft.gstMode}</dd></>}
             </dl>
-            <button className="ai-draft-confirm" onClick={handleConfirm}>
+            <button
+              className="ai-draft-confirm"
+              onClick={handleConfirm}
+              disabled={hasBlockingMissingFields}
+              title={hasBlockingMissingFields ? 'Answer the required details first' : undefined}
+            >
               Open in form →
             </button>
           </div>

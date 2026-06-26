@@ -2114,6 +2114,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   cursor: pointer;
 }
 .ai-draft-confirm:hover { opacity: 0.85; }
+.ai-draft-confirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .ai-entry-actions {
   display: flex;

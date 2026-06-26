@@ -163,6 +163,7 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  const hasBlockingMissingFields = draft ? draft.missingFields.some((field) => field !== 'contact') : false;
   const typeLabel = draft?.type === 'income' ? 'Income' : draft?.type === 'transfer' ? 'Transfer' : 'Expense';
   const typeColor = draft?.type === 'income' ? colors.green : draft?.type === 'transfer' ? colors.blue : colors.orange;
 
@@ -270,7 +271,11 @@ export function AiEntrySheet({ data, mode, getToken, onParsed, onClose }: AiEntr
               {draft.entryMode ? <DraftRow label="Mode" value={draft.entryMode} /> : null}
               {draft.gstMode ? <DraftRow label="GST" value={String(draft.gstMode)} /> : null}
             </View>
-            <Pressable style={styles.confirmBtn} onPress={handleConfirm}>
+            <Pressable
+              style={[styles.confirmBtn, hasBlockingMissingFields && styles.confirmBtnDisabled]}
+              onPress={handleConfirm}
+              disabled={hasBlockingMissingFields}
+            >
               <Text style={styles.confirmBtnText}>Open in form →</Text>
             </Pressable>
           </View>
@@ -373,6 +378,7 @@ const styles = StyleSheet.create({
     marginTop: 12, backgroundColor: colors.text, borderRadius: 10,
     paddingVertical: 10, alignItems: 'center',
   },
+  confirmBtnDisabled: { opacity: 0.45 },
   confirmBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   actions: { marginTop: 4 },
   parseBtn: {
