@@ -287,6 +287,38 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes natural language payment terms", () => {
+    const netThirty = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      paymentTerms: "Net 30",
+      missingFields: [],
+    } as unknown, context);
+    const dueNow = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      paymentTerms: "due on receipt",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(netThirty).toMatchObject({
+      paymentTerms: "net_30",
+      dueDate: "2026-07-10",
+    });
+    expect(dueNow).toMatchObject({
+      paymentTerms: "due_on_receipt",
+      dueDate: "2026-06-10",
+    });
+  });
+
   it("preserves invoice and credit note numbers for matching entry modes", () => {
     const invoice = __testing.normalizeDraft({
       type: "income",

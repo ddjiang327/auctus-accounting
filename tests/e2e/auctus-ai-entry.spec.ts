@@ -465,6 +465,51 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-10');
   });
 
+  test('normalizes natural language invoice payment terms', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_invoice_terms_text_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'income',
+                amount: 640,
+                date: '2026-06-10',
+                accountId: 'a1',
+                categoryId: 'i_free',
+                entryMode: 'invoice',
+                paymentTerms: 'Net 30',
+                invoiceNo: 'INV-TEXT-30',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Invoice $640 Net 30 on 2026-06-10');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('net_30');
+    await expect(draft).toContainText('2026-07-10');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByLabel('Terms')).toHaveValue('net_30');
+    await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-10');
+  });
+
   test('matches invoice party to a local contact and applies default terms', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({

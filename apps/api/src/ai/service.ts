@@ -75,6 +75,15 @@ function normalizeGstMode(value: unknown): ParseDraft['gstMode'] | undefined {
   return undefined;
 }
 
+function normalizePaymentTerms(value: unknown): string | undefined {
+  const normalized = normalizeName(String(value ?? '')) || '';
+  if (PAYMENT_TERMS.has(normalized)) return normalized;
+  if (!normalized) return undefined;
+  if (/\bdue\s*(on\s*)?(receipt|now)\b|\bimmediate\b/.test(normalized)) return 'due_on_receipt';
+  const days = normalized.match(/\b(?:net\s*)?(7|14|30|60)(?:\s*days?)?\b/);
+  return days ? `net_${days[1]}` : undefined;
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -154,12 +163,10 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
   const gstMode = type === 'transfer' || !ctx.gstEnabled
     ? null
     : normalizeGstMode(raw.gstMode) || 'inc';
-  const contactPaymentTerms = PAYMENT_TERMS.has(String(matchedContact?.paymentTerms)) ? matchedContact?.paymentTerms : undefined;
-  const paymentTerms = entryMode === 'invoice' && PAYMENT_TERMS.has(String(raw.paymentTerms))
-    ? raw.paymentTerms
-    : entryMode === 'invoice'
-      ? contactPaymentTerms
-      : undefined;
+  const contactPaymentTerms = normalizePaymentTerms(matchedContact?.paymentTerms);
+  const paymentTerms = entryMode === 'invoice'
+    ? normalizePaymentTerms(raw.paymentTerms) || contactPaymentTerms
+    : undefined;
 
   const date = validDate(raw.date) ? raw.date : ctx.today;
   const dueDate = entryMode === 'invoice'
