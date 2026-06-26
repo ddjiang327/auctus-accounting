@@ -48,6 +48,16 @@ function parseAmount(value: unknown) {
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 }
 
+function normalizeGstMode(value: unknown): ParseDraft['gstMode'] | undefined {
+  const normalized = normalizeName(String(value ?? '')) || '';
+  if (GST_MODES.has(normalized)) return normalized as ParseDraft['gstMode'];
+  if (!normalized) return undefined;
+  if (/\b(gst\s*free|free|exempt|no\s*gst|without\s*gst)\b/.test(normalized)) return 'free';
+  if (/\b(exc|excl|exclusive|plus|before)\s*gst\b|\bgst\s*(extra|on\s*top)\b/.test(normalized)) return 'exc';
+  if (/\b(inc|incl|inclusive|includes|including)\s*gst\b|\bgst\s*included\b/.test(normalized)) return 'inc';
+  return undefined;
+}
+
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -126,9 +136,7 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     : raw.entryMode === 'invoice' || raw.entryMode === 'credit_note' ? raw.entryMode : 'cash';
   const gstMode = type === 'transfer' || !context.gstEnabled
     ? null
-    : GST_MODES.has(String(raw.gstMode))
-      ? raw.gstMode
-      : 'inc';
+    : normalizeGstMode(raw.gstMode) || 'inc';
   const contactPaymentTerms = PAYMENT_TERMS.has(String(matchedContact?.paymentTerms)) ? matchedContact?.paymentTerms : undefined;
   const paymentTerms = entryMode === 'invoice' && PAYMENT_TERMS.has(String(raw.paymentTerms))
     ? raw.paymentTerms

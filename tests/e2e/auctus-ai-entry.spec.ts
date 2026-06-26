@@ -155,6 +155,47 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('Amount')).toHaveValue('1234.5');
   });
 
+  test('normalizes natural language GST mode from local AI output', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_gst_mode_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 88,
+                date: '2026-06-21',
+                accountId: 'a2',
+                categoryId: 'e_other',
+                gstMode: 'plus GST',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Spent $88 plus GST');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('exc');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByLabel('GST')).toHaveValue('exc');
+  });
+
   test('blocks incomplete local AI drafts from opening the form', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({

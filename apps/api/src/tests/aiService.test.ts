@@ -173,6 +173,37 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes natural language GST modes", () => {
+    const plusGst = __testing.normalizeDraft({
+      type: "expense",
+      amount: 80,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      gstMode: "plus GST",
+      missingFields: [],
+    } as unknown, context);
+    const gstFree = __testing.normalizeDraft({
+      type: "expense",
+      amount: 80,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      gstMode: "GST free",
+      missingFields: [],
+    } as unknown, context);
+    const included = __testing.normalizeDraft({
+      type: "expense",
+      amount: 80,
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      gstMode: "includes gst",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(plusGst.gstMode).toBe("exc");
+    expect(gstFree.gstMode).toBe("free");
+    expect(included.gstMode).toBe("inc");
+  });
+
   it("preserves credit note entry mode for non-transfer drafts", () => {
     const draft = __testing.normalizeDraft({
       type: "income",
