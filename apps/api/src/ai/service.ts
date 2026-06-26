@@ -60,6 +60,11 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function clarificationForMissingFields(missingFields: string[]) {
+  if (!missingFields.length) return undefined;
+  return `Can you confirm the ${missingFields.join(', ')}?`;
+}
+
 function defaultChartAccountId(ctx: ParseContext, type: ParseDraft['type']): string | undefined {
   if (type === 'transfer') return undefined;
   const preferredCode = type === 'income' ? '4010' : '7030';
@@ -141,6 +146,9 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     missing.push('contact');
   }
 
+  const missingFields = unique(missing);
+  const rawClarification = typeof raw.clarification === 'string' ? raw.clarification.trim() : '';
+
   return {
     type,
     amount,
@@ -158,8 +166,8 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     dueDate,
     invoiceNo,
     creditNoteNo,
-    missingFields: unique(missing),
-    clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
+    missingFields,
+    clarification: rawClarification || clarificationForMissingFields(missingFields),
   };
 }
 
@@ -200,7 +208,7 @@ ${chartOfAccounts}
 - gstMode: "inc" = price includes GST, "exc" = GST on top, "free" = GST exempt, null = unknown
 - When GST is enabled and not specified, default gstMode to "inc"
 - List truly unknown required fields in missingFields (e.g. "amount" if no dollar value given)
-- Only set clarification if a critical field cannot be guessed at all
+- If missingFields is not empty, set clarification to one concise question asking the user for those fields
 - For transfers, set type="transfer", accountId=source account, accountToId=destination account
 - Preserve invoiceNo or creditNoteNo if the user explicitly mentions a document number`;
 }

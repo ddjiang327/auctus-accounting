@@ -50,6 +50,20 @@ describe("AI parse draft normalization", () => {
       gstMode: "inc",
     });
     expect(draft.missingFields).toEqual(["category", "amount", "account"]);
+    expect(draft.clarification).toBe("Can you confirm the category, amount, account?");
+  });
+
+  it("keeps model clarification when missing fields need review", () => {
+    const draft = __testing.normalizeDraft({
+      type: "expense",
+      amount: 0,
+      accountId: "bank_1",
+      missingFields: ["amount"],
+      clarification: "What was the total paid?",
+    }, context);
+
+    expect(draft.missingFields).toEqual(["amount"]);
+    expect(draft.clarification).toBe("What was the total paid?");
   });
 
   it("normalizes transfers to source and destination accounts only", () => {

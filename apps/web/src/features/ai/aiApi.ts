@@ -42,6 +42,11 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function clarificationForMissingFields(missingFields: string[]) {
+  if (!missingFields.length) return undefined;
+  return `Can you confirm the ${missingFields.join(', ')}?`;
+}
+
 function defaultChartAccountId(context: ParseContext, type: ParseDraft['type']): string | undefined {
   if (type === 'transfer') return undefined;
   const preferredCode = type === 'income' ? '4010' : '7030';
@@ -123,6 +128,9 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     missing.push('contact');
   }
 
+  const missingFields = unique(missing);
+  const rawClarification = typeof raw.clarification === 'string' ? raw.clarification.trim() : '';
+
   return {
     type,
     amount,
@@ -140,8 +148,8 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     dueDate,
     invoiceNo,
     creditNoteNo,
-    missingFields: unique(missing),
-    clarification: typeof raw.clarification === 'string' ? raw.clarification : undefined,
+    missingFields,
+    clarification: rawClarification || clarificationForMissingFields(missingFields),
   };
 }
 
@@ -189,7 +197,7 @@ Chart of Accounts:\n${coa}
 Today: ${ctx.today}
 GST: ${ctx.gstEnabled ? 'enabled 10%' : 'disabled'}
 
-Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, preserve invoiceNo/creditNoteNo when mentioned, list uncertain fields in missingFields.`;
+Rules: default date=today, match names loosely, entryMode=cash for payments, invoice for invoices/bills, credit_note for credit notes/supplier credits, gstMode=inc/exc/free/null, preserve invoiceNo/creditNoteNo when mentioned, list uncertain fields in missingFields, and if missingFields is not empty set clarification to one concise question asking the user for those fields.`;
 }
 
 async function parseViaDirectApi(text: string, context: ParseContext): Promise<ParseDraft> {

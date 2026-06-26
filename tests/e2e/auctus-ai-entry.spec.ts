@@ -106,6 +106,7 @@ test.describe('Auctus AI quick entry', () => {
 
     const draft = page.locator('.ai-entry-draft');
     await expect(draft).toContainText('Fill in: amount, account');
+    await expect(draft).toContainText('Can you confirm the amount, account?');
     await expect(draft).toContainText(today);
     await page.getByRole('button', { name: /Open in form/i }).click();
 
@@ -259,6 +260,7 @@ test.describe('Auctus AI quick entry', () => {
     await expect(draft).toContainText('net_30');
     await expect(draft).toContainText('INV-AI-42');
     await expect(draft).toContainText('Fill in: contact');
+    await expect(draft).toContainText('Can you confirm the contact?');
     await expect(draft).toContainText('New Customer Pty Ltd');
     await page.getByRole('button', { name: /Open in form/i }).click();
 
