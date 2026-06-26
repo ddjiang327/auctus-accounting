@@ -82,6 +82,7 @@ function parseAmount(value: unknown) {
   if (typeof value !== 'string') return 0;
   const normalized = value
     .trim()
+    .replace(/^\((.*)\)$/, '-$1')
     .replace(/^[+-]?\s*(?:a\$|aud|nzd|usd)\s*/i, (match) => match.includes('-') ? '-' : match.includes('+') ? '+' : '')
     .replace(/\s*(?:aud|nzd|usd)\s*$/i, '')
     .replace(/[$,\s]/g, '');

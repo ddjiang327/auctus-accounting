@@ -275,6 +275,13 @@ describe("AI parse draft normalization", () => {
       categoryId: "expense_office",
       missingFields: [],
     } as unknown, context);
+    const parenthesizedAmount = __testing.normalizeDraft({
+      type: "expense",
+      amount: "(AUD 1,234.50)",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    } as unknown, context);
 
     expect(amountString).toMatchObject({
       amount: 1234.5,
@@ -294,6 +301,10 @@ describe("AI parse draft normalization", () => {
       missingFields: [],
     });
     expect(suffixCurrencyAmount).toMatchObject({
+      amount: 1234.5,
+      missingFields: [],
+    });
+    expect(parenthesizedAmount).toMatchObject({
       amount: 1234.5,
       missingFields: [],
     });
