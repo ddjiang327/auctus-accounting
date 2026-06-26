@@ -581,6 +581,22 @@ describe("AI parse draft normalization", () => {
     expect(cashDraft.missingFields).not.toContain("contact");
   });
 
+  it("flags unmatched contact ids on invoice drafts", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 250,
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      contactId: "Unknown Customer",
+      missingFields: [],
+    }, context);
+
+    expect(draft.contactId).toBeUndefined();
+    expect(draft.missingFields).toContain("contact");
+    expect(draft.clarification).toBe("Can you confirm the contact?");
+  });
+
   it("matches invoice parties to known contacts and applies default terms", () => {
     const customerInvoice = __testing.normalizeDraft({
       type: "income",

@@ -264,7 +264,8 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     : undefined;
   const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
   const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;
-  if (party && !contactId && (entryMode === 'invoice' || entryMode === 'credit_note')) {
+  const hasContactHint = Boolean(party || raw.contactId);
+  if (hasContactHint && !contactId && (entryMode === 'invoice' || entryMode === 'credit_note')) {
     missing.push('contact');
   }
 
