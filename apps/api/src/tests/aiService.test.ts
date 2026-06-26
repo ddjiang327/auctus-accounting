@@ -498,6 +498,26 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("asks for confirmation when explicit payment terms are unsupported", () => {
+    const draft = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "2026-06-10",
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      paymentTerms: "Net 45",
+      missingFields: [],
+    } as unknown, context);
+
+    expect(draft).toMatchObject({
+      paymentTerms: undefined,
+      dueDate: "2026-06-10",
+      missingFields: ["payment terms"],
+      clarification: "Can you confirm the payment terms?",
+    });
+  });
+
   it("normalizes common AI date formats without guessing ambiguous years", () => {
     const numericDate = __testing.normalizeDraft({
       type: "expense",

@@ -272,8 +272,11 @@ function normalizeDraft(input: unknown, context: ParseContext): ParseDraft {
     ? null
     : normalizeGstMode(raw.gstMode) || 'inc';
   const contactPaymentTerms = normalizePaymentTerms(matchedContact?.paymentTerms);
+  const parsedPaymentTerms = normalizePaymentTerms(raw.paymentTerms);
+  const hasPaymentTermsHint = raw.paymentTerms !== undefined && String(raw.paymentTerms).trim() !== '';
+  if (entryMode === 'invoice' && hasPaymentTermsHint && !parsedPaymentTerms) missing.push('payment terms');
   const paymentTerms = entryMode === 'invoice'
-    ? normalizePaymentTerms(raw.paymentTerms) || contactPaymentTerms
+    ? (hasPaymentTermsHint ? parsedPaymentTerms : contactPaymentTerms)
     : undefined;
 
   const date = normalizeDate(raw.date, context.today) || context.today;

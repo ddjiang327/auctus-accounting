@@ -788,6 +788,45 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-10');
   });
 
+  test('asks for confirmation when local AI payment terms are unsupported', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_invoice_terms_unsupported_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'income',
+                amount: 640,
+                date: '2026-06-10',
+                accountId: 'a1',
+                categoryId: 'i_free',
+                entryMode: 'invoice',
+                paymentTerms: 'Net 45',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Invoice $640 Net 45 on 2026-06-10');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('Fill in: payment terms');
+    await expect(draft).toContainText('Can you confirm the payment terms?');
+    await expect(page.getByRole('button', { name: /Open in form/i })).toBeDisabled();
+  });
+
   test('matches invoice party to a local contact and applies default terms', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({
