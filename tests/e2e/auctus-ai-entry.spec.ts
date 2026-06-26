@@ -268,4 +268,78 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByRole('textbox', { name: 'Invoice No.' })).toHaveValue('INV-AI-42');
     await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-07-10');
   });
+
+  test('matches invoice party to a local contact and applies default terms', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_invoice_contact_match_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'income',
+                amount: 1200,
+                date: '2026-06-12',
+                accountId: 'a2',
+                categoryId: 'i_free',
+                entryMode: 'invoice',
+                invoiceNo: 'INV-MATCH-9',
+                party: 'Acme Studios',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('auctus_react_data_v1');
+      if (!raw) throw new Error('Ledger data was not saved.');
+      const ledger = JSON.parse(raw);
+      ledger.contacts.push({
+        id: 'contact_acme_studios',
+        type: 'customer',
+        name: 'Acme Studios',
+        email: 'accounts@acme.example',
+        paymentTerms: 'net_14',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      });
+      ledger.contacts.push({
+        id: 'contact_acme_supplier',
+        type: 'supplier',
+        name: 'Acme Studios',
+        paymentTerms: 'net_60',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      });
+      localStorage.setItem('auctus_react_data_v1', JSON.stringify(ledger));
+    });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Invoice Acme Studios $1200 on 2026-06-12');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('Acme Studios');
+    await expect(draft).toContainText('net_14');
+    await expect(draft).toContainText('2026-06-26');
+    await expect(draft).not.toContainText('Fill in: contact');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Sale' })).toHaveClass(/active/);
+    await expect(modal.getByRole('button', { name: 'Invoice' })).toHaveClass(/active/);
+    await expect(modal.getByLabel('Customer')).toHaveValue('contact_acme_studios');
+    await expect(modal.getByLabel('Terms')).toHaveValue('net_14');
+    await expect(modal.getByRole('textbox', { name: 'Due Date' })).toHaveValue('2026-06-26');
+    await expect(modal.getByRole('textbox', { name: 'Invoice No.' })).toHaveValue('INV-MATCH-9');
+  });
 });
