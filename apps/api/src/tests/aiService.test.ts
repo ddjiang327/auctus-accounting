@@ -166,15 +166,15 @@ describe("AI parse draft normalization", () => {
     const draft = __testing.normalizeDraft({
       type: "expense",
       amount: 49,
-      accountId: "everyday account",
-      categoryId: "office supplies",
+      accountId: "bank_1 | Everyday Account (bank)",
+      categoryId: "office   supplies",
       missingFields: [],
     }, context);
     const transfer = __testing.normalizeDraft({
       type: "transfer",
       amount: 100,
       accountId: "Everyday Account",
-      accountToId: "petty cash",
+      accountToId: "cash_1 | Petty Cash (cash)",
       missingFields: [],
     }, context);
 

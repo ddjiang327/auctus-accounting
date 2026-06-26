@@ -151,15 +151,30 @@ function defaultChartAccountId(ctx: ParseContext, type: ParseDraft['type']): str
 }
 
 function normalizeName(value?: string) {
-  return value?.trim().toLowerCase();
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function normalizedNameCandidates(value?: string) {
+  const candidates = [normalizeName(value)];
+  const pipeLabel = value?.split('|').slice(1).join('|');
+  if (pipeLabel) candidates.push(normalizeName(pipeLabel));
+  return unique(candidates.filter((candidate): candidate is string => Boolean(candidate)));
 }
 
 function matchByIdOrName<T extends { id: string; name: string }>(items: T[], value?: string): { item?: T; ambiguous: boolean } {
-  const normalized = normalizeName(value);
-  if (!normalized) return { ambiguous: false };
+  const candidates = normalizedNameCandidates(value);
+  if (!candidates.length) return { ambiguous: false };
   const idMatch = items.find((item) => item.id === value);
   if (idMatch) return { item: idMatch, ambiguous: false };
-  const nameMatches = items.filter((item) => normalizeName(item.name) === normalized);
+  const nameMatches = items.filter((item) => {
+    const name = normalizeName(item.name);
+    return name ? candidates.includes(name) : false;
+  });
   return nameMatches.length === 1
     ? { item: nameMatches[0], ambiguous: false }
     : { ambiguous: nameMatches.length > 1 };
@@ -177,9 +192,12 @@ function matchContactByIdOrParty(contacts: Contact[], type: ParseDraft['type'], 
   const supportedContacts = contacts.filter((contact) => contactSupportsType(contact, type));
   const idMatch = supportedContacts.find((contact) => contact.id === contactId);
   if (idMatch) return { item: idMatch, ambiguous: false };
-  const partyName = normalizeName(party);
-  if (!partyName) return { item: undefined, ambiguous: false };
-  const nameMatches = supportedContacts.filter((contact) => normalizeName(contact.name) === partyName);
+  const partyNames = normalizedNameCandidates(party);
+  if (!partyNames.length) return { item: undefined, ambiguous: false };
+  const nameMatches = supportedContacts.filter((contact) => {
+    const name = normalizeName(contact.name);
+    return name ? partyNames.includes(name) : false;
+  });
   return nameMatches.length === 1
     ? { item: nameMatches[0], ambiguous: false }
     : { item: undefined, ambiguous: nameMatches.length > 1 };
