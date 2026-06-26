@@ -196,6 +196,46 @@ test.describe('Auctus AI quick entry', () => {
     await expect(modal.getByLabel('GST')).toHaveValue('exc');
   });
 
+  test('normalizes common date formats from local AI output', async ({ page }) => {
+    await page.route('https://api.anthropic.com/v1/messages', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_date_format_ai_entry',
+              name: 'parse_transaction',
+              input: {
+                type: 'expense',
+                amount: 88,
+                date: '20/06/2026',
+                accountId: 'a2',
+                categoryId: 'e_other',
+                missingFields: [],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await resetLocalApp(page);
+
+    await page.getByTitle('AI Quick Entry').click();
+    await page.locator('.ai-entry-textarea').fill('Spent $88 on 20/06/2026');
+    await page.getByRole('button', { name: /Parse/i }).click();
+
+    const draft = page.locator('.ai-entry-draft');
+    await expect(draft).toContainText('2026-06-20');
+    await page.getByRole('button', { name: /Open in form/i }).click();
+
+    const modal = page.locator('.sheet').filter({ hasText: 'New Transaction' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByLabel('Date')).toHaveValue('2026-06-20');
+  });
+
   test('blocks incomplete local AI drafts from opening the form', async ({ page }) => {
     await page.route('https://api.anthropic.com/v1/messages', async (route) => {
       await route.fulfill({

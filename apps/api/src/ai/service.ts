@@ -38,11 +38,44 @@ export interface ParseDraft {
 const PAYMENT_TERMS = new Set(['due_on_receipt', 'net_7', 'net_14', 'net_30', 'net_60']);
 const GST_MODES = new Set(['inc', 'exc', 'free']);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MONTHS: Record<string, number> = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12,
+};
 
 function validDate(value: unknown): value is string {
   return typeof value === 'string'
     && DATE_PATTERN.test(value)
     && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+}
+
+function isoDate(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return undefined;
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeDate(value: unknown) {
+  if (validDate(value)) return value;
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  const auNumeric = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (auNumeric) return isoDate(Number(auNumeric[3]), Number(auNumeric[2]), Number(auNumeric[1]));
+  const monthFirst = text.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (monthFirst) return isoDate(Number(monthFirst[3]), MONTHS[monthFirst[1].toLowerCase()] || 0, Number(monthFirst[2]));
+  const dayFirst = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (dayFirst) return isoDate(Number(dayFirst[3]), MONTHS[dayFirst[2].toLowerCase()] || 0, Number(dayFirst[1]));
+  return undefined;
 }
 
 function addDays(dateStr: string, days: number) {
@@ -168,9 +201,9 @@ function normalizeDraft(input: unknown, ctx: ParseContext): ParseDraft {
     ? normalizePaymentTerms(raw.paymentTerms) || contactPaymentTerms
     : undefined;
 
-  const date = validDate(raw.date) ? raw.date : ctx.today;
+  const date = normalizeDate(raw.date) || ctx.today;
   const dueDate = entryMode === 'invoice'
-    ? validDate(raw.dueDate) ? raw.dueDate : dueDateForTerms(date, paymentTerms)
+    ? normalizeDate(raw.dueDate) || dueDateForTerms(date, paymentTerms)
     : undefined;
   const invoiceNo = entryMode === 'invoice' && typeof raw.invoiceNo === 'string' ? raw.invoiceNo.trim() || undefined : undefined;
   const creditNoteNo = entryMode === 'credit_note' && typeof raw.creditNoteNo === 'string' ? raw.creditNoteNo.trim() || undefined : undefined;

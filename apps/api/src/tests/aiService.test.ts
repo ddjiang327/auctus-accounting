@@ -319,6 +319,41 @@ describe("AI parse draft normalization", () => {
     });
   });
 
+  it("normalizes common AI date formats without guessing ambiguous years", () => {
+    const numericDate = __testing.normalizeDraft({
+      type: "expense",
+      amount: 42,
+      date: "20/06/2026",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    }, context);
+    const monthDate = __testing.normalizeDraft({
+      type: "income",
+      amount: 500,
+      date: "June 20, 2026",
+      dueDate: "21 July 2026",
+      accountId: "bank_1",
+      categoryId: "income_sales",
+      entryMode: "invoice",
+      paymentTerms: "net_30",
+      missingFields: [],
+    }, context);
+    const ambiguousDate = __testing.normalizeDraft({
+      type: "expense",
+      amount: 42,
+      date: "20/06/26",
+      accountId: "bank_1",
+      categoryId: "expense_office",
+      missingFields: [],
+    }, context);
+
+    expect(numericDate.date).toBe("2026-06-20");
+    expect(monthDate.date).toBe("2026-06-20");
+    expect(monthDate.dueDate).toBe("2026-07-21");
+    expect(ambiguousDate.date).toBe("2026-06-25");
+  });
+
   it("preserves invoice and credit note numbers for matching entry modes", () => {
     const invoice = __testing.normalizeDraft({
       type: "income",
